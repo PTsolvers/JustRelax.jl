@@ -195,6 +195,15 @@ end
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))
 
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+            _di.center, _di.vertex, 0.0,
+        )
+        @test all(isfinite, Array(stokes.R.Rx))
+        @test all(isfinite, Array(stokes.R.Ry))
+
         # --- fused DR residual + damped velocity update ---
         # D = 1, β = 0 ⇒ ΔV = 0 (velocity unchanged), residuals finite
         dyrel.Dx .= 1.0; dyrel.Dy .= 1.0

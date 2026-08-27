@@ -348,6 +348,57 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function compute_PH_residual_V!(
+        Rx::AbstractArray{T, 2},
+        Ry,
+        Vx,
+        Vy,
+        P,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        _di_center,
+        _di_vertex,
+        dt,
+    ) where {T}
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+
+    nx, ny = size(ρgy)
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        _dx_c = @dx(_di_center, i)
+        _dy_v = @dy(_di_vertex, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
+        Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+    end
+
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        _dy_c = @dy(_di_center, j)
+        _dx_v = @dx(_di_vertex, i)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
+        θ = 1.0
+        # Vertical velocity
+        Vyᵢⱼ = Vy[i + 1, j + 1]
+        # Get necessary buoyancy forces
+        j_N = min(j + 1, ny)
+        ρg_S = ρgy[i, j]
+        ρg_N = ρgy[i, j_N]
+        # Spatial derivatives
+        ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
+        # correction term
+        ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
+
+        Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy) + ρg_correction
+    end
+
+    return nothing
+end
+
 @parallel_indices (i, j) function compute_DR_residual_V!(
         Rx::AbstractArray{T, 2},
         Ry,
@@ -430,6 +481,56 @@ end
             _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
             _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
             d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
+    end
+    return nothing
+end
+
+@parallel_indices (i, j, k) function compute_PH_residual_V!(
+        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt
+    ) where {T}
+
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+
+    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
+        _dx = @dx(_di_center, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_vertex, k)
+
+        Rx[i, j, k] =
+            d_xa(τxx, _dx) +
+            _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+            _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
+            d_xa(P, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+    end
+    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_center, j)
+        _dz = @dz(_di_vertex, k)
+
+        Ry[i, j, k] =
+            d_ya(τyy, _dy) +
+            _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+            _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
+            d_ya(P, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+    end
+    if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
+        _dx = @dx(_di_vertex, i)
+        _dy = @dy(_di_vertex, j)
+        _dz = @dz(_di_center, k)
+
+        k_T = min(k + 1, size(ρgz, 3))
+        ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
+        ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
+        Rz[i, j, k] =
+            d_za(τzz, _dz) +
+            _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+            _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
+            d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz) + ρg_correction
     end
     return nothing
 end
@@ -675,6 +776,7 @@ end
         dτVz,
         _di_center,
         _di_vertex,
+        dt,
     ) where {T}
 
     Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
@@ -725,12 +827,15 @@ end
             _dx = @dx(_di_vertex, i)
             _dy = @dy(_di_vertex, j)
             _dz = @dz(_di_center, k)
+            k_T = min(k + 1, size(ρgz, 3))
+            ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
+            ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
             Rz_ijk =
                 (
                 d_za(τzz, _dz) +
                     _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
                     _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
-                    d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz)
+                    d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz) + ρg_correction
             ) / Dz[i, j, k]
             Rz[i, j, k] = Rz_ijk
 

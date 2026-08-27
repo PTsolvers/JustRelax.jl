@@ -144,6 +144,14 @@ end
         )
         @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
 
+        @parallel (@idx local_ni) JR3K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.V.Vx, stokes.V.Vy, stokes.V.Vz,
+            stokes.P, stokes.ΔPψ, @stress(stokes)..., ρg...,
+            grid._di.center, grid._di.vertex, 0.0,
+        )
+        @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
+
         dyrel.Dx .= 1.0
         dyrel.Dy .= 1.0
         dyrel.Dz .= 1.0
@@ -166,7 +174,7 @@ end
             dyrel.αVx, dyrel.αVy, dyrel.αVz,
             dyrel.βVx, dyrel.βVy, dyrel.βVz,
             dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
-            grid._di.center, grid._di.vertex,
+            grid._di.center, grid._di.vertex, 0.0,
         )
         @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
         @test all(i -> Array((stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)[i]) == Array(V_before[i]), 1:3)

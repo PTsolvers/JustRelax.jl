@@ -31,6 +31,25 @@ for free surfaces.
 
 Reference: [Larionov, Batty, and Bridson (2017)](https://cs.uwaterloo.ca/~c2batty/papers/Larionov2017/Larionov2017.pdf).
 
+## Implementation status
+
+- [x] Dedicated `solve_VariationalDYREL!` API and 2D backend dispatch scaffolding.
+- [x] Port the historical solver and masked velocity-kernel source files.
+- [x] Add the variational constructor, viscosity, and Gershgorin wiring.
+- [ ] Reconcile their dependencies with PR #520 and validate the weighted operator.
+- [ ] Weighted momentum diagonal estimation.
+- [ ] Focused regressions and documentation completion.
+
+Implementation note: the repository contains a historical `pa-dyrel_VS_2D` branch
+with `src/DYREL/solver_VS.jl` and `src/DYREL/velocity_kernels_VS.jl`. Those files
+are the starting point for the implementation, but they predate PR #520 and must be
+adapted rather than copied unchanged.
+
+Checkpoint: the API, constructor, solver-loop source, masked kernels, viscosity
+helpers, and Gershgorin wiring are now staged for review. The next implementation
+step is to reconcile the remaining mask/utility dependencies and verify the
+weighted momentum diagonal against the PR #520 operators before enabling tests.
+
 ## 1. Define the mathematical DYREL form first
 
 Write down the 2D weighted residuals before modifying kernels.

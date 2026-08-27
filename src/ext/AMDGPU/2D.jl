@@ -44,6 +44,7 @@ include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
+include("../../DYREL/solver_VS.jl")
 
 @parallel_indices (i, j) function _apply_free_surface_diagonal_AMDGPU!(
         Dy, λmaxVy, ρgy, di_center, dt
@@ -81,6 +82,10 @@ end
 
 function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
 function JR2D.update_α_β!(βVx::ROCArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
@@ -454,6 +459,10 @@ end
 
 function JR2D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve_DYREL!(stokes, args...; kwargs...)
+end
+
+function JR2D.solve_VariationalDYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_VariationalDYREL!(stokes, args...; kwargs...)
 end
 
 function JR2D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)

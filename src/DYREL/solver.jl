@@ -42,6 +42,21 @@ end
 # entry point for extensions
 solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes, args...; kwargs...)
 
+"""
+    solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+        rheology, args, grid, dt, igg; kwargs...)
+
+Solve the 2D variational Stokes problem with DYREL relaxation and the
+`RockRatio` volume weights. This is a separate entry point from
+`solve_DYREL!`; the latter remains the standard, unweighted DYREL solver.
+"""
+function solve_VariationalDYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    return solve_VariationalDYREL!(backend(stokes), stokes, args...; kwargs...)
+end
+
+solve_VariationalDYREL!(::CPUBackendTrait, stokes, args...; kwargs...) =
+    _solve_VariationalDYREL!(stokes, args...; kwargs...)
+
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
         ρg,

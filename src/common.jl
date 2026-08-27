@@ -64,6 +64,7 @@ include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 
 include("rheology/Viscosity.jl")
+include("rheology/Viscosity_VS.jl")
 export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
@@ -127,7 +128,9 @@ include("DYREL/constructors.jl")
 include("DYREL/pressure_kernels.jl")
 include("DYREL/stress_kernels.jl")
 include("DYREL/velocity_kernels.jl")
+include("DYREL/velocity_kernels_VS.jl")
 include("DYREL/Gershgorin.jl")
+include("DYREL/Gershgorin_VS.jl")
 
 # thermal diffusion
 

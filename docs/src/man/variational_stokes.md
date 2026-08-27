@@ -11,6 +11,14 @@ The implementation described here is currently 2D. The governing equations and
 the weighted operators are implemented in
 [`src/variational_stokes/`](https://github.com/PTsolvers/JustRelax.jl/tree/main/src/variational_stokes).
 
+The equations below distinguish the mathematical target from the current
+matrix-free implementation. Pressure null-space elimination, liquid-volume
+weights, bounded active-face mass, and the implicit density-gradient correction
+are implemented. The fully coupled weighted continuity/momentum operator shown
+in the eliminated system remains a derivation target; the current continuity
+stencil uses the unweighted staggered velocity difference together with the
+binary active-cell policy.
+
 ## Continuous problem
 
 Let \(\Omega_L\) be the liquid part of the computational domain. For a
@@ -51,7 +59,7 @@ The subscripts identify the discrete locations:
 | \(W_L^u\) | `ϕ.Vx`, `ϕ.Vy` | staggered face velocities |
 
 With \(G\) the discrete gradient and \(D\) the discrete divergence, the
-weighted saddle-point system has the schematic form
+mathematical target weighted saddle-point system has the schematic form
 
 \[
 \begin{bmatrix}
@@ -116,8 +124,9 @@ are not allowed to contribute to the pressure or velocity residual.
 
 ## Pseudo-transient iteration
 
-JustRelax solves the weighted system with accelerated pseudo-transient
-iterations rather than a direct sparse solve. The velocity update has the form
+JustRelax solves a matrix-free approximation to this weighted system with
+accelerated pseudo-transient iterations rather than a direct sparse solve. The
+velocity update has the form
 
 \[
  u_f^{k+1}=u_f^k+
@@ -136,8 +145,11 @@ implementation uses
 in the diagonal update. A face with zero liquid volume is still inactive; the
 floor is only a bounded preconditioning approximation for active sliver faces.
 
-Pressure is updated from the weighted divergence and the constitutive material
-parameters. For finite bulk and shear moduli, the pressure kernel uses
+Pressure is updated from the active-cell divergence and the constitutive
+material parameters. The pressure residual includes the centre liquid fraction,
+but the current divergence stencil itself is not face-weighted; this is one of
+the coupled-operator items still requiring re-derivation. For finite bulk and
+shear moduli, the pressure kernel uses
 
 \[
  R_p = -(p-p_0)(K\Delta t)^{-1}
@@ -233,7 +245,10 @@ should not enable both mechanisms accidentally.
 One physical timestep follows this order:
 
 1. Advect particles and move them into their new cells.
-2. Advect the marker chain with the same velocity field.
+2. Advect the marker chain with the same velocity field. The recommended
+   free-surface path is the semi-Lagrangian update, which backtracks fixed
+   surface vertices, limits steep slopes, conserves mean height, and rebuilds
+   the chain. The fully Lagrangian alternative is described below.
 3. Invalidate particles lying on the wrong side of the updated chain.
 4. Replenish invalid particle slots from neighbouring valid particles.
 5. Recompute particle phase ratios at centres, vertices, and velocity faces.
@@ -243,7 +258,31 @@ The last two fields have different roles: phase ratios determine material
 properties such as \(\rho\) and \(\eta\), while `RockRatio` supplies the liquid
 weights in the variational operator. Replenishment must occur before phase-ratio
 normalization; otherwise an empty particle cell can produce a zero-weight
-normalization and hence `NaN` phase fractions.
+normalization and hence `NaN` phase fractions. JustPIC's phase-aware
+replenishment currently chooses replacement coordinates randomly inside
+depleted quadrants and copies the nearest valid particle's phase. Increasing
+particle count and avoiding an unnecessarily high replenishment threshold can
+reduce the resulting sampling noise, but does not make the process deterministic.
+
+For the recommended semi-Lagrangian surface update, use:
+
+```julia
+semilagrangian_advection_markerchain!(
+    chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
+)
+```
+
+The non-semi-Lagrangian alternative moves the chain markers directly and has a
+different signature:
+
+```julia
+advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+```
+
+Do not pass `xvi` to `advect_markerchain!`; that routine obtains the chain's
+vertex grid from the `MarkerChain` itself. It also performs marker movement,
+cell reassignment, resampling, topography reconstruction, and mean-height
+correction internally.
 
 ## Minimal usage
 
@@ -254,10 +293,8 @@ compute_rock_fraction!(ϕ, chain, xvi, di)
 solve_VariationalStokes!(
     stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ,
     rheology, args, dt, igg;
-    kwargs = (;
-        air_phase = 1,
-        free_surface = true,
-    ),
+    air_phase = 1,
+    free_surface = true,
 )
 ```
 
@@ -269,5 +306,5 @@ not produce the intended air/liquid buoyancy or viscosity weighting.
 
 Larionov, A., Batty, C. and Bridson, R. (2017), *Variational Stokes: A Unified
 Pressure-Viscosity Solver for Accurate Viscous Liquids*, ACM Transactions on
-Graphics, 36(4), Article 101. The local mathematical reference is
-[`Larionov2017.pdf`](https://github.com/PTsolvers/JustRelax.jl/blob/main/Larionov2017.pdf).
+Graphics, 36(4), Article 101. See the
+[publisher record and mathematical reference](https://doi.org/10.1145/3099564.3099569).

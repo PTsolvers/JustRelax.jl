@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -196,10 +196,10 @@ function main(igg, nx, ny)
 
     # Time loop
     t, it = 0.0, 0
-    dt = 25.0e3 * (3600 * 24 * 365.25)
-    dt_max = 25.0e3 * (3600 * 24 * 365.25)
+    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
-    while it < 1000 #00
+    while it < 500 #00
 
         # Stokes solver ----------------
         solve_VariationalStokes!(
@@ -215,7 +215,8 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (
-                iterMax = 50.0e3,
+                air_phase = air_phase,
+                iterMax = 150.0e3,
                 iterMin = 1.0e3,
                 viscosity_relaxation = 1.0e-2,
                 nout = 2.0e3,
@@ -224,6 +225,7 @@ function main(igg, nx, ny)
             )
         )
         dt = compute_dt(stokes, di, dt_max)
+        println("dt = $(round(dt / (3600 * 24 * 365.25); digits = 3)) yrs")
         # ------------------------------
 
         # Advection --------------------
@@ -231,12 +233,13 @@ function main(igg, nx, ny)
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
 
-        # advect marker chain
+        # Apply the updated marker-chain surface before replenishing particles.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

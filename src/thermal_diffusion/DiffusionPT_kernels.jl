@@ -574,8 +574,6 @@ end
 
     else
 
-        nx, ny = size(args.P)
-
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_vertex, j)
 

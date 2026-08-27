@@ -1,25 +1,36 @@
-const isGPU = true
+const isCUDA = false
+# const isCUDA = true
 
-@static if isGPU
+@static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-using JustPIC
-using ParallelStencil, GeoParams
 
-@static if isGPU
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
-    const backend_JR = CUDABackend
-    const backend = CUDABackend
-
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    const backend_JR = CPUBackend
-    const backend = JustPIC.CPU
-
 end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams
 
 distance(p1, p2) = mapreduce(x -> (x[1] - x[2])^2, +, zip(p1, p2)) |> sqrt
 
@@ -104,7 +115,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     P = @zeros(ni...)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2], ly)
 
     # Add thermal perturbation
@@ -117,10 +128,10 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     pPhases, = init_cell_arrays(particles, Val(1))
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
@@ -128,7 +139,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     # PT coefficients for thermal diffusion
     args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.97 / √2
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.97 / √2
     )
 
     thermal_bc = TemperatureBoundaryConditions(;

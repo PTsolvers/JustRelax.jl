@@ -21,7 +21,7 @@ function update_phases_given_markerchain!(
         phase, chain::MarkerChain{backend}, particles::Particles{backend}, origin, di, air_phase, args::NTuple{N, Any}
     ) where {backend, N}
     (; coords, index) = particles
-    return @parallel (1:size(index, 1)) _update_phases_given_markerchain!(
+    return @parallel (1:size(chain.coords[1], 1)) _update_phases_given_markerchain!(
         phase,
         coords,
         index,
@@ -49,29 +49,30 @@ function _update_phases_given_markerchain_kernel!(
     chain_yi = @cell chain_coords[2][icell]
     min_cell_j, max_cell_j = find_minmax_cell_indices(chain_yi, origin[2], di)
     min_cell_j = max(1, min_cell_j - 10)
-    max_cell_j = min(size(index, 2), max_cell_j + 10)
+    max_cell_j = min(size(index, 2) - 2, max_cell_j + 10)
     cell_range = min_cell_j:max_cell_j
 
     # iterate over cells with marker chain on them
     for j in cell_range
+        particle_i, particle_j = icell + 1, j + 1
         # iterate over particles j-th cell
         for ip in cellaxes(index)
-            (@index index[ip, icell, j]) || continue
-            xq = @index coords[1][ip, icell, j]
-            yq = @index coords[2][ip, icell, j]
-            phaseq = @index phase[ip, icell, j]
+            (@index index[ip, particle_i, particle_j]) || continue
+            xq = @index coords[1][ip, particle_i, particle_j]
+            yq = @index coords[2][ip, particle_i, particle_j]
+            phaseq = @index phase[ip, particle_i, particle_j]
 
             # check if particle is above the marker chain
             above = is_above_chain(xq, yq, chain_coords, cell_vertices)
             # if the particle is above the surface and the phase is not air, set the phase to air
             if above && phaseq != air_phase
                 # @index phase[ip, icell, j] = T(air_phase)
-                @index coords[1][ip, icell, j] = NaN
-                @index coords[2][ip, icell, j] = NaN
-                @index index[ip, icell, j] = false
+                @index coords[1][ip, particle_i, particle_j] = NaN
+                @index coords[2][ip, particle_i, particle_j] = NaN
+                @index index[ip, particle_i, particle_j] = false
 
                 for argᵢ in args
-                    @index argᵢ[ip, icell, j] = NaN
+                    @index argᵢ[ip, particle_i, particle_j] = NaN
                 end
 
             end
@@ -80,12 +81,12 @@ function _update_phases_given_markerchain_kernel!(
                 # @index phase[ip, icell, j] = closest_phase(
                 #     coords, (xq, yq), index, ip, phase, air_phase, icell, j
                 # )
-                @index coords[1][ip, icell, j] = NaN
-                @index coords[2][ip, icell, j] = NaN
-                @index index[ip, icell, j] = false
+                @index coords[1][ip, particle_i, particle_j] = NaN
+                @index coords[2][ip, particle_i, particle_j] = NaN
+                @index index[ip, particle_i, particle_j] = false
 
                 for argᵢ in args
-                    @index argᵢ[ip, icell, j] = NaN
+                    @index argᵢ[ip, particle_i, particle_j] = NaN
                 end
             end
         end

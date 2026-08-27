@@ -138,7 +138,12 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 125, 175, 75
+    # Particle injection currently uses a random location inside each depleted
+    # quadrant.  A larger reservoir reduces the sampling noise in the phase
+    # ratios, while a lower replenishment threshold avoids repeatedly replacing
+    # particles near the moving free surface (where this noise is amplified by
+    # the unstable Rayleigh--Taylor mode).
+    nxcell, max_xcell, min_xcell = 192, 256, 64
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
@@ -154,7 +159,7 @@ function main(igg, nx, ny)
     # ----------------------------------------------------
 
     # Initialize marker chain-------------------------------
-    nxcell, max_xcell, min_xcell = 100, 150, 75
+    nxcell, max_xcell, min_xcell = 100, 200, 15
     initial_elevation = -100.0e3
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
     # ----------------------------------------------------
@@ -197,7 +202,7 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dt_max = 50.0e3 * (3600 * 24 * 365.25)
+    dt_max = 25.0e3 * (3600 * 24 * 365.25)
 
     while it < 500 #00
 
@@ -236,6 +241,13 @@ function main(igg, nx, ny)
 
         # Apply the updated marker-chain surface before replenishing particles.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        # advect_markerchain!(
+        #     chain,
+        #     RungeKutta2(),
+        #     @velocity(stokes),
+        #     grid_vxi,
+        #     dt,
+        # )
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # check if we need to inject particles
@@ -248,7 +260,7 @@ function main(igg, nx, ny)
         @show it += 1
         t += dt
 
-        if it == 1 || rem(it, 5) == 0
+        if it == 1 || rem(it, 50) == 0
             px, py = particles.coords
             chain_x, chain_y = chain.coords
 

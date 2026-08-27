@@ -13,6 +13,7 @@ const backend_JP = JustPIC.CPU
 const backend = JustRelax.CPUBackend
 using GeoParams, Printf, Statistics, LinearAlgebra
 using ImplicitGlobalGrid
+using Test
 
 const RHO, GRAV = 1.0, 1.0
 
@@ -20,12 +21,16 @@ quiet(f) = redirect_stdout(f, devnull)
 
 function materials(η_air, ρ_air, g)
     return (
-        SetMaterialParams(; Phase = 1, Density = ConstantDensity(; ρ = ρ_air),
+        SetMaterialParams(;
+            Phase = 1, Density = ConstantDensity(; ρ = ρ_air),
             CompositeRheology = CompositeRheology((LinearViscous(; η = η_air),)),
-            Gravity = ConstantGravity(; g = g)),
-        SetMaterialParams(; Phase = 2, Density = ConstantDensity(; ρ = RHO),
+            Gravity = ConstantGravity(; g = g)
+        ),
+        SetMaterialParams(;
+            Phase = 2, Density = ConstantDensity(; ρ = RHO),
             CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
-            Gravity = ConstantGravity(; g = g)),
+            Gravity = ConstantGravity(; g = g)
+        ),
     )
 end
 
@@ -49,14 +54,17 @@ function build(n, origin, rheology, phasefun)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-11, ϵ_rel = 1.0e-11,
-                               Re = 3π, r = 0.7, CFL = 0.9 / √2.1)
+    pt_stokes = PTStokesCoeffs(
+        li, di; ϵ_abs = 1.0e-11, ϵ_rel = 1.0e-11,
+        Re = 3π, r = 0.7, CFL = 0.9 / √2.1
+    )
     thermal = ThermalArrays(backend, ni)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     ϕ = RockRatio(backend, ni)
     flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, top = true, bot = true), free_surface = false)
+        free_slip = (left = true, right = true, top = true, bot = true), free_surface = false
+    )
     return (; ni, li, di, grid, phase_ratios, stokes, pt_stokes, ρg, args, ϕ, flow_bcs, rheology)
 end
 
@@ -67,8 +75,14 @@ function solve!(m, igg; iterMax = 100.0e3)
         solve_VariationalStokes!(
             m.stokes, m.pt_stokes, m.grid, m.flow_bcs, m.ρg, m.phase_ratios, m.ϕ,
             m.rheology, m.args, 1.0, igg;
-            kwargs = (; iterMax, iterMin = 10, nout = 2000, air_phase = 1,
-                      viscosity_cutoff = (1.0e-8, 1.0e8), free_surface = false, verbose = false))
+            air_phase = 1,
+            iterMax,
+            iterMin = 10,
+            nout = 2000,
+            viscosity_cutoff = (1.0e-8, 1.0e8),
+            free_surface = false,
+            verbose = false,
+        )
     end
     return nothing
 end
@@ -88,10 +102,18 @@ function rigid(igg, n, U, ω)
     m = build(n, (-0.5, -0.5), materials(1.0e-3, 0.0, 0.0), (x, y) -> incircle(x, y) ? 2.0 : 1.0)
     (; xci, xvi) = m.grid; di = m.di; ϕ = m.ϕ
     xc, yc = xci; xv, yv = xvi
-    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1); ϕ.center[i, j] = circfrac(xc[i], yc[j], di...); end
-    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1); ϕ.vertex[i, j] = circfrac(xv[i], yv[j], di...); end
-    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1); ϕ.Vx[i, j] = circfrac(xv[i], yc[j], di...); end
-    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1); ϕ.Vy[i, j] = circfrac(xc[i], yv[j], di...); end
+    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
+        ϕ.center[i, j] = circfrac(xc[i], yc[j], di...)
+    end
+    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
+        ϕ.vertex[i, j] = circfrac(xv[i], yv[j], di...)
+    end
+    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
+        ϕ.Vx[i, j] = circfrac(xv[i], yc[j], di...)
+    end
+    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
+        ϕ.Vy[i, j] = circfrac(xc[i], yv[j], di...)
+    end
 
     Vx, Vy = m.stokes.V.Vx, m.stokes.V.Vy
     fill!(Vx, 0.0); fill!(Vy, 0.0)
@@ -117,10 +139,18 @@ function hydro(igg, n, y_s)
     m = build(n, (0.0, -1.0), materials(1.0e-3, 0.0, GRAV), (x, y) -> y < y_s ? 2.0 : 1.0)
     (; xci, xvi) = m.grid; dy = m.di[2]; ϕ = m.ϕ
     yc, yv = xci[2], xvi[2]
-    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1); ϕ.center[i, j] = below(yc[j], dy, y_s); end
-    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1); ϕ.vertex[i, j] = below(yv[j], dy, y_s); end
-    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1); ϕ.Vx[i, j] = below(yc[j], dy, y_s); end
-    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1); ϕ.Vy[i, j] = below(yv[j], dy, y_s); end
+    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
+        ϕ.center[i, j] = below(yc[j], dy, y_s)
+    end
+    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
+        ϕ.vertex[i, j] = below(yv[j], dy, y_s)
+    end
+    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
+        ϕ.Vx[i, j] = below(yc[j], dy, y_s)
+    end
+    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
+        ϕ.Vy[i, j] = below(yv[j], dy, y_s)
+    end
     solve!(m, igg)
     jp = argmin(abs.(yc .- (-0.5)))
     err = (mean(m.stokes.P[:, jp]) - RHO * GRAV * (y_s - yc[jp])) / (RHO * GRAV * dy)
@@ -141,6 +171,8 @@ println("\n===== A. rigid-body invariance (n = 64) =====")
 for (lbl, U, ω) in (("translation", 1.0, 0.0), ("rotation", 0.0, 1.0))
     r, c = at_resolution(igg -> rigid(igg, 64, U, ω), 64)
     @printf("  %-14s %14.8f %14.2e\n", lbl, r, c)
+    @test r ≈ 1.0 atol = 1.0e-12
+    @test c < 1.0e-12
 end
 
 println("\n===== B. hydrostatic exactness: surface misplacement, in cells =====")
@@ -153,4 +185,8 @@ for δ in (0.0, 0.25, 0.5, 0.75)
         push!(errs, e); v = vm
     end
     @printf("  %8.2f %12.5f %12.5f %12.5f %14.2e\n", δ, errs..., v)
+    @test all(isfinite, errs)
+    @test v < 1.0e-10
+    expected = δ in (0.25, 0.5) ? -δ / 2 : 0.0
+    @test errs ≈ fill(expected, 3) atol = 1.0e-10
 end

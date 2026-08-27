@@ -7,6 +7,7 @@ using Test
 using Statistics
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+import ImplicitGlobalGrid
 import JustRelax.JustRelax2D:
     detect_args_size,
     _tuple,
@@ -32,16 +33,16 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @testset "Utils" begin
@@ -308,10 +309,13 @@ end
         @test JustRelax2D._av_xi(A2, i, j) == 10.5
         @test JustRelax2D._av_yi(A2, i, j) == 9.0
 
-        @test JustRelax2D._harm(A2, i, j) == 1.2136363636363636
-        @test JustRelax2D._harm_a(A2, i, j) == 2.001731601731602
-        @test JustRelax2D._harm_xa(A2, i, j) == 0.6190476190476191
-        @test JustRelax2D._harm_ya(A2, i, j) == 0.5333333333333333
+        # harmonic mean of the cells each stencil gathers
+        harmonic(x...) = length(x) / sum(inv, x)
+
+        @test JustRelax2D._harm(A2, i, j) ≈ harmonic(11.0, 12.0, 15.0, 16.0)
+        @test JustRelax2D._harm_a(A2, i, j) ≈ harmonic(6.0, 7.0, 10.0, 11.0)
+        @test JustRelax2D._harm_xa(A2, i, j) ≈ harmonic(6.0, 7.0)
+        @test JustRelax2D._harm_ya(A2, i, j) ≈ harmonic(6.0, 10.0)
 
         @test JustRelax2D._gather(A2, i, j) == (6.0, 7.0, 10.0, 11.0)
 
@@ -326,15 +330,15 @@ end
         @test JustRelax2D._av_xzi(A3, i, j, k) == 13.5
         @test JustRelax2D._av_yzi(A3, i, j, k) == 12.0
 
-        @test JustRelax2D._harm_x(A3, i, j, k) == 22.488888888888887
-        @test JustRelax2D._harm_y(A3, i, j, k) == 23.833333333333332
-        @test JustRelax2D._harm_z(A3, i, j, k) == 27.866666666666667
-        @test JustRelax2D._harm_xy(A3, i, j, k) == 0.04081632653061224
-        @test JustRelax2D._harm_xz(A3, i, j, k) == 0.03278688524590164
-        @test JustRelax2D._harm_yz(A3, i, j, k) == 0.03125
-        @test JustRelax2D._harm_xyi(A3, i, j, k) == 0.05128205128205128
-        @test JustRelax2D._harm_xzi(A3, i, j, k) == 0.07407407407407407
-        @test JustRelax2D._harm_yzi(A3, i, j, k) == 0.08333333333333333
+        @test JustRelax2D._harm_x(A3, i, j, k) ≈ harmonic(22.0, 23.0)
+        @test JustRelax2D._harm_y(A3, i, j, k) ≈ harmonic(22.0, 26.0)
+        @test JustRelax2D._harm_z(A3, i, j, k) ≈ harmonic(22.0, 38.0)
+        @test JustRelax2D._harm_xy(A3, i, j, k) ≈ harmonic(22.0, 23.0, 26.0, 27.0)
+        @test JustRelax2D._harm_xz(A3, i, j, k) ≈ harmonic(22.0, 23.0, 38.0, 39.0)
+        @test JustRelax2D._harm_yz(A3, i, j, k) ≈ harmonic(22.0, 26.0, 38.0, 42.0)
+        @test JustRelax2D._harm_xyi(A3, i, j, k) ≈ harmonic(17.0, 18.0, 21.0, 22.0)
+        @test JustRelax2D._harm_xzi(A3, i, j, k) ≈ harmonic(5.0, 6.0, 21.0, 22.0)
+        @test JustRelax2D._harm_yzi(A3, i, j, k) ≈ harmonic(2.0, 6.0, 18.0, 22.0)
 
         @test JustRelax2D._gather_yz(A3, i, j, k) == (22.0, 26.0, 38.0, 42.0)
         @test JustRelax2D._gather_xz(A3, i, j, k) == (22.0, 23.0, 38.0, 39.0)
@@ -509,4 +513,95 @@ end
         @test di == (0.25, 0.5, 0.75)
         @test length(xi_vel) == 3
     end
+
+    @testset "compute_lithostatic_pressure!" begin
+        nx, ny = 3, 4
+        dz = 0.5
+
+        # uniform column: cell j carries ny - j full cells plus half of its own
+        ρg = @zeros(nx, ny)
+        ρg .= 2.0
+        P = @zeros(nx, ny)
+        compute_lithostatic_pressure!(P, ρg, dz)
+        @test Array(P)[1, :] ≈ [(ny - j + 0.5) * 2.0 * dz for j in 1:ny]
+        @test all(Array(P) .== Array(P)[1:1, :])
+
+        # the topmost cell carries half of its own weight, and nothing else
+        @test Array(P)[1, end] ≈ 2.0 * dz / 2
+
+        # variable density, checked against the definition
+        ρg .= PTArray(backend_JR)([Float64(i + 2j) for i in 1:nx, j in 1:ny])
+        compute_lithostatic_pressure!(P, ρg, dz)
+        ρg_cpu, P_cpu = Array(ρg), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈ sum(ρg_cpu[i, (j + 1):end]) * dz + ρg_cpu[i, j] * dz / 2
+        end
+
+        # non-uniform cell heights: each cell is weighted by its own height
+        dzs = PTArray(backend_JR)([0.25, 0.5, 1.0, 2.0])
+        compute_lithostatic_pressure!(P, ρg, dzs)
+        dzs_cpu, P_cpu = Array(dzs), Array(P)
+        for i in 1:nx, j in 1:ny
+            @test P_cpu[i, j] ≈
+                sum(ρg_cpu[i, k] * dzs_cpu[k] for k in (j + 1):ny; init = 0.0) +
+                ρg_cpu[i, j] * dzs_cpu[j] / 2
+        end
+
+        # a constant height reproduces the uniform case
+        compute_lithostatic_pressure!(P, ρg, dz)
+        P_uniform = copy(Array(P))
+        compute_lithostatic_pressure!(P, ρg, PTArray(backend_JR)(fill(dz, ny)))
+        @test Array(P) ≈ P_uniform
+
+        # a single rank holds the whole column, so the topology adds nothing to it
+        gg = ImplicitGlobalGrid.global_grid()
+        igg = IGG(gg.me, gg.dims, gg.nprocs, gg.coords, gg.comm)
+        P_mpi = @zeros(nx, ny)
+        compute_lithostatic_pressure!(P_mpi, ρg, dz, igg)
+        @test Array(P_mpi) == P_uniform
+        compute_lithostatic_pressure!(P_mpi, ρg, PTArray(backend_JR)(fill(dz, ny)), igg)
+        @test Array(P_mpi) ≈ P_uniform
+
+        # a column carved out of a wider field is integrated in place
+        wide = @zeros(nx + 2, ny)
+        P_view = view(wide, 2:(nx + 1), 1:ny)
+        compute_lithostatic_pressure!(P_view, ρg, dz)
+        @test Array(P_view) ≈ P_uniform
+        @test all(iszero, Array(wide)[1, :])
+
+        # 3D integrates along the third dimension
+        ρg3 = [Float64(i + j + k) for i in 1:2, j in 1:2, k in 1:3]
+        P3 = similar(ρg3)
+        JustRelax.JustRelax3D.compute_lithostatic_pressure!(P3, ρg3, dz)
+        for i in 1:2, j in 1:2, k in 1:3
+            @test P3[i, j, k] ≈ sum(ρg3[i, j, (k + 1):end]) * dz + ρg3[i, j, k] * dz / 2
+        end
+        P3_mpi = similar(ρg3)
+        JustRelax.JustRelax3D.compute_lithostatic_pressure!(P3_mpi, ρg3, dz, igg)
+        @test P3_mpi == P3
+
+        @test_throws "must span the same cells" compute_lithostatic_pressure!(
+            @zeros(nx, ny), @zeros(nx, ny + 1), dz
+        )
+        @test_throws "one height per cell" compute_lithostatic_pressure!(
+            P, ρg, PTArray(backend_JR)(fill(dz, ny + 1))
+        )
+    end
+end
+
+@testset "getindex_NamedTuple" begin
+    # src/Utils.jl: sizes are compared per dimension. `min` on tuples is
+    # lexicographic, so a mixed-stagger args would otherwise infer a sz_min that is
+    # too large in one dimension and offset that dimension the wrong way.
+    getidx = JustRelax.JustRelax2D.getindex_NamedTuple
+    x_face = [10.0i + j for i in 1:5, j in 1:4]   # (nx+1, ny)
+    y_face = [10.0i + j for i in 1:4, j in 1:5]   # (nx, ny+1)
+
+    got = getidx((; x_face, y_face), 1, 1)
+    @test got.x_face == x_face[2, 1]
+    @test got.y_face == y_face[1, 2]
+
+    # an explicit grid size wins over anything inferred from args
+    ghosted = [10.0i + j for i in 1:6, j in 1:6]  # (nx+2, ny+2)
+    @test getidx((; ghosted), (4, 4), 1, 1).ghosted == ghosted[2, 2]
 end

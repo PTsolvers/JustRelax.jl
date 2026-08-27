@@ -483,10 +483,6 @@ end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
 
-@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
-@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
-@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
-
 @inline pressure_dof(N) = prod(global_grid_size(N))
 
 function velocity_dofs(::Val{N}) where {N}

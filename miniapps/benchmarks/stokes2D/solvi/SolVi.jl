@@ -1,4 +1,3 @@
-using Pkg; Pkg.activate("miniapps")
 using ParallelStencil.FiniteDifferences2D
 using JLD2
 # include benchmark related functions

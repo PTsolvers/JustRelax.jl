@@ -21,13 +21,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @testset "Rheology" begin
@@ -252,6 +252,160 @@ end
         @test all(ϕ .< 1.0e-6)
     end
 
+    @testset "Melting.jl — dϕdT" begin
+        # src/rheology/Melting.jl: the melt-fraction temperature derivative that
+        # activates GeoParams' Latent_HeatCapacity (Cp += Q_L * dϕdT).
+        Ts, Tl = 973.0, 1273.0
+        quad = GeoParams.MeltingParam_Quadratic(; T_s = Ts, T_l = Tl)
+        # ∂ϕ/∂T = 2(T_l - T)/(T_l - T_s)² inside the interval, 0 outside
+        dϕdT_analytic(T) = Ts < T < Tl ? 2 * (Tl - T) / (Tl - Ts)^2 : 0.0
+
+        mat_melt = GeoParams.SetMaterialParams(;
+            Phase = 1,
+            Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+            Melting = quad,
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+        # a phase with no Melting entry ⇒ compute_dϕdT returns 0
+        mat_nomelt = GeoParams.SetMaterialParams(;
+            Phase = 2,
+            Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+
+        nx, ny = 5, 4
+        ni = nx, ny
+        # 900, 1020, 1140, 1260, 1380: subsolidus, three inside the melting interval,
+        # and superliquidus. No sample lands on T_s, where the two disagree:
+        # MeltingParam_Quadratic zeroes dϕdT only for `T > T_l || T < T_s`, so at
+        # T == T_s it returns 2 / (T_l - T_s) rather than 0.
+        T_h = [900.0 + 120.0 * i for i in 0:(nx - 1), _ in 1:ny]
+        T = PTArray(backend_JR)(T_h)
+        P = @fill(1.0e8, ni...)
+        args = (; T, P)
+
+        # 1) stand-alone, single-phase: matches the closed form
+        dϕdT = @zeros(ni...)
+        compute_melt_fraction_derivative!(dϕdT, mat_melt, args)
+        @test Base.Array(dϕdT) ≈ dϕdT_analytic.(T_h)
+
+        # 2) phase-ratio branch: pure phase 1 reproduces the single-phase result
+        grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+        (; xci, xvi) = grid
+        rheology = (mat_melt, mat_nomelt)
+        pr = JustPIC.PhaseRatios(backend_JP, 2, ni)
+        JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...), @zeros(ni...)), xci, xvi)
+
+        dϕdT_pr = @zeros(ni...)
+        compute_melt_fraction_derivative!(dϕdT_pr, pr, rheology, args)
+        @test Base.Array(dϕdT_pr) ≈ dϕdT_analytic.(T_h)
+
+        # 3) a phase with no melting law contributes 0
+        pr_nomelt = JustPIC.PhaseRatios(backend_JP, 2, ni)
+        JustRelax2D.update_phase_ratios_2D!(
+            pr_nomelt, (@zeros(ni...), @fill(1.0, ni...)), xci, xvi
+        )
+        dϕdT_zero = @fill(NaN, ni...)
+        compute_melt_fraction_derivative!(dϕdT_zero, pr_nomelt, rheology, args)
+        @test all(Base.Array(dϕdT_zero) .== 0.0)
+
+        # 4) fused ≡ stand-alone, bit for bit (guards the gather-then-write-both
+        #    ordering in compute_melt_fraction_kernel!)
+        ϕ_sep, ϕ_fused = @zeros(ni...), @zeros(ni...)
+        dϕdT_fused = @zeros(ni...)
+        compute_melt_fraction!(ϕ_sep, pr, rheology, args)
+        compute_melt_fraction!(ϕ_fused, dϕdT_fused, pr, rheology, args)
+        @test Base.Array(ϕ_fused) == Base.Array(ϕ_sep)
+        @test Base.Array(dϕdT_fused) == Base.Array(dϕdT_pr)
+
+        # 5) args without a cell-sized entry: the kernels index on their own grid,
+        #    so a ghosted T is offset past its halo either way
+        T_ghost = PTArray(backend_JR)(
+            [
+                T_h[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] for i in 1:(nx + 2), j in 1:(ny + 2)
+            ]
+        )
+        dϕdT_ghost = @zeros(ni...)
+        compute_melt_fraction_derivative!(dϕdT_ghost, mat_melt, (; T = T_ghost))
+        @test Base.Array(dϕdT_ghost) ≈ dϕdT_analytic.(T_h)
+
+        # 6) the kernel writes dϕdT under @inbounds over ϕ's indices
+        @test_throws "must match size(ϕ)" compute_melt_fraction!(
+            ϕ_fused, @zeros((ni .+ 1)...), pr, rheology, args
+        )
+    end
+
+    @testset "Latent_HeatCapacity reaches the PT preconditioner" begin
+        # src/thermal_diffusion/DiffusionPT_coefficients.jl: the coefficient
+        # kernels evaluate ρCp from the *full* args, so a dϕdT entry feeds
+        # Latent_HeatCapacity (Cp += Q_L * dϕdT) and changes dτ_ρ. Passing a
+        # truncated (T, P) subset would make Q_L a no-op here while update_T
+        # still sees it — a preconditioner built for a different operator.
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+                HeatCapacity = GeoParams.Latent_HeatCapacity(;
+                    Cp = GeoParams.ConstantHeatCapacity(; Cp = 1000.0), Q_L = 350.0e3,
+                ),
+                Conductivity = GeoParams.ConstantConductivity(; k = 3.0),
+                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+            ),
+        )
+
+        nx, ny = 4, 4
+        ni = nx, ny
+        grid = Geometry(ni, (1.0e3, 1.0e3); origin = (0.0, 0.0))
+        (; xci, xvi, di, li) = grid
+        pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
+        JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
+
+        T = @fill(1073.0, (ni .+ 2)...)
+        P = @fill(1.0e8, ni...)
+        dt = 100.0
+
+        coeffs(dϕdT) = PTThermalCoeffs(
+            backend_JR, rheology, pr, (; T, P, dϕdT = @fill(dϕdT, ni...)),
+            dt, ni, di.center, li
+        )
+
+        @test !(Base.Array(coeffs(1.0e-3).dτ_ρ) ≈ Base.Array(coeffs(0.0).dτ_ρ))
+    end
+
+    @testset "PT coefficients offset args against their own grid" begin
+        # src/thermal_diffusion/DiffusionPT_coefficients.jl: the coefficient kernels
+        # hand their own grid size to getindex_NamedTuple, so a ghosted entry like
+        # thermal.T is offset past its halo whether or not args also carries a
+        # cell-sized array. Inferring that size from args instead would read the
+        # halo as a cell center as soon as the cell-sized entry is dropped.
+        rheology = (
+            GeoParams.SetMaterialParams(;
+                Phase = 1,
+                Density = GeoParams.ConstantDensity(; ρ = 2700.0),
+                HeatCapacity = GeoParams.T_HeatCapacity_Whittington(),
+                Conductivity = GeoParams.ConstantConductivity(; k = 3.0),
+                CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+            ),
+        )
+
+        nx, ny = 4, 4
+        ni = nx, ny
+        grid = Geometry(ni, (1.0e3, 1.0e3); origin = (0.0, 0.0))
+        (; xci, xvi, di, li) = grid
+        pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
+        JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
+
+        # a ramp, so reading the halo instead of the interior changes ρCp
+        T = PTArray(backend_JR)([800.0 + 10.0 * (i + j) for i in 1:(nx + 2), j in 1:(ny + 2)])
+        P = @fill(1.0e8, ni...)
+
+        dτ_ρ(args) = Base.Array(
+            PTThermalCoeffs(backend_JR, rheology, pr, args, 100.0, ni, di.center, li).dτ_ρ
+        )
+
+        @test dτ_ρ((; T)) == dτ_ρ((; T, P))
+    end
+
     @testset "Solubility.jl" begin
         # src/rheology/Solubility.jl: compute_dissolved_volatiles! fills the H2O
         # and CO2 arrays from the GeoParams solubility closures.
@@ -281,7 +435,7 @@ end
                     Solubility = sol,
                 ),
             )
-            pr = JustPIC._2D.PhaseRatios(backend_JP, 1, ni)
+            pr = JustPIC.PhaseRatios(backend_JP, 1, ni)
             JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
 
             mH2O = @zeros(ni...)
@@ -449,7 +603,7 @@ end
         # passing plain Vector{Float64} causes `T = Vector{Float64}` to leak into
         # `@MVector @zeros(T, N)`, which is a separate API constraint not relevant here.
         nx, ny = 4, 4
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, (nx, ny))
+        pr = JustPIC.PhaseRatios(backend_JP, 2, (nx, ny))
         xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
         xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
 
@@ -492,7 +646,7 @@ end
         @test all(sum(Vy_h[i, j]) ≈ 1.0 for i in axes(Vy_h, 1), j in axes(Vy_h, 2))
 
         # Threshold path: a tiny third phase (< 1e-5) should be cleaned to zero.
-        pr3 = JustPIC._2D.PhaseRatios(backend_JP, 3, (nx, ny))
+        pr3 = JustPIC.PhaseRatios(backend_JP, 3, (nx, ny))
         p1b = @fill(0.6, nx, ny)
         p2b = @fill(0.4, nx, ny)
         p3b = @fill(1.0e-6, nx, ny)             # below the 1e-5 threshold

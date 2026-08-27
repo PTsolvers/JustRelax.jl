@@ -56,6 +56,7 @@ solve_DYREL!(
         linear_viscosity     = true,
         free_surface         = false,
         viscosity_cutoff     = (-Inf, Inf),
+        free_surface         = false,
     )
 );
 ```
@@ -82,6 +83,12 @@ solver keyword arguments are:
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `free_surface` $\rightarrow$ adds the free-surface stabilization (FSSA) term $V_y \frac{\partial (\rho g)}{\partial y} \Delta t$ to the vertical momentum residual, and puts a lower bound on the penalty so that it stays commensurate with that term.
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
+- `free_surface` $\rightarrow$ include the 2D density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+
+When `free_surface=true`, DYREL adds the local diagonal
+$-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
+row bound whenever the pseudo-transient coefficients are refreshed. The same
+term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
 
 # Variational (free surface) Stokes
 

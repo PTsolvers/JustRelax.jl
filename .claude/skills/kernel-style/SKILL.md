@@ -18,7 +18,7 @@ description: ParallelStencil kernel idioms and GPU-compatibility rules for JustR
 
 - No allocations inside kernels; use `StaticArrays` for small local vectors/tensors.
 - No dynamic dispatch, no `try/catch`, no printing inside kernels.
-- Material parameters: kernels receive GeoParams rheology structs; calls like `compute_viscosity`, `compute_ρg` must be type-stable and inlined. Phase ratios come from CellArrays (`@cell` / `@index` access patterns).
+- Material parameters: kernels receive GeoParams rheology structs; calls like `compute_viscosity`, `compute_ρg` must be type-stable and inlined. Phase ratios come from CellArrays (`@cell` / `@index` access patterns). `@index` is CellArraysIndexing's cell accessor, re-exported by `JustRelax2D`/`JustRelax3D`; KernelAbstractions has an unrelated macro of the same name, so do not `using KernelAbstractions` in files that index cell arrays.
 - Scalar indexing of device arrays outside kernels is forbidden — operate via kernels or broadcast.
 
 ## Formatting

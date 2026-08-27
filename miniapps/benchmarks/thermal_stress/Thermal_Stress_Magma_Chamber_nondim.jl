@@ -1,18 +1,35 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC
-using JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
+# Load script dependencies
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
 
 # -----------------------------------------------------------------------------------------
@@ -230,7 +247,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -242,11 +259,11 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     r_anomaly = nondimensionalize(1.5km, CharDim)        # radius of perturbation
     anomaly = nondimensionalize((750 + 273)K, CharDim) # thermal perturbation (in K)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialisation of thermal profile
-    thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
+    thermal = ThermalArrays(backend, ni) # initialise thermal arrays and boundary conditions
     Ttop = nondimensionalize((20 + 273)K, CharDim)
     Tbot = nondimensionalize(438.5625C, CharDim)
     thermal_bc = TemperatureBoundaryConditions(;
@@ -257,7 +274,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     # dTdz = nondimensionalize((450-20+273)K, CharDim) / (nondimensionalize(12.5km, CharDim))
     T1D = @. (∇Tz * (xci[2]) + Ttop) * (xci[2] < 0.0e0)
     T1D[xci[2] .≥ 0.0e0] .= Ttop
-    thermal.T[:, 2:(end - 1)] .+= PTArray(backend_JR)(T1D')
+    thermal.T[:, 2:(end - 1)] .+= PTArray(backend)(T1D')
 
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, r_anomaly, xvi, sticky_air
@@ -266,22 +283,22 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
+    stokes = StokesArrays(backend, ni) # initialise stokes arrays with the defined regime
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-2, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.T, P = stokes.P, dt = dt)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √2.1
     )
 
     # Pure shear far-field boundary conditions
-    stokes.V.Vx .= PTArray(backend_JR)(
+    stokes.V.Vx .= PTArray(backend)(
         [
             εbg * (x - lx * 0.5) for x in xvi[1], _ in 1:(ny + 2)
         ]
     )
-    stokes.V.Vy .= PTArray(backend_JR)(
+    stokes.V.Vy .= PTArray(backend)(
         [
             (abs(y) - sticky_air) * εbg * (abs(y) > sticky_air) for _ in 1:(nx + 2), y in xvi[2]
         ]
@@ -303,7 +320,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     ρg = @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     # Arguments for functions
@@ -456,11 +473,11 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told
@@ -477,7 +494,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 if do_vtk
                     data_v = (;
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, MPa, CharDim))),
                         εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                         Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),

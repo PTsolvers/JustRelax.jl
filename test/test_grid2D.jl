@@ -72,6 +72,33 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         finalize_global_grid(; finalize_MPI = false)
     end
 
+    @testset "GeometryAnnulus (θ, r)" begin
+        nθ, nr = 8, 4
+        lθ, lr = 2π, 2.0
+        θ₀, r₀ = -π, 1.0
+        grid = JustRelax.GeometryAnnulus((nθ, nr), (lθ, lr); origin = (θ₀, r₀))
+
+        @test grid isa JustRelax.GeometryAnnulus
+        @test grid.ni == (nθ, nr)
+        @test grid.origin == (θ₀, r₀)
+        @test grid.max_li == lθ
+        @test grid.xvi[1][1] == θ₀
+        @test grid.xvi[2][1] == r₀
+        @test grid.xci[1][1] == θ₀ + lθ / (2nθ)
+        @test grid.xci[2][1] == r₀ + lr / (2nr)
+
+        θv = [-π, -π / 2, 0.0, π]
+        rv = [1.0, 1.2, 1.8, 3.0]
+        grid_nu = JustRelax.GeometryAnnulus(Array, θv, rv)
+        grid_tuple = JustRelax.GeometryAnnulus((θv, rv))
+
+        @test grid_nu isa JustRelax.GeometryAnnulus
+        @test grid_nu.xvi == (θv, rv)
+        @test grid_nu.xci[1] == (θv[1:(end - 1)] .+ θv[2:end]) ./ 2
+        @test grid_nu.xci[2] == (rv[1:(end - 1)] .+ rv[2:end]) ./ 2
+        @test grid_tuple.xvi == grid_nu.xvi
+    end
+
     @suppress @testset "periodic x_g / y_g" begin
         n = 4
         igg = IGG(

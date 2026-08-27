@@ -1,7 +1,8 @@
 module JustRelax2D
 
     using ..JustRelax
-    using JustPIC, JustPIC._2D
+    using JustPIC
+    using CellArraysIndexing: @index
     using StaticArrays
     using CellArrays
     using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -25,7 +26,11 @@ module JustRelax2D
     import JustRelax: normal_stress, shear_stress, shear_vorticity
     import JustRelax: @dxi, @dx, @dy, @dz
 
-    import JustPIC._2D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+    import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
+
+    # `@index` is CellArraysIndexing's cell accessor. JustPIC does not export it -- a bare
+    # `@index` there is KernelAbstractions' kernel index macro -- so it is re-exported here.
+    export @index
 
     __init__() = @init_parallel_stencil(Threads, Float64, 2)
 
@@ -46,7 +51,8 @@ end
 module JustRelax3D
 
     using ..JustRelax
-    using JustPIC, JustPIC._3D
+    using JustPIC
+    using CellArraysIndexing: @index
     using StaticArrays
     using CellArrays
     using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -70,7 +76,11 @@ module JustRelax3D
     import JustRelax: normal_stress, shear_stress, shear_vorticity
     import JustRelax: @dxi, @dx, @dy, @dz
 
-    import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+    import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
+
+    # `@index` is CellArraysIndexing's cell accessor. JustPIC does not export it -- a bare
+    # `@index` there is KernelAbstractions' kernel index macro -- so it is re-exported here.
+    export @index
 
     __init__() = @init_parallel_stencil(Threads, Float64, 3)
 

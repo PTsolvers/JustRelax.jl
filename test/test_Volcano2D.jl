@@ -21,14 +21,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 # Load script dependencies
 using GeoParams, CellArrays, Statistics
@@ -39,12 +39,6 @@ include("../miniapps/benchmarks/stokes2D/Volcano2D/Caldera_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -52,12 +46,6 @@ function copyinn_x!(A, B)
     end
 
     return @parallel f_x(A, B)
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
 end
 
 function apply_pure_shear(Vx, Vy, εbg, xvi, lx, ly)
@@ -186,11 +174,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
+    stokes.P .= 0
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-10, Re = π / 2, r = 0.7, CFL = 0.98 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend, ni)
+    thermal.T .= 0
     T_GMG_center = @zeros(ni...)
     vertex2center!(T_GMG_center, PTArray(backend)(T_GMG))
     @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_GMG_center
@@ -215,15 +205,15 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 
-    # Melt fraction
-    ϕ_m = @zeros(ni...)
+    # Melt fraction and its temperature derivative dϕdT
+    ϕ_m, dϕdT = @zeros(ni...), @zeros(ni...)
     compute_melt_fraction!(
-        ϕ_m, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
+        ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)
     )
     # Rheology
-    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
+    args0 = (; dϕdT, T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
 
@@ -257,10 +247,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
+    τxx_v_ghost = @zeros(ni .+ 3...)
+    τyy_v_ghost = @zeros(ni .+ 3...)
+    τxy_ghost = @zeros(ni .+ 3...)
+    ωxy_ghost = @zeros(ni .+ 3...)
 
     # Time loop
     t, it = 0.0, 0
@@ -269,7 +263,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     while it < 2 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         if mod(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3), 1.5e3) == 0.0
             thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, air_phase)
@@ -277,7 +271,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         thermal_bcs!(thermal, thermal_bc)
 
         # args = (; T = thermal.T, P=stokes.P, dt=Inf, ΔT=@view(thermal.ΔT[2:(end - 1), 2:(end - 1)]))
-        args = (; ϕ = ϕ_m, T = thermal.T, P = stokes.P, dt = Inf)
+        args = (; ϕ = ϕ_m, dϕdT, T = thermal.T, P = stokes.P, dt = Inf)
 
         stress2grid!(stokes, pτ, particles)
 
@@ -335,7 +329,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -348,19 +342,31 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
+        for (ghost, field) in (
+                (τxx_v_ghost, τxx_v),
+                (τyy_v_ghost, τyy_v),
+                (τxy_ghost, stokes.τ.xy),
+                (ωxy_ghost, stokes.ω.xy),
+            )
+            @views ghost[2:(end - 1), 2:(end - 1)] .= field
+            @views ghost[1, :] .= ghost[2, :]
+            @views ghost[end, :] .= ghost[end - 1, :]
+            @views ghost[:, 1] .= ghost[:, 2]
+            @views ghost[:, end] .= ghost[:, end - 1]
+        end
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v_ghost, τyy_v_ghost, τxy_ghost, ωxy_ghost)
         )
 
         # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
-            ϕ_m, phase_ratios, rheology, (T = thermal.T, P = stokes.P)
+            ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)
         )
 
         # update phase ratios

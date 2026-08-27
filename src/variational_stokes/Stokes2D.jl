@@ -226,6 +226,7 @@ function _solve_VS!(
             end
 
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             # @hide_communication b_width begin # communication/computation overlap
             @parallel (@idx ni .+ 1) compute_V!(
@@ -244,8 +245,8 @@ function _solve_VS!(
             )
             # apply boundary conditions
             velocity2displacement!(stokes, dt)
-            # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
             flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
             update_halo!(@velocity(stokes)...)
             # end
         end

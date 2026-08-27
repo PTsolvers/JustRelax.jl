@@ -51,6 +51,32 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
     return nothing
 end
 
+"""
+    apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+
+Add the 2D free-surface diagonal `-dt * ∂y(ρg)` to the vertical DYREL
+preconditioner and its Gershgorin row bound. Passing `dt = 0` is a no-op.
+"""
+function apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+    ni = size(Dy)
+    @parallel (@idx ni) _apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+    return nothing
+end
+
+@parallel_indices (i, j) function _apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+    @inbounds if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+        _dy = inv(@dy(di_center, j))
+        j_N = min(j + 1, size(ρgy, 2))
+        c_fs = free_surface_diagonal(ρgy[i, j], ρgy[i, j_N], _dy, dt)
+        D_old = Dy[i, j]
+        row_sum = λmaxVy[i, j] * D_old + c_fs
+        D_new = D_old + c_fs
+        Dy[i, j] = D_new
+        λmaxVy[i, j] = row_sum / D_new
+    end
+    return nothing
+end
+
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
         Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, rheology, dt, ρgy

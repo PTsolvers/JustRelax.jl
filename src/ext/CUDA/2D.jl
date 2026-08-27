@@ -331,9 +331,13 @@ function JR2D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, ar
 end
 
 function JR2D.compute_ρg!(
-        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+        ρg::Union{CuArray, NTuple{N, CuArray}},
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction

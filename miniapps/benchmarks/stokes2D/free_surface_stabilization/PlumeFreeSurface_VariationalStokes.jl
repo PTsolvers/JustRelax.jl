@@ -199,13 +199,11 @@ function main(igg, nx, ny)
             args,
             dt,
             igg;
-            kwargs = (;
-                air_phase = air_phase,
-                iterMax = 100.0e3,
-                nout = 1.0e3,
-                viscosity_cutoff = (-Inf, Inf),
-                free_surface = true,
-            )
+            air_phase = air_phase,
+            iterMax = 100.0e3,
+            nout = 1.0e3,
+            viscosity_cutoff = (-Inf, Inf),
+            free_surface = true,
         )
         dt = compute_dt(stokes, di) * 0.95
         # ------------------------------

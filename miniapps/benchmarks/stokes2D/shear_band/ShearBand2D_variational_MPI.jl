@@ -206,12 +206,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             args,
             dt,
             igg;
-            kwargs = (;
-                air_phase = air_phase,
-                iterMax = 50.0e3,
-                nout = 2.0e3,
-                viscosity_cutoff = (-Inf, Inf),
-            )
+            air_phase = air_phase,
+            iterMax = 50.0e3,
+            nout = 2.0e3,
+            viscosity_cutoff = (-Inf, Inf),
         )
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))

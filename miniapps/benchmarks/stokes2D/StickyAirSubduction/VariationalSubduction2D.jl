@@ -174,13 +174,11 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
                 args,
                 dt,
                 igg;
-                kwargs = (;
-                    air_phase = air_phase,
-                    iterMax = 50.0e3,
-                    free_surface = true,
-                    nout = 5.0e3,
-                    viscosity_cutoff = viscosity_cutoff,
-                )
+                air_phase = air_phase,
+                iterMax = 50.0e3,
+                free_surface = true,
+                nout = 5.0e3,
+                viscosity_cutoff = viscosity_cutoff,
             )
         end
         # println("   Time/iteration:  $(t_stokes / out.iter) s")

@@ -432,7 +432,7 @@ function JR2D.solve!(::CUDABackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
 end
 
-function JR2D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwargs)
+function JR2D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwargs...)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 

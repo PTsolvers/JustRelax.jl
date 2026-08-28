@@ -1,9 +1,13 @@
-using JustRelax
-using LinearAlgebra
+push!(LOAD_PATH, "..")
+
 using Test
+using LinearAlgebra
+using JustRelax, JustRelax.JustRelax2D
+import JustRelax.JustRelax2D as JR2
 
 """Return the interior x-face pressure gradient used by the 2D layout."""
 function _pressure_gradient_x(p, wₚ, wᵤ, dx)
+    Base.require_one_based_indexing(p, wₚ, wᵤ)
     nx, ny = size(p)
     gx = zeros(promote_type(eltype(p), eltype(wₚ), eltype(wᵤ)), nx - 1, ny)
     for j in 1:ny, i in 1:(nx - 1)
@@ -17,6 +21,7 @@ end
 
 """Return the interior y-face pressure gradient used by the 2D layout."""
 function _pressure_gradient_y(p, wₚ, wᵥ, dy)
+    Base.require_one_based_indexing(p, wₚ, wᵥ)
     nx, ny = size(p)
     gy = zeros(promote_type(eltype(p), eltype(wₚ), eltype(wᵥ)), nx, ny - 1)
     for j in 1:(ny - 1), i in 1:nx
@@ -29,6 +34,7 @@ function _pressure_gradient_y(p, wₚ, wᵥ, dy)
 end
 
 function _dense_gradient_x(wₚ, wᵤ, dx)
+    Base.require_one_based_indexing(wₚ, wᵤ)
     nx, ny = size(wₚ)
     G = zeros(eltype(wₚ), (nx - 1) * ny, nx * ny)
     row(i, j) = i + (j - 1) * (nx - 1)
@@ -43,6 +49,7 @@ function _dense_gradient_x(wₚ, wᵤ, dx)
 end
 
 function _dense_gradient_y(wₚ, wᵥ, dy)
+    Base.require_one_based_indexing(wₚ, wᵥ)
     nx, ny = size(wₚ)
     G = zeros(eltype(wₚ), nx * (ny - 1), nx * ny)
     row(i, j) = i + (j - 1) * nx
@@ -80,22 +87,22 @@ end
 end
 
 @testset "Variational Stokes 2D active-volume policy" begin
-    @test JustRelax.JustRelax2D.variational_active(0.0) == false
-    @test JustRelax.JustRelax2D.variational_active(nextfloat(0.0)) == true
-    @test JustRelax.JustRelax2D.variational_active(1.0) == true
+    @test JR2.variational_active(0.0) == false
+    @test JR2.variational_active(nextfloat(0.0)) == true
+    @test JR2.variational_active(1.0) == true
 end
 
 @testset "Variational Stokes 2D bounded face mass" begin
     for fraction in (0.0, nextfloat(0.0), 0.05, 0.1, 0.75, 1.0)
-        mass = JustRelax.JustRelax2D.variational_face_mass(fraction)
+        mass = JR2.variational_face_mass(fraction)
         @test isfinite(mass)
         @test mass ≥ 0.1
     end
-    @test JustRelax.JustRelax2D.variational_face_mass(1.0) == 1.0
+    @test JR2.variational_face_mass(1.0) == 1.0
 end
 
 @testset "Marker-chain filtering index safety" begin
-    find_cells = JustRelax.JustRelax2D.find_minmax_cell_indices
+    find_cells = JR2.find_minmax_cell_indices
 
     # Cell lookup must floor negative coordinates rather than truncate them
     # toward zero.

@@ -229,9 +229,7 @@ end
         ni = (2, 2)
         phase_ratios = PhaseRatios(backend_JP, 2, ni)
         for ratios_field in (phase_ratios.center, phase_ratios.vertex, phase_ratios.Vx, phase_ratios.Vy)
-            for I in CartesianIndices(ratios_field)
-                ratios_field[I] = ratios
-            end
+            @fill!(ratios_field, ratios)
         end
         ρg_air = @zeros(ni...)
         args_ρg = (; T = @fill(300.0, ni...), P = @fill(0.0, ni...))

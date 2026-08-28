@@ -5,19 +5,56 @@
 # B: hydrostatic exactness.  A fluid layer under a flat free surface placed at a
 #    sub-grid height must reproduce P = rho*g*(y_s - y) exactly, for any height.
 
-using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2)
-using JustPIC
-const backend_JP = JustPIC.CPU
-const backend = JustRelax.CPUBackend
+push!(LOAD_PATH, "..")
+@static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    using AMDGPU
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    using CUDA
+end
+
+using Test, Suppressor
 using GeoParams, Printf, Statistics, LinearAlgebra
 using ImplicitGlobalGrid
-using Test
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    @init_parallel_stencil(AMDGPU, Float64, 2)
+    AMDGPUBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    @init_parallel_stencil(CUDA, Float64, 2)
+    CUDABackend
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+    CPUBackend
+end
+
+using JustPIC
+
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    AMDGPU.ROCBackend
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    CUDABackend
+else
+    JustPIC.CPU
+end
 
 const RHO, GRAV = 1.0, 1.0
 
-quiet(f) = redirect_stdout(f, devnull)
+@parallel_indices (i, j) function init_phases!(phases, px, py, index, phasefun)
+    for ip in cellaxes(phases)
+        @index(index[ip, i, j]) == 0 && continue
+        @index phases[ip, i, j] = phasefun(@index(px[ip, i, j]), @index(py[ip, i, j]))
+    end
+    return nothing
+end
+
+# The staggered volume fractions are analytic, so they are assembled on the host
+# and uploaded; on GPU backends they live in device memory.
+function setmask!(dst, f, xs, ys)
+    copyto!(dst, [f(x, y) for x in xs, y in ys])
+    return dst
+end
 
 function materials(η_air, ρ_air, g)
     return (
@@ -41,27 +78,21 @@ function build(n, origin, rheology, phasefun)
     grid = Geometry(ni, li; origin = origin)
     particles = init_particles(backend_JP, 40, 60, 20, grid.xi_vel...)
     pPhases, = init_cell_arrays(particles, Val(1))
-    ni_ = size(pPhases)
-    @parallel_indices (i, j) function _init!(phases, px, py, index)
-        @inbounds for ip in cellaxes(phases)
-            @index(index[ip, i, j]) == 0 && continue
-            @index phases[ip, i, j] = phasefun(@index(px[ip, i, j]), @index(py[ip, i, j]))
-        end
-        return nothing
-    end
-    @parallel (@idx ni_) _init!(pPhases, particles.coords..., particles.index)
+    @parallel (@idx size(pPhases)) init_phases!(
+        pPhases, particles.coords..., particles.index, phasefun
+    )
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
-    stokes = StokesArrays(backend, ni)
+    stokes = StokesArrays(backend_JR, ni)
     pt_stokes = PTStokesCoeffs(
         li, di; ϵ_abs = 1.0e-11, ϵ_rel = 1.0e-11,
         Re = 3π, r = 0.7, CFL = 0.9 / √2.1
     )
-    thermal = ThermalArrays(backend, ni)
+    thermal = ThermalArrays(backend_JR, ni)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
-    ϕ = RockRatio(backend, ni)
+    ϕ = RockRatio(backend_JR, ni)
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true), free_surface = false
     )
@@ -69,7 +100,7 @@ function build(n, origin, rheology, phasefun)
 end
 
 function solve!(m, igg; iterMax = 100.0e3)
-    quiet() do
+    @suppress begin
         compute_ρg!(m.ρg, m.phase_ratios, m.rheology, m.args)
         compute_viscosity!(m.stokes, m.phase_ratios, m.args, m.rheology, (1.0e-8, 1.0e8))
         solve_VariationalStokes!(
@@ -102,33 +133,28 @@ function rigid(igg, n, U, ω)
     m = build(n, (-0.5, -0.5), materials(1.0e-3, 0.0, 0.0), (x, y) -> incircle(x, y) ? 2.0 : 1.0)
     (; xci, xvi) = m.grid; di = m.di; ϕ = m.ϕ
     xc, yc = xci; xv, yv = xvi
-    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
-        ϕ.center[i, j] = circfrac(xc[i], yc[j], di...)
-    end
-    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
-        ϕ.vertex[i, j] = circfrac(xv[i], yv[j], di...)
-    end
-    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
-        ϕ.Vx[i, j] = circfrac(xv[i], yc[j], di...)
-    end
-    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
-        ϕ.Vy[i, j] = circfrac(xc[i], yv[j], di...)
-    end
+    frac(x, y) = circfrac(x, y, di...)
+    setmask!(ϕ.center, frac, xc, yc)
+    setmask!(ϕ.vertex, frac, xv, yv)
+    setmask!(ϕ.Vx, frac, xv, yc)
+    setmask!(ϕ.Vy, frac, xc, yv)
 
+    ϕVx, ϕVy = Array(ϕ.Vx), Array(ϕ.Vy)
     Vx, Vy = m.stokes.V.Vx, m.stokes.V.Vy
-    fill!(Vx, 0.0); fill!(Vy, 0.0)
+    vx0, vy0 = zeros(size(Vx)), zeros(size(Vy))
     mx, my = falses(size(Vx)), falses(size(Vy))
-    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
-        ϕ.Vx[i, j] > 0 && (Vx[i, j + 1] = U - ω * (yc[j] - YC0); mx[i, j + 1] = true)
+    for j in axes(ϕVx, 2), i in axes(ϕVx, 1)
+        ϕVx[i, j] > 0 && (vx0[i, j + 1] = U - ω * (yc[j] - YC0); mx[i, j + 1] = true)
     end
-    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
-        ϕ.Vy[i, j] > 0 && (Vy[i + 1, j] = ω * (xc[i] - XC0); my[i + 1, j] = true)
+    for j in axes(ϕVy, 2), i in axes(ϕVy, 1)
+        ϕVy[i, j] > 0 && (vy0[i + 1, j] = ω * (xc[i] - XC0); my[i + 1, j] = true)
     end
-    Vx0, Vy0 = copy(Vx), copy(Vy)
+    copyto!(Vx, vx0); copyto!(Vy, vy0)
     solve!(m, igg; iterMax = 5.0e3)
-    den = dot(Vx0[mx], Vx0[mx]) + dot(Vy0[my], Vy0[my])
-    retained = (dot(Vx[mx], Vx0[mx]) + dot(Vy[my], Vy0[my])) / den
-    rel = sqrt(sum(abs2, Vx[mx] .- Vx0[mx]) + sum(abs2, Vy[my] .- Vy0[my])) / sqrt(den)
+    vx, vy = Array(Vx), Array(Vy)
+    den = dot(vx0[mx], vx0[mx]) + dot(vy0[my], vy0[my])
+    retained = (dot(vx[mx], vx0[mx]) + dot(vy[my], vy0[my])) / den
+    rel = sqrt(sum(abs2, vx[mx] .- vx0[mx]) + sum(abs2, vy[my] .- vy0[my])) / sqrt(den)
     return retained, rel
 end
 
@@ -138,22 +164,16 @@ below(y, hy, y_s) = clamp((y_s - (y - hy / 2)) / hy, 0.0, 1.0)
 function hydro(igg, n, y_s)
     m = build(n, (0.0, -1.0), materials(1.0e-3, 0.0, GRAV), (x, y) -> y < y_s ? 2.0 : 1.0)
     (; xci, xvi) = m.grid; dy = m.di[2]; ϕ = m.ϕ
-    yc, yv = xci[2], xvi[2]
-    for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
-        ϕ.center[i, j] = below(yc[j], dy, y_s)
-    end
-    for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
-        ϕ.vertex[i, j] = below(yv[j], dy, y_s)
-    end
-    for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
-        ϕ.Vx[i, j] = below(yc[j], dy, y_s)
-    end
-    for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
-        ϕ.Vy[i, j] = below(yv[j], dy, y_s)
-    end
+    xc, yc = xci; xv, yv = xvi
+    layer(_, y) = below(y, dy, y_s)
+    setmask!(ϕ.center, layer, xc, yc)
+    setmask!(ϕ.vertex, layer, xv, yv)
+    setmask!(ϕ.Vx, layer, xv, yc)
+    setmask!(ϕ.Vy, layer, xc, yv)
     solve!(m, igg)
     jp = argmin(abs.(yc .- (-0.5)))
-    err = (mean(m.stokes.P[:, jp]) - RHO * GRAV * (y_s - yc[jp])) / (RHO * GRAV * dy)
+    P = Array(m.stokes.P)
+    err = (mean(P[:, jp]) - RHO * GRAV * (y_s - yc[jp])) / (RHO * GRAV * dy)
     Vmax = max(maximum(abs, m.stokes.V.Vx), maximum(abs, m.stokes.V.Vy))
     return err, Vmax
 end

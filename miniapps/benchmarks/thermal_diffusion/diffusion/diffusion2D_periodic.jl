@@ -5,7 +5,7 @@
 # circular hot perturbation partway down. It runs on a small grid, with no
 # particles and no separate rheology file — the natural first thing to run.
 # For larger, physically richer setups see the
-# [Blankenbach benchmark](@ref) and the other worked examples.
+# [Blankenbach benchmark](@ref "Blankenbach thermal-convection benchmark") and the other worked examples.
 
 using Pkg; Pkg.activate("miniapps") #src
 

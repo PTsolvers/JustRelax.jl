@@ -127,6 +127,7 @@ makedocs(;
                 "APT equations" => "man/equations_APT.md",
                 "Discretization" => "man/equations_discretization.md",
                 "Material physics" => "man/material_physics.md",
+                "2D variational Stokes" => "man/variational_stokes.md",
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",

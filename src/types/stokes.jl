@@ -199,6 +199,7 @@ end
 @inline dims(stokes::StokesArrays) = size(stokes.P)
 @inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
+## PTStokesCoeffs type
 """
     PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL=0.9/√2.1, r=0.7)
 
@@ -206,6 +207,11 @@ Pseudo-transient damping coefficients for the Stokes solver, derived from the do
 `li`, grid spacing `di`, Reynolds number `Re` and bulk-to-shear damping ratio `r` following
 [Räss et al. (2022)](https://gmd.copernicus.org/articles/15/5757/2022/). Passed as
 `pt_stokes` to `solve!`.
+
+`ηdτ / ητ` is the local velocity pseudo-time step, while `θ_dτ` controls the stress and
+pressure updates. In the 2D free-surface-stabilized velocity kernel, the vertical
+pseudo-time step also includes the local diagonal `-dt * ∂y(ρg)` introduced by
+stabilization.
 
 # Keyword arguments
 - `ϵ_rel`, `ϵ_abs`: relative/absolute convergence tolerances.

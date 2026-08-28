@@ -1,16 +1,32 @@
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+const isCUDA = false
+# const isCUDA = true
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+# Load script dependencies
+using Printf, LinearAlgebra, GeoParams, CellArrays
+
 
 # using JustPIC
-# # Threads is the default backend,
-# # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 # const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 @parallel_indices (i, j) function init_T!(T, z)
@@ -64,7 +80,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     args = (; P = P, T = @zeros(ni .+ 2...))
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.H .= 1.0e-6 # radiogenic heat production
     # physical parameters
     ρ = @fill(ρ0, ni...)
@@ -72,7 +88,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     K = @fill(K0, ni...)
     ρCp = @. Cp * ρ
 
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li)
     Ttop, Tbot = 300.0, 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),

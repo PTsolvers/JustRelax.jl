@@ -10,6 +10,7 @@ using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
+using Statistics
 
 import JustRelax.JustRelax3D as JR3D
 
@@ -224,6 +225,26 @@ end
 function thermal_bcs!(::CUDABackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
 end
+
+function JR3D.pureshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg
+    )
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function JR3D.simpleshear_bc!(
+        ::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg
+    )
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::CUDABackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
 # Rheology
 
 ## viscosity
@@ -288,14 +309,19 @@ function JR3D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, ar
     return compute_ρg!(ρg, rheology, args)
 end
 function JR3D.compute_ρg!(
-        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+        ρg::Union{CuArray, NTuple{N, CuArray}},
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 function JR3D.compute_ρg!(
-        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios, rheology, args
+        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios, rheology, args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction

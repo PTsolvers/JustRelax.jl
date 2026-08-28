@@ -2,24 +2,42 @@
 #
 # The smallest complete JustRelax.jl model: heat diffusing through a 2D slab
 # with periodic left/right boundaries, fixed top/bottom temperatures, and a
-# circular hot perturbation partway down. It runs on the CPU backend, on a
-# small grid, with no particles and no separate rheology file — the natural
-# first thing to run. For larger, physically richer setups see the
+# circular hot perturbation partway down. It runs on a small grid, with no
+# particles and no separate rheology file — the natural first thing to run.
+# For larger, physically richer setups see the
 # [Blankenbach benchmark](@ref) and the other worked examples.
 
 using Pkg; Pkg.activate("miniapps") #src
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+# Set `isCUDA = true` to run the same model on an NVIDIA GPU.
+const isCUDA = false
 
-using GeoParams
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
 using CairoMakie
 
 # JustRelax dispatches on a *backend trait* rather than the array type
 # directly, so the same solver code runs unmodified on CPU, CUDA, or AMDGPU
-# (see [Selecting the backend](@ref)). Here we pick the CPU backend.
-const backend = CPUBackend
+# (see [Selecting the backend](@ref)).
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+# ParallelStencil generates the compute kernels for the same device.
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using GeoParams
 
 # ## Initial and boundary conditions
 #

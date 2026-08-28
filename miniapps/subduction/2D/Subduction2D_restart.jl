@@ -1,7 +1,5 @@
-# Load script dependencies
-using GeoParams, CairoMakie
-
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -25,14 +23,15 @@ else
 end
 
 using JustPIC
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+
+# Load script dependencies
+using GeoParams, CairoMakie
+
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -101,7 +100,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     # Load Stokes arrays
     !isfile(joinpath(figdir, "checkpoint", "checkpoint.jld2")) && error("Checkpoint file not found. Please check the path.")
     stokes_cpu, thermal_cpu, t, dt, it = JLD2.load(joinpath(figdir, "checkpoint"))
-    stokes = PTArray(backend_JR, stokes_cpu)
+    stokes = PTArray(backend, stokes_cpu)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 1.0e0, r = 0.7, CFL = 0.9 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
@@ -109,7 +108,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     # Load thermal arrays
-    thermal = PTArray(backend_JR, thermal_cpu)
+    thermal = PTArray(backend, thermal_cpu)
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
@@ -168,7 +167,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
 

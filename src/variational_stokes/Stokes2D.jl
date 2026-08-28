@@ -2,26 +2,46 @@
 
 # backend trait
 """
-    solve_VariationalStokes!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ::RockRatio, rheology, args, dt, igg; kwargs...)
+    solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
 
-Solve the 2D viscoelastoplastic Stokes equations to pseudo-transient convergence using the
-variational (ghost-node-free) formulation, updating `stokes` in place for one physical
-time step `dt`. Cells are weighted by the rock ratio `ϕ` (see [`RockRatio`](@ref)), so
-partially- or fully-air/sticky-air cells contribute less (or not at all) to the momentum
-balance. `grid` may be replaced by the grid spacing `di` alone.
+Solve the 2D volume-fraction variational Stokes problem with matrix-free
+pseudo-transient iterations.
 
-`rheology` is one `GeoParams.MaterialParams` per phase; `args` carries auxiliary fields
-(e.g. temperature `T`, pressure `P`). Keyword tolerances, iteration limits, and relaxation
-factors default as in `_solve_VS!`. Dispatches on the CPU/CUDA/AMDGPU backend selected by
-`stokes`.
+ϕ carries liquid weights at pressure cells, stress vertices, and staggered
+velocity faces. A pressure degree of freedom is retained only when its cell and
+all four surrounding velocity faces are connected to liquid:
+
+                 Vy[i, j+1]
+                       o
+                       |
+        Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+                       |
+                       o
+                 Vy[i, j]
+
+       inactive face => pressure row and disconnected velocity row eliminated
+
+Zero-weight rows are written as zero instead of being solved with air material
+properties. Positive sliver fractions remain active; their velocity diagonal
+uses the bounded face mass max(ϕ_face, 0.1).
+
+The free_surface keyword enables the density-gradient correction in the
+vertical momentum row. In this solver it is included implicitly in the local
+face diagonal, so the physical timestep does not create an explicit feedback
+instability.
 """
-function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    out = solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
+function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    out = solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs...)
     return out
 end
 
 # entry point for extensions
-function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
+"""
+    solve_VariationalStokes!(backend::BackendTrait, stokes::JustRelax.StokesArrays, args...; kwargs)
+
+Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the backend provided in the function call.
+"""
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs...)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
@@ -102,7 +122,7 @@ function _solve_VS!(
     end
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
     displacement2velocity!(stokes, dt, flow_bcs)
 
@@ -119,7 +139,7 @@ function _solve_VS!(
                 @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), ϕ, _di.vertex)
             end
 
-            compute_P!(
+            compute_variational_P!(
                 θ,
                 stokes.P0,
                 stokes.R.RP,
@@ -128,13 +148,14 @@ function _solve_VS!(
                 ητ,
                 rheology,
                 phase_ratios,
+                ϕ,
                 dt,
                 r,
                 θ_dτ,
                 args,
             )
 
-            update_ρg!(ρg[2], phase_ratios, rheology, args)
+            update_ρg!(ρg[2], phase_ratios, rheology, args; air_phase)
 
             if strain_increment
                 @parallel (@idx ni .+ 1) compute_strain_rate!(
@@ -228,6 +249,7 @@ function _solve_VS!(
             end
 
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             # @hide_communication b_width begin # communication/computation overlap
             @parallel (@idx ni .+ 1) compute_V!(
@@ -246,8 +268,8 @@ function _solve_VS!(
             )
             # apply boundary conditions
             velocity2displacement!(stokes, dt)
-            # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
             flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
             update_halo!(@velocity(stokes)...)
             # end
         end

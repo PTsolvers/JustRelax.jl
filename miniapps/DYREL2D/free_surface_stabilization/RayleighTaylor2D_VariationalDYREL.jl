@@ -1,0 +1,282 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams
+using CairoMakie
+
+# Velocity helper grids for the particle advection
+function copyinn_x!(A, B)
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+    return @parallel f_x(A, B)
+end
+
+function init_phases!(phases, particles, A)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
+
+        f(x, A, λ) = A * sin(π * x / λ)
+
+        @inbounds for ip in cellaxes(phases)
+            # quick escape
+            @index(index[ip, i, j]) == 0 && continue
+
+            x = @index px[ip, i, j]
+            depth = -(@index py[ip, i, j])
+            @index phases[ip, i, j] = 2.0
+
+            if 0.0e0 ≤ depth ≤ 100.0e3
+                @index phases[ip, i, j] = 1.0
+
+            elseif depth > (-f(x, A, 500.0e3) + (200.0e3 - A))
+                @index phases[ip, i, j] = 3.0
+
+            end
+
+        end
+        return nothing
+    end
+
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
+end
+## END OF HELPER FUNCTION ------------------------------------------------------------
+
+# (Path)/folder where output data and figures are stored
+n = 64
+nx = n
+ny = n
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+
+## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
+function main(igg, nx, ny)
+
+    # Physical domain ------------------------------------
+    thick_air = 100.0e3             # thickness of sticky air layer
+    ly = 500.0e3 + thick_air # domain length in y
+    lx = 500.0e3             # domain length in x
+    ni = nx, ny            # number of cells
+    li = lx, ly            # domain length in x- and y-
+    di = @. li / ni        # grid step in x- and -y
+    origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    grid_vxi = velocity_grids(xci, xvi, di)
+    # ----------------------------------------------------
+
+    # Physical properties using GeoParams ----------------
+    rheology = rheology = (
+        # Name              = "Air",
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0e0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e16),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        # Name              = "Crust",
+        SetMaterialParams(;
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 3.3e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e21),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        # Name              = "Mantle",
+        SetMaterialParams(;
+            Phase = 3,
+            Density = ConstantDensity(; ρ = 3.2e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+    )
+    # ----------------------------------------------------
+
+    # Initialize particles -------------------------------
+    # Particle injection currently uses a random location inside each depleted
+    # quadrant.  A larger reservoir reduces the sampling noise in the phase
+    # ratios, while a lower replenishment threshold avoids repeatedly replacing
+    # particles near the moving free surface (where this noise is amplified by
+    # the unstable Rayleigh--Taylor mode).
+    nxcell, max_xcell, min_xcell = 192, 256, 64
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    # temperature
+    pT, pPhases = init_cell_arrays(particles, Val(2))
+    particle_args = (pT, pPhases)
+
+    # Elliptical temperature anomaly
+    A = 5.0e3    # Amplitude of the anomaly
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, particles, A)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
+    # ----------------------------------------------------
+
+    # Initialize marker chain-------------------------------
+    nxcell, max_xcell, min_xcell = 100, 200, 15
+    initial_elevation = -100.0e3
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+    # ----------------------------------------------------
+
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend, ni)
+    # ----------------------------------------------------
+
+    # TEMPERATURE PROFILE --------------------------------
+    thermal = ThermalArrays(backend, ni)
+    # ----------------------------------------------------
+
+    # Buoyancy forces & rheology
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args; air_phase)
+    ρg_rock = ρg[2] .* ϕ.center
+    compute_lithostatic_pressure!(stokes.P, ρg_rock, di[2], igg)
+    @. stokes.P = ifelse(ϕ.center > 0, stokes.P / ϕ.center, 0)
+    viscosity_cutoff = (-Inf, Inf)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = false),
+        no_slip = (left = false, right = false, top = false, bot = true),
+        free_surface = false,
+    )
+
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+
+    figdir = "RayleighTaylor2D_VariationalDYREL"
+    take(figdir)
+
+    # Time loop
+    t, it = 0.0, 0
+    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = 25.0e3 * (3600 * 24 * 365.25)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+
+    while it < 50#0 #00
+
+        # Stokes solver ----------------
+        result = solve_VariationalDYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            ϕ,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                air_phase = air_phase,
+                iterMax = 150.0e3,
+                total_iterMax = 150.0e3,
+                viscosity_relaxation = 1.0e-2,
+                nout = 2.0e3,
+                free_surface = true,
+                viscosity_cutoff = viscosity_cutoff,
+            ),
+        )
+        result.converged || error("Variational DYREL did not converge (err=$(result.err))")
+        dt = compute_dt(stokes, di, dt_max)
+        println("dt = $(round(dt / (3600 * 24 * 365.25); digits = 3)) yrs")
+        # ------------------------------
+
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
+        # advect particles in memory
+        move_particles!(particles, particle_args)
+
+        # Apply the updated marker-chain surface before replenishing particles.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        # advect_markerchain!(
+        #     chain,
+        #     RungeKutta2(),
+        #     @velocity(stokes),
+        #     grid_vxi,
+        #     dt,
+        # )
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
+
+        @show it += 1
+        t += dt
+
+        if it == 1 || rem(it, 2) == 0
+            px, py = particles.coords
+            chain_x, chain_y = chain.coords
+
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            Vmax = max(maximum(abs, Vx_v), maximum(abs, Vy_v))
+            nt = 5
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
+            # heatmap!(ax, xci[1].*1e-3, xci[2].*1e-3, Array([argmax(p) for p in phase_ratios.vertex]), colormap = :grayC)
+            scatter!(ax, Array(px.data[:]) .* 1.0e-3, Array(py.data[:]) .* 1.0e-3, color = Array(pPhases.data[:]), colormap = :grayC)
+            scatter!(ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3, color = :red)
+            arrows2d!(
+                ax,
+                xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
+                lengthscale = 25 / Vmax,
+                color = :red,
+            )
+            fig
+            save(joinpath(figdir, "$(it).png"), fig)
+
+        end
+    end
+    return nothing
+end
+
+## END OF MAIN SCRIPT ----------------------------------------------------------------
+main(igg, nx, ny)

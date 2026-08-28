@@ -19,7 +19,7 @@ end
     return nothing
 end
 
-function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false)
+function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false)
     ni = (8, 8)
     grid = Geometry(ni, (1.0, 1.0))
     creep = LinearViscous(; η = 1.0)
@@ -78,7 +78,8 @@ function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = fal
         end
         dyrel = DYREL(CPUBackend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
         result = solve_VariationalDYREL!(
-            stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg; kwargs
+            stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args,
+            legacy_grid ? grid.di : grid, dt, igg; kwargs
         )
     else
         dyrel = DYREL(CPUBackend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
@@ -99,7 +100,9 @@ end
 
 @testset "Variational DYREL hydrostatic convergence" begin
     stokes, _, _ = _full_volume_dyrel(TEST_IGG; variational = false, hydrostatic = true)
-    stokes_variational, result, _ = _full_volume_dyrel(TEST_IGG; variational = true, hydrostatic = true)
+    stokes_variational, result, _ = _full_volume_dyrel(
+        TEST_IGG; variational = true, hydrostatic = true, legacy_grid = true
+    )
 
     @test result.converged
     @test maximum(abs, stokes_variational.V.Vx) < 1.0e-5

@@ -87,20 +87,22 @@ dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0
 solve_VariationalDYREL!(
     stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
     rheology, args, grid, dt, igg;
-    kwargs = (;
-        linear_viscosity = true,
-        free_surface = true,
-        verbose_PH = false,
-        verbose_DR = false,
-    ),
+    air_phase,
+    linear_viscosity = true,
+    free_surface = true,
+    pressure_relaxation = 0.5,
+    verbose_PH = false,
+    verbose_DR = false,
 )
 ```
 
 The constructor and solver must receive the same `RockRatio`. Zero-volume
 pressure and velocity rows are eliminated, positive sliver faces use a bounded
 face mass, and changing the mask between calls resets the dynamic-relaxation
-history. This path currently supports only `Geometry{2}`. Standard
-`solve_DYREL!` remains unchanged for unweighted 2D problems.
+history. `air_phase` excludes the air phase from material averages, while
+`pressure_relaxation` damps the Powell--Hestenes pressure update; its default is
+`1`. The solver accepts either a `Geometry{2}` or a legacy uniform-spacing tuple.
+Standard `solve_DYREL!` remains unchanged for unweighted 2D problems.
 
 See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
 mask construction, and the mathematical reference.

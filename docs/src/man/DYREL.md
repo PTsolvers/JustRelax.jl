@@ -71,6 +71,40 @@ $-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
 row bound whenever the pseudo-transient coefficients are refreshed. The same
 term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
 
+## 2D variational DYREL
+
+Free surfaces represented by a `RockRatio` use the dedicated 2D entry point
+`solve_VariationalDYREL!`. It combines DYREL's Powell--Hestenes and dynamic
+relaxation iteration with the volume-weighted operator of Larionov, Batty, and
+Bridson (2017): center fractions weight pressure and normal stress, vertex
+fractions weight shear stress, and face fractions weight momentum rows.
+
+```julia
+ϕ = RockRatio(backend, ni)
+update_rock_ratio!(ϕ, phase_ratios, air_phase)
+dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+
+solve_VariationalDYREL!(
+    stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+    rheology, args, grid, dt, igg;
+    kwargs = (;
+        linear_viscosity = true,
+        free_surface = true,
+        verbose_PH = false,
+        verbose_DR = false,
+    ),
+)
+```
+
+The constructor and solver must receive the same `RockRatio`. Zero-volume
+pressure and velocity rows are eliminated, positive sliver faces use a bounded
+face mass, and changing the mask between calls resets the dynamic-relaxation
+history. This path currently supports only `Geometry{2}`. Standard
+`solve_DYREL!` remains unchanged for unweighted 2D problems.
+
+See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
+mask construction, and the mathematical reference.
+
 # Examples
 
 Examples of a set of miniapps using this solver can be found in [this folder](https://github.com/PTsolvers/JustRelax.jl/tree/main/miniapps/DYREL2D).

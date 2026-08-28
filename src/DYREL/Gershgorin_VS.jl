@@ -17,6 +17,22 @@ Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ϕ::JustRelax.RockRatio, _dy, i
 
 # Store a preconditioner diagonal and its eigenvalue bound. A valid diagonal is strictly
 # positive; it can still come out zero or NaN at a mask-boundary cell that `isvalid_*` accepts
+# because its neighbouring stress weights vanish. The bounded face mass is the outer
+# `W_L^u` factor of the variational velocity preconditioner. The physical row sum is not
+# rescaled, so sliver faces correctly increase the preconditioned eigenvalue bound.
+Base.@propagate_inbounds @inline function set_preconditioner!(D, λmaxV, diagonal, row_sum, face_fraction, i, j)
+    face_mass = variational_face_mass(face_fraction)
+    weighted_diagonal = face_mass * diagonal
+    if isfinite(weighted_diagonal) && weighted_diagonal > zero(weighted_diagonal)
+        D[i, j] = weighted_diagonal
+        λmaxV[i, j] = row_sum / weighted_diagonal
+    else
+        D[i, j] = one(eltype(D))
+        λmaxV[i, j] = one(eltype(λmaxV))
+    end
+    return nothing
+end
+
 # ϕ-weighted viscoelastic combine for the preconditioner row. Any G·dt that is not a positive
 # modulus falls back to the elastic-free combine ϕ·η: a degenerate phase-ratio sample makes the
 # shear-modulus lookup 0 or NaN at cells ϕ still marks valid, and the row must stay finite.
@@ -71,7 +87,7 @@ end
     γW = γ_eff[i, j] * ϕ.center[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
-        if isvalid_vx_strict(ϕ, i + 1, j)
+        if isvalid_vx(ϕ, i + 1, j)
             # Hoist common parameters
             dx = @dx(di_center, i)
             dy = @dy(di_vertex, j)
@@ -114,7 +130,7 @@ end
                 abs((γW + ηS - c23 * ηW) * _dxdy)
 
             Dx_ij = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
-            set_preconditioner!(Dx, λmaxVx, Dx_ij, Cxx + Cxy, i, j)
+            set_preconditioner!(Dx, λmaxVx, Dx_ij, Cxx + Cxy, ϕ.Vx[i + 1, j], i, j)
         else
             Dx[i, j] = one(eltype(Dx))
             λmaxVx[i, j] = one(eltype(λmaxVx))
@@ -135,7 +151,7 @@ end
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
-        if isvalid_vy_strict(ϕ, i, j + 1)
+        if isvalid_vy(ϕ, i, j + 1)
             # Hoist common parameters
             dx = @dx(di_vertex, i)
             dy = @dy(di_center, j)
@@ -182,7 +198,7 @@ end
                 abs((γS + ηE - c23 * ηS) * _dxdy) +
                 abs((γS - c23 * ηS + ηW) * _dxdy)
 
-            set_preconditioner!(Dy, λmaxVy, Dy_mag, Cyx + Cyy, i, j)
+            set_preconditioner!(Dy, λmaxVy, Dy_mag, Cyx + Cyy, ϕ.Vy[i, j + 1], i, j)
         else
             Dy[i, j] = one(eltype(Dy))
             λmaxVy[i, j] = one(eltype(λmaxVy))

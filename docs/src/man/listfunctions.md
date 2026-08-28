@@ -9,3 +9,7 @@ The 2D variational-Stokes entry point is
 `JustRelax.JustRelax2D.solve_VariationalStokes!`. Its volume-fraction
 container and update routines are documented on the
 [2D variational Stokes](./variational_stokes.md) page.
+
+The dynamic-relaxation counterpart is
+`JustRelax.JustRelax2D.solve_VariationalDYREL!`. It requires a 2D `RockRatio`
+in both the `DYREL` constructor and solver call; see [DYREL](./DYREL.md).

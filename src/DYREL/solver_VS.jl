@@ -22,6 +22,7 @@ function _solve_VariationalDYREL!(
         viscosity_relaxation = 1.0e-2,
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
+        pressure_relaxation = 1,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -116,14 +117,14 @@ function _solve_VariationalDYREL!(
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
     sanitize_ρg!(ρg)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
-        update_ρg!(ρg, phase_ratios, rheology, args)
+        update_ρg!(ρg, phase_ratios, rheology, args; air_phase)
         sanitize_ρg!(ρg)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
@@ -290,8 +291,8 @@ function _solve_VariationalDYREL!(
         # update pressure — refresh RP from the final velocity first (do_strain_rate = false leaves
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
-        @. stokes.P += dyrel.γ_eff .* stokes.R.RP
-        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP)
+        @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
+        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation)
 
         iter > total_iterMax && break
     end

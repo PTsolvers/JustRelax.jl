@@ -25,6 +25,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `viscosity_relaxation`: Relaxation factor for viscosity updates. Default: `1.0e-2`.
 - `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
+- `pressure_relaxation`: Relaxation factor for variational pressure updates. Default: `1`.
 - `iterMax`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
 - `nout`: Output frequency for residuals. Default: `100`.
@@ -372,6 +373,41 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+@inline nonzero_span(s) = abs(s) ≤ sqrt(eps(typeof(s))) ? one(s) : s
+@inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
+
+@inline function masked_extrema(mask, A)
+    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    return lo, hi
+end
+
+@inline function masked_value_span(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? hi - lo : zero(eltype(A))
+end
+
+@inline function masked_value_scale(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? max(hi - lo, abs(hi), abs(lo)) : zero(eltype(A))
+end
+
+function relax_volumetric_mode!(P, RP, ηb, mask, relaxation = 1)
+    compliance = sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
+    iszero(compliance) && return nothing
+    δ = sum_mpi((RPᵢ, valid) -> valid ? RPᵢ : zero(RPᵢ), RP, mask) / compliance
+    @. P += ifelse(mask, relaxation * δ, zero(δ))
+    return nothing
+end
+
+@inline rayleigh_quotient(numerator, denominator) = iszero(denominator) ? zero(denominator) : abs(numerator) / denominator
+
+function masked_λminV(dV::NTuple{N}, residuals::NTuple{N}, residuals0::NTuple{N}, masks::NTuple{N}) where {N}
+    numerator = sum(ntuple(d -> sum_mpi((m, dv, r, r0) -> m ? dv * (r - r0) : zero(dv), masks[d], dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(N)))
+    return rayleigh_quotient(numerator, denominator)
+end
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
 

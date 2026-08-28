@@ -78,7 +78,7 @@ end
         K = fn_ratio(get_bulk_modulus, rheology, @cell(phase_ratio[I...]))
         G = fn_ratio(get_shear_modulus, rheology, @cell(phase_ratio[I...]))
         @inbounds RP[I...], P[I...] = _compute_P!(
-            P[I...], P0[I...], ∇V[I...] * ϕ.center[I...], Q[I...], η[I...], K, G, dt, r, θ_dτ
+            P[I...], P0[I...], variational_pressure_divergence(∇V[I...], ϕ.center[I...]), Q[I...], η[I...], K, G, dt, r, θ_dτ
         )
     else
         @inbounds RP[I...] = P[I...] = zero(eltype(P))
@@ -108,7 +108,7 @@ end
         G = fn_ratio(get_shear_modulus, rheology, phase_ratio_I)
         α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
         @inbounds RP[I...], P[I...] = _compute_P!(
-            P[I...], P0[I...], ∇V[I...] * ϕ.center[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+            P[I...], P0[I...], variational_pressure_divergence(∇V[I...], ϕ.center[I...]), Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
         )
     else
         @inbounds RP[I...] = P[I...] = zero(eltype(P))
@@ -143,7 +143,7 @@ end
             (; ϕ = melt_fraction[I...]),
         )
         @inbounds RP[I...], P[I...] = _compute_P!(
-            P[I...], P0[I...], ∇V[I...] * ϕ.center[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+            P[I...], P0[I...], variational_pressure_divergence(∇V[I...], ϕ.center[I...]), Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
         )
     else
         @inbounds RP[I...] = P[I...] = zero(eltype(P))

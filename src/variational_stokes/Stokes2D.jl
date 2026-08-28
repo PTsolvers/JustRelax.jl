@@ -1,6 +1,16 @@
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
+function _variational_stokes_options(kwargs)
+    options = (; kwargs...)
+    if haskey(options, :kwargs)
+        legacy = options.kwargs
+        legacy isa NamedTuple || throw(ArgumentError("`kwargs` must be a NamedTuple"))
+        options = merge(legacy, Base.structdiff(options, (; kwargs = legacy)))
+    end
+    return options
+end
+
 """
     solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
 
@@ -31,7 +41,8 @@ face diagonal, so the physical timestep does not create an explicit feedback
 instability.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
-    out = solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs...)
+    options = _variational_stokes_options(kwargs)
+    out = solve_VariationalStokes!(backend(stokes), stokes, args...; options...)
     return out
 end
 

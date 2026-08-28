@@ -97,7 +97,7 @@ end
                     _dx_vy = @dx(_di_vy, i)
                     dVx_dy = (vx_n - vx_s) * _dy_vx
                     dVy_dx = (vy_e - vy_w) * _dx_vy
-                    εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
+                    εxy[i, j] = ϕ.vertex[i, j] * 0.5 * (dVx_dy + dVy_dx)
                 end
             else
                 do_strain_rate && (εxy[i, j] = zero(T))
@@ -116,14 +116,16 @@ end
 
                 if do_strain_rate
                     div_third = div_ij * third
-                    εxx[i, j] = dVx_dx - div_third
-                    εyy[i, j] = dVy_dy - div_third
+                    center_fraction = ϕ.center[i, j]
+                    εxx[i, j] = center_fraction * (dVx_dx - div_third)
+                    εyy[i, j] = center_fraction * (dVy_dy - div_third)
                 end
 
                 # pressure residual (reuses `div_ij` in-register). Masked to 0 in air below,
                 # where ηb = 0 would make (P - P0)/ηb NaN. Recomputed with do_strain_rate = false
                 # before the pressure update so it reflects the final velocity.
-                RP[i, j] = _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
+                weighted_div = variational_pressure_divergence(div_ij, ϕ.center[i, j])
+                RP[i, j] = _RP_cell(P[i, j], P0[i, j], weighted_div, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
             else
                 if do_strain_rate
                     εxx[i, j] = zero(T)
@@ -168,7 +170,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            Rx[i, j] = if isvalid_vx_strict(ϕ, i + 1, j)
+            Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
                 d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
             else
                 0.0e0
@@ -179,7 +181,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            Ry[i, j] = if isvalid_vy_strict(ϕ, i, j + 1)
+            Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -237,7 +239,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            if isvalid_vx_strict(ϕ, i + 1, j)
+            if isvalid_vx(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
                 dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
@@ -254,7 +256,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            if isvalid_vy_strict(ϕ, i, j + 1)
+            if isvalid_vy(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]

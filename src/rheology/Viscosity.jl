@@ -107,19 +107,43 @@ end
 
 ## 2D KERNELS
 
+"""
+    compute_viscosity_τII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **deviatoric
+stress** (`τII`), evaluating `rheology` (a single `GeoParams.MaterialParams`, or one per
+phase when `phase_ratios` is given) at each cell and relaxing towards the new value with
+factor `relaxation` (`1.0` = no damping). `cutoff = (ηmin, ηmax)` clamps the result.
+`air_phase` (multi-phase form only) excludes that phase from the update.
+
+See also [`compute_viscosity_εII!`](@ref) for the strain-rate-invariant convention, and
+[`compute_viscosity!`](@ref) for the rheology-driven default (εII).
+"""
 function compute_viscosity_τII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII)
 end
 
+"""
+    compute_viscosity_εII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **strain rate**
+(`εII`); otherwise identical to [`compute_viscosity_τII!`](@ref).
+"""
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII)
 end
 
-# generic fallback
+"""
+    compute_viscosity!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place by evaluating `rheology` at the strain-rate invariant
+(equivalent to [`compute_viscosity_εII!`](@ref); see there for the arguments, and
+[`compute_viscosity_τII!`](@ref) for the stress-invariant alternative).
+"""
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )

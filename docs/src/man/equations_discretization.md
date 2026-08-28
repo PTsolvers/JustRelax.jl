@@ -1,14 +1,8 @@
 # Spatial discretization of the governing equations
 
-We discretize both the Stokes and heat diffusion equations using a Finite Differences approach on a staggered grid (ref Taras book here).
+We discretize both the Stokes and heat diffusion equations using a Finite Differences approach on a staggered grid (ref Taras book here). Pressure, temperature and the diagonal stress/strain-rate components (`Cᵢᵢ`) live at cell centers, the off-diagonal components (`Cᵢⱼ`) at cell corners, and velocity/flux components on the cell faces they cross:
 
-## Heat diffusion
-![Staggered Temperature Grid](../assets/temp_stag2D.png)
-
-
-## Stokes equations
-![Staggered Velocity Grid](../assets/stokes_stag2D.png)
-where dotted lines represent the velocity ghost nodes.
+![Staggered grid stencil](../assets/staggered_grid_stencil.png)
 
 # Time and pseudo-time discretization of the APT equations
 

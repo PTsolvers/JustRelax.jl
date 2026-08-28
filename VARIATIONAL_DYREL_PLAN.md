@@ -36,19 +36,22 @@ Reference: [Larionov, Batty, and Bridson (2017)](https://cs.uwaterloo.ca/~c2batt
 - [x] Dedicated `solve_VariationalDYREL!` API and 2D backend dispatch scaffolding.
 - [x] Port the historical solver and masked velocity-kernel source files.
 - [x] Add the variational constructor, viscosity, and Gershgorin wiring.
-- [ ] Reconcile their dependencies with PR #520 and validate the weighted operator.
-- [ ] Weighted momentum diagonal estimation.
-- [ ] Focused regressions and documentation completion.
+- [x] Reconcile their dependencies with PR #520 and validate the weighted operator.
+- [x] Weighted momentum diagonal estimation.
+- [x] Focused regressions and documentation completion.
 
 Implementation note: the repository contains a historical `pa-dyrel_VS_2D` branch
 with `src/DYREL/solver_VS.jl` and `src/DYREL/velocity_kernels_VS.jl`. Those files
 are the starting point for the implementation, but they predate PR #520 and must be
 adapted rather than copied unchanged.
 
-Checkpoint: the API, constructor, solver-loop source, masked kernels, viscosity
-helpers, and Gershgorin wiring are now staged for review. The next implementation
-step is to reconcile the remaining mask/utility dependencies and verify the
-weighted momentum diagonal against the PR #520 operators before enabling tests.
+Completion checkpoint: the dedicated API, weighted operator and diagonal,
+active-row projection, solver convergence path, constitutive dispatch, focused
+regressions, comparison miniapp, and documentation are complete. The hydrostatic
+case exercises PH/DR convergence, while the full-volume pure-shear case verifies
+physical equivalence with standard DYREL. The complete CPU and MPI suite passes;
+accelerator execution was not attempted because CUDA/AMDGPU hardware was not
+available.
 
 ## 1. Define the mathematical DYREL form first
 
@@ -325,3 +328,16 @@ The feature is ready when:
 The central design principle is to reuse PR #520's variational discretization for the
 operator, and reuse DYREL for the nonlinear constitutive iteration, Powell–Hestenes
 update, damping, and diagonal relaxation.
+
+Completion verification (2026-08-27):
+
+- focused variational operator tests: 34/34 passed;
+- focused variational DYREL tests: 33/33 passed;
+- variational free-surface verification: 16/16 passed;
+- standard DYREL, shear-band DYREL, and Volcano2D regressions passed;
+- comparison miniapp completed with `result.converged == true`;
+- complete CPU suite: 1806/1806 assertions passed, followed by all two-rank MPI
+  tests;
+- documentation build passed;
+- CUDA/AMDGPU runtime tests were not run because compatible hardware was not
+  available.

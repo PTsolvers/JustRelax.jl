@@ -1,22 +1,37 @@
-using CUDA
-# using Pkg; Pkg.activate("../")
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-using JustPIC
+using PoissonGrids
+const isCUDA = false
+# const isCUDA = true
 
-const backend_JR = CUDABackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(CUDA, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-# JustPIC and JustRelax use different backend types.
-const backend_JP = CUDA.CUDABackend
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
 using Printf, Statistics, LinearAlgebra, GeoParams, GLMakie
-using PoissonGrids
+
 
 # -----------------------------------------------------------------------------------------
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -297,7 +312,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     Q_in         = nondimensionalize(1.0e-5km^3 / yr, CD)
 
     # Initialize particles -------------------------------
-    nxcell, max_xcell, min_xcell = 20, 40, 15
+    nxcell, max_xcell, min_xcell = 40, 80, 15
     particles      = init_particles(backend_JP, nxcell, max_xcell, min_xcell, Array.(grid.xi_vel[1]), Array.(grid.xi_vel[2]))
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
@@ -494,6 +509,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, ϕ_R, grid.di, dt; ϵ = 1.0e-6)
 
     # Stokes solver -----------------
     args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
@@ -530,29 +546,35 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
 
         # Stokes solver -----------------
-        solve_VariationalStokes!(
+        result = solve_VariationalDYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             ϕ_R,
             rheology,
             args,
+            grid,
             dt,
             igg;
             kwargs = (;
                 air_phase = air_phase,
-                verbose = true,
+                verbose_PH = true,
+                verbose_DR = false,
                 iterMax = 100.0e3,
-                nout = 2.0e3,
-                λ_relaxation = 1.0,
-                viscosity_relaxation = 1.0e-2,
+                total_iterMax = 100.0e3,
+                nout = 50,
+                rel_drop = 1e-1,
+                λ_relaxation_PH = 1.0,
+                λ_relaxation_DR = 1.0,
+                pressure_relaxation = 0.75,
+                viscosity_relaxation = 1.0e-3,
                 viscosity_cutoff = cutoff_visc,
-                free_surface = true,
-            )
+                free_surface = false,
+            ),
         )
+        result.converged || error("Variational DYREL did not converge (err=$(result.err))")
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dt = compute_dt(stokes, di_min, dt_max, igg)
@@ -893,7 +915,7 @@ end
 
 figdir = "Extension_VS"
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 128
+n = 64
 ar = 1
 nx = n * ar
 ny = n

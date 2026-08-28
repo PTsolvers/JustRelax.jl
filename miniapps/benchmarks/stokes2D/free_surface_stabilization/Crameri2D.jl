@@ -194,14 +194,12 @@ function main(igg, nx, ny)
             args,
             Inf,
             igg;
-            kwargs = (
-                air_phase = air_phase,
-                iterMax = 50.0e3,
-                iterMin = 1.0e3,
-                viscosity_relaxation = 1.0e-2,
-                nout = 2.0e3,
-                viscosity_cutoff = (1.0e18, 1.0e24),
-            )
+            air_phase = air_phase,
+            iterMax = 50.0e3,
+            iterMin = 1.0e3,
+            viscosity_relaxation = 1.0e-2,
+            nout = 2.0e3,
+            viscosity_cutoff = (1.0e18, 1.0e24),
         )
         dt = compute_dt(stokes, di, dt_max)
         # ------------------------------

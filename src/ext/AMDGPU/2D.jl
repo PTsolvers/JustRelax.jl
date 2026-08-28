@@ -448,7 +448,7 @@ function JR2D.solve!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve!(stokes, args...; kwargs...)
 end
 
-function JR2D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+function JR2D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs...)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 

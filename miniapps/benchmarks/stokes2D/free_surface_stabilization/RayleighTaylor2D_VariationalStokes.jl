@@ -219,15 +219,13 @@ function main(igg, nx, ny)
             args,
             dt,
             igg;
-            kwargs = (
-                air_phase = air_phase,
-                iterMax = 150.0e3,
-                iterMin = 1.0e3,
-                viscosity_relaxation = 1.0e-2,
-                nout = 2.0e3,
-                free_surface = true,
-                viscosity_cutoff = (-Inf, Inf),
-            )
+            air_phase = air_phase,
+            iterMax = 150.0e3,
+            iterMin = 1.0e3,
+            viscosity_relaxation = 1.0e-2,
+            nout = 2.0e3,
+            free_surface = true,
+            viscosity_cutoff = (-Inf, Inf),
         )
         dt = compute_dt(stokes, di, dt_max)
         println("dt = $(round(dt / (3600 * 24 * 365.25); digits = 3)) yrs")

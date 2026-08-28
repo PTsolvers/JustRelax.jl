@@ -191,13 +191,11 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 args,
                 dt,
                 igg;
-                kwargs = (;
-                    air_phase = air_phase,
-                    iterMax = 150.0e3,
-                    free_surface = true,
-                    nout = 5.0e3,
-                    viscosity_cutoff = viscosity_cutoff,
-                )
+                air_phase = air_phase,
+                iterMax = 150.0e3,
+                free_surface = true,
+                nout = 5.0e3,
+                viscosity_cutoff = viscosity_cutoff,
             )
         end
 

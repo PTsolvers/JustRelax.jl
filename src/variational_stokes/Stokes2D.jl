@@ -37,7 +37,7 @@ end
 
 # entry point for extensions
 """
-    solve_VariationalStokes!(backend::BackendTrait, stokes::JustRelax.StokesArrays, args...; kwargs)
+    solve_VariationalStokes!(backend::BackendTrait, stokes::JustRelax.StokesArrays, args...; kwargs...)
 
 Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the backend provided in the function call.
 """

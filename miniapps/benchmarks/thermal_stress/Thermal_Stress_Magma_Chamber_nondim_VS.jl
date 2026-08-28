@@ -427,15 +427,13 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         args,
         dt,
         igg;
-        kwargs = (;
-            air_phase = air_phase,
-            iterMax = 100.0e3,
-            free_surface = true,
-            nout = 2.5e3,
-            viscosity_cutoff = viscosity_cutoff,
-            relaxation = 1.0e-3,
-            λ_relaxation = 1.0e0,
-        )
+        air_phase = air_phase,
+        iterMax = 100.0e3,
+        free_surface = true,
+        nout = 2.5e3,
+        viscosity_cutoff = viscosity_cutoff,
+        relaxation = 1.0e-3,
+        λ_relaxation = 1.0e0,
     )
 
     while it < 500
@@ -455,15 +453,13 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             args,
             dt,
             igg;
-            kwargs = (;
-                air_phase = air_phase,
-                iterMax = 100.0e3,
-                free_surface = true,
-                nout = 2.5e3,
-                viscosity_cutoff = viscosity_cutoff,
-                relaxation = 1.0e-3,
-                λ_relaxation = 1.0e0,
-            )
+            air_phase = air_phase,
+            iterMax = 100.0e3,
+            free_surface = true,
+            nout = 2.5e3,
+            viscosity_cutoff = viscosity_cutoff,
+            relaxation = 1.0e-3,
+            λ_relaxation = 1.0e0,
         )
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)

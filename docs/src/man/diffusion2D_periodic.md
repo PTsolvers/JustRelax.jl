@@ -1,49 +1,40 @@
-# # Periodic 2D thermal diffusion
-#
-# The smallest complete JustRelax.jl model: heat diffusing through a 2D slab
-# with periodic left/right boundaries, fixed top/bottom temperatures, and a
-# circular hot perturbation partway down. It runs on a small grid, with no
-# particles and no separate rheology file — the natural first thing to run.
-# For larger, physically richer setups see the
-# [Blankenbach benchmark](@ref "Blankenbach thermal-convection benchmark") and the other worked examples.
+```@meta
+EditURL = "../../../miniapps/benchmarks/thermal_diffusion/diffusion/diffusion2D_periodic.jl"
+```
 
-using Pkg; Pkg.activate("miniapps") #src
+# Periodic 2D thermal diffusion
 
-# Set `isCUDA = true` to run the same model on an NVIDIA GPU.
-const isCUDA = false
+The smallest complete JustRelax.jl model: heat diffusing through a 2D slab
+with periodic left/right boundaries, fixed top/bottom temperatures, and a
+circular hot perturbation partway down. It runs on the CPU backend, on a
+small grid, with no particles and no separate rheology file — the natural
+first thing to run. For larger, physically richer setups see the
+[Blankenbach benchmark](@ref) and the other worked examples.
 
-@static if isCUDA
-    using CUDA
-end
-
-using JustRelax, JustRelax.JustRelax2D
-using CairoMakie
-
-# JustRelax dispatches on a *backend trait* rather than the array type
-# directly, so the same solver code runs unmodified on CPU, CUDA, or AMDGPU
-# (see [Selecting the backend](@ref)).
-const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-end
-
-# ParallelStencil generates the compute kernels for the same device.
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-
-@static if isCUDA
-    @init_parallel_stencil(CUDA, Float64, 2)
-else
-    @init_parallel_stencil(Threads, Float64, 2)
-end
+````@example diffusion2D_periodic
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
 using GeoParams
+using JustRelax, JustRelax.JustRelax2D
+using CairoMakie
+````
 
-# ## Initial and boundary conditions
-#
-# `init_T!` sets a linear temperature gradient between the fixed top and
-# bottom boundary values (300 K and 3500 K), and `circular_perturbation!`
-# adds a localized hot anomaly on top of it.
+JustRelax dispatches on a *backend trait* rather than the array type
+directly, so the same solver code runs unmodified on CPU, CUDA, or AMDGPU
+(see [Selecting the backend](@ref)). Here we pick the CPU backend.
+
+````@example diffusion2D_periodic
+const backend = CPUBackend
+````
+
+## Initial and boundary conditions
+
+`init_T!` sets a linear temperature gradient between the fixed top and
+bottom boundary values (300 K and 3500 K), and `circular_perturbation!`
+adds a localized hot anomaly on top of it.
+
+````@example diffusion2D_periodic
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
         T[i + 1, j + 1] = 300.0
@@ -65,14 +56,17 @@ function circular_perturbation!(T, δT, xc, yc, r, xci)
     ni = size(T) .- 2
     return @parallel (@idx ni) _circular_perturbation!(T, xci...)
 end
+````
 
-# ## Model setup and time loop
-#
-# [`Geometry`](@ref) builds the staggered grid, `SetMaterialParams` (from
-# [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) defines
-# the constant density, heat capacity and conductivity, and `ThermalArrays` /
-# `PTThermalCoeffs` allocate the pseudo-transient solver state. The left and
-# right boundaries are periodic; top and bottom hold constant temperatures.
+## Model setup and time loop
+
+[`Geometry`](@ref) builds the staggered grid, `SetMaterialParams` (from
+[GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)) defines
+the constant density, heat capacity and conductivity, and `ThermalArrays` /
+`PTThermalCoeffs` allocate the pseudo-transient solver state. The left and
+right boundaries are periodic; top and bottom hold constant temperatures.
+
+````@example diffusion2D_periodic
 function diffusion_2D_periodic(;
         nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
         ρ0 = 3.3e3, Cp0 = 1.2e3, K0 = 3.0,
@@ -122,16 +116,23 @@ function diffusion_2D_periodic(;
     return T_initial, thermal.T[2:(end - 1), 2:(end - 1)], grid
 end
 nothing #hide
+````
 
-# Running it for 20 steps of 50 kyr (1 Myr total) and keeping both the
-# post-perturbation initial field and the final field lets us compare them
-# below:
+Running it for 20 steps of 50 kyr (1 Myr total) and keeping both the
+post-perturbation initial field and the final field lets us compare them
+below:
+
+````@example diffusion2D_periodic
 T_initial, T_final, grid = diffusion_2D_periodic();
+nothing #hide
+````
 
-# ## Result
-#
-# Zooming in on the perturbation, the sharp circular anomaly has visibly
-# spread and flattened after 1 Myr of diffusion:
+## Result
+
+Zooming in on the perturbation, the sharp circular anomaly has visibly
+spread and flattened after 1 Myr of diffusion:
+
+````@example diffusion2D_periodic
 x_km = grid.xci[1] ./ 1.0e3
 z_km = grid.xci[2] ./ 1.0e3
 crop_x = 30 .<= x_km .<= 70
@@ -145,3 +146,9 @@ for (i, (T, title)) in enumerate(((T_initial, "Initial"), (T_final, "After 1 Myr
     i == 2 && Colorbar(fig[1, 3], hm; label = "T (K)")
 end
 fig
+````
+
+---
+
+*This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
+

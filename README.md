@@ -19,6 +19,10 @@
 
 JustRelax.jl is a Julia package for geodynamic modeling with matrix-free, accelerated pseudo-transient solvers. It supports two- and three-dimensional applications on CPUs and GPUs, including distributed-memory runs with MPI.
 
+JustRelax.jl supports Julia 1.10 through 1.12. Start with the CPU backend, then
+use the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend/)
+to configure CUDA, AMDGPU, or MPI workflows.
+
 The package is part of the [PTSolvers organisation](https://ptsolvers.github.io/) and was developed within the [GPU4GEO project](https://www.pasc.ch/projects/2021-2024/gpu4geo/). For an overview of the methods and examples, see the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/).
 
 ## Highlights

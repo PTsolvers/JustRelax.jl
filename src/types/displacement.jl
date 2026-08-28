@@ -1,4 +1,9 @@
 # Velocity to displacement interpolation
+"""
+    velocity2displacement!(stokes::StokesArrays, dt)
+
+Set `stokes.U` (displacement) to `stokes.V * dt` (velocity times the time step), in place.
+"""
 velocity2displacement!(stokes, dt) = velocity2displacement!(backend(stokes), stokes, dt)
 
 function velocity2displacement!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, dt)
@@ -29,6 +34,14 @@ end
 
 # Displacement to velocity interpolation
 
+"""
+    displacement2velocity!(stokes::StokesArrays, dt)
+    displacement2velocity!(stokes::StokesArrays, dt, flow_bcs::AbstractFlowBoundaryConditions)
+
+Set `stokes.V` (velocity) to `stokes.U / dt` (displacement divided by the time step), in
+place — the inverse of [`velocity2displacement!`](@ref). The 3-argument method is a no-op
+when `flow_bcs isa VelocityBoundaryConditions` (velocity is already the primary variable).
+"""
 displacement2velocity!(stokes, dt) = displacement2velocity!(backend(stokes), stokes, dt)
 
 function displacement2velocity!(::CPUBackendTrait, stokes::JustRelax.StokesArrays, dt)

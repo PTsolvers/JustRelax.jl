@@ -101,8 +101,19 @@ pressure and velocity rows are eliminated, positive sliver faces use a bounded
 face mass, and changing the mask between calls resets the dynamic-relaxation
 history. `air_phase` excludes the air phase from material averages, while
 `pressure_relaxation` damps the Powell--Hestenes pressure update; its default is
-`1`. The solver accepts either a `Geometry{2}` or a legacy uniform-spacing tuple.
+`1`. The solver accepts either a `Geometry{2}` or a legacy uniform-spacing tuple,
+and takes its options either as the plain keywords above or bundled as a single
+`kwargs = (; ...)` NamedTuple.
 Standard `solve_DYREL!` remains unchanged for unweighted 2D problems.
+
+A velocity row whose preconditioner diagonal comes out zero is decoupled from
+its neighbours and is preconditioned with the identity. A diagonal that comes
+out negative or non-finite is not: it means the free-surface term is large
+enough to invert the row, or that a degenerate phase sample produced a
+non-finite viscosity, and it is propagated as `NaN` so the solve reports a
+failure rather than continuing with an arbitrary substitute. Reaching it with
+`free_surface = true` indicates the timestep is too large for the density
+contrast at the surface.
 
 See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
 mask construction, and the mathematical reference.

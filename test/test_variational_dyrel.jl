@@ -77,10 +77,19 @@ function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = fal
             ϕ.Vx[4, 4] = 0.0
         end
         dyrel = DYREL(CPUBackend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
-        result = solve_VariationalDYREL!(
-            stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args,
-            legacy_grid ? grid.di : grid, dt, igg; kwargs
-        )
+        # `legacy_grid` doubles as the switch between the two accepted keyword forms: the bundled
+        # `kwargs = (; ...)` used by the miniapps and the plain keywords used by the docs.
+        result = if legacy_grid
+            solve_VariationalDYREL!(
+                stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args,
+                grid.di, dt, igg; kwargs
+            )
+        else
+            solve_VariationalDYREL!(
+                stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args,
+                grid, dt, igg; kwargs...
+            )
+        end
     else
         dyrel = DYREL(CPUBackend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
         result = solve_DYREL!(

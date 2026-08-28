@@ -1,34 +1,43 @@
 # Diagonal contribution of the free-surface stabilization buoyancy term (Kaus et al.,
-# 2010) to the Vy operator: ∂(ρg)/∂y·θ·dt, with θ = 1 to match the residual kernels
-# (`compute_PH_residual_V!`/`compute_DR_residual_update_V!`), which add Vy·∂(ρg)/∂y·θ·dt
-# to Ry. Passing a `RockRatio` selects the ϕ-masked ρg sampling those masked kernels use, so
-# the preconditioner describes the same stabilized operator. Returns a Bool `false` (numeric
-# zero) when no buoyancy field is supplied, so construction-time estimates and the FSSA-off
-# path are byte-identical to the plain viscous diagonal.
+# 2010) to the Vy operator: -∂(ρg)/∂y·θ·dt, with θ = 1. The residual kernels
+# (`compute_PH_residual_V!`/`compute_DR_residual_update_V!`) add Vy·∂(ρg)/∂y·θ·dt to Ry, and
+# Ry = b - A·V, so the term enters A's diagonal with the opposite sign — the same convention as
+# `free_surface_diagonal`. It is signed, not a magnitude: where density increases upward it
+# reduces the diagonal. Passing a `RockRatio` selects the ϕ-masked ρg sampling those masked
+# kernels use, so the preconditioner describes the same stabilized operator. Returns a Bool
+# `false` (numeric zero) when no buoyancy field is supplied, so construction-time estimates and
+# the FSSA-off path are byte-identical to the plain viscous diagonal.
 @inline fssa_diagonal_y(::Nothing, i, j, _dy, dt, ϕ = nothing) = false
 Base.@propagate_inbounds @inline function fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ = nothing)
     # the launch spans every center row, so the north neighbour of the top row does not exist
     j == lastindex(ρgy, 2) && return zero(eltype(ρgy))
-    return _d_ya_ρg(ρgy, ϕ, _dy, i, j) * dt
+    return -_d_ya_ρg(ρgy, ϕ, _dy, i, j) * dt
 end
 
 Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ::Nothing, _dy, i, j) = _d_ya(ρgy, _dy, i, j)
 Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ϕ::JustRelax.RockRatio, _dy, i, j) = _d_ya(ρgy, ϕ.center, _dy, i, j)
 
-# Store a preconditioner diagonal and its eigenvalue bound. A valid diagonal is strictly
-# positive; it can still come out zero or NaN at a mask-boundary cell that `isvalid_*` accepts
-# because its neighbouring stress weights vanish. The bounded face mass is the outer
-# `W_L^u` factor of the variational velocity preconditioner. The physical row sum is not
-# rescaled, so sliver faces correctly increase the preconditioned eigenvalue bound.
+# Store a preconditioner diagonal and its eigenvalue bound. The bounded face mass is the outer
+# `W_L^u` factor of the variational velocity preconditioner. The physical row sum is not rescaled,
+# so sliver faces correctly increase the preconditioned eigenvalue bound.
+#
+# A diagonal of exactly zero is a legitimate mask-boundary row that `isvalid_*` accepts but whose
+# neighbouring stress weights all vanish; it carries no coupling, so the identity is the right
+# preconditioner for it. A negative or non-finite diagonal is not legitimate — it means either a
+# degenerate viscosity sample or an FSSA term large enough to invert the row — and is propagated as
+# `NaN`, the same signal `free_surface_pseudotime` raises, rather than silently replaced by 1.
 Base.@propagate_inbounds @inline function set_preconditioner!(D, λmaxV, diagonal, row_sum, face_fraction, i, j)
     face_mass = variational_face_mass(face_fraction)
     weighted_diagonal = face_mass * diagonal
-    if isfinite(weighted_diagonal) && weighted_diagonal > zero(weighted_diagonal)
+    if weighted_diagonal > zero(weighted_diagonal)
         D[i, j] = weighted_diagonal
         λmaxV[i, j] = row_sum / weighted_diagonal
-    else
+    elseif iszero(weighted_diagonal)
         D[i, j] = one(eltype(D))
         λmaxV[i, j] = one(eltype(λmaxV))
+    else
+        D[i, j] = convert(eltype(D), NaN)
+        λmaxV[i, j] = convert(eltype(λmaxV), NaN)
     end
     return nothing
 end
@@ -182,23 +191,23 @@ end
             γN_dy = γN * _dy
             γS_dy = γS * _dy
 
-            # Viscous+penalty diagonal augmented by the ϕ-masked FSSA term, as above.
+            # Viscous+penalty diagonal augmented by the signed ϕ-masked FSSA term, as above.
             Dy_visc = (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
-            Dy_mag = Dy_visc + abs(fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ))
+            Dy_ij = Dy_visc + fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ)
 
             # compute Gershgorin entries
             Cyy = abs(ηE * _dx2) +
                 abs(ηW * _dx2) +
                 abs((γN + c43 * ηN) * _dy2) +
                 abs((γS + c43 * ηS) * _dy2) +
-                Dy_mag
+                Dy_ij
 
             Cyx = abs((γN + ηE - c23 * ηN) * _dxdy) +
                 abs((γN - c23 * ηN + ηW) * _dxdy) +
                 abs((γS + ηE - c23 * ηS) * _dxdy) +
                 abs((γS - c23 * ηS + ηW) * _dxdy)
 
-            set_preconditioner!(Dy, λmaxVy, Dy_mag, Cyx + Cyy, ϕ.Vy[i, j + 1], i, j)
+            set_preconditioner!(Dy, λmaxVy, Dy_ij, Cyx + Cyy, ϕ.Vy[i, j + 1], i, j)
         else
             Dy[i, j] = one(eltype(Dy))
             λmaxVy[i, j] = one(eltype(λmaxVy))

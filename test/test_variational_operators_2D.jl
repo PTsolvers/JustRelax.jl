@@ -1,11 +1,36 @@
 using JustRelax
+using JustRelax.JustRelax2D
 using LinearAlgebra
+using ParallelStencil
 using Test
 
+@init_parallel_stencil(Threads, Float64, 2)
+
 @testset "Variational Stokes legacy keyword bundle" begin
+    flatten = JustRelax.JustRelax2D.flatten_solver_kwargs
     legacy = (; nout = 2000, free_surface = true)
-    options = JustRelax.JustRelax2D._variational_stokes_options((; kwargs = legacy, nout = 10))
-    @test options == (; nout = 10, free_surface = true)
+    @test flatten((; kwargs = legacy, nout = 10)) == (; nout = 10, free_surface = true)
+    @test flatten((; nout = 10, free_surface = true)) == (; nout = 10, free_surface = true)
+    @test_throws "must be a NamedTuple" flatten((; kwargs = 1))
+end
+
+@testset "Solver entry point keyword contract" begin
+    # The CUDA/AMDGPU extensions declare their backend-trait methods as `(...; kwargs)` and splat
+    # inside, so every trait method must take the options as that single bundle, and every public
+    # entry point must slurp so it accepts both the bundled and the plain-keyword call form. A
+    # generic entry that splats instead reaches the GPU methods with no `kwargs` at all.
+    keywords_of(f, trait) = Base.kwarg_decl(only(methods(f, Tuple{trait, Any, Vararg{Any}})))
+
+    for (M, name) in (
+            (JustRelax.JustRelax2D, :solve_VariationalStokes!),
+            (JustRelax.JustRelax2D, :solve_DYREL!),
+            (JustRelax.JustRelax2D, :solve_VariationalDYREL!),
+            (JustRelax.JustRelax3D, :solve_VariationalStokes!),
+        )
+        f = getfield(M, name)
+        @test keywords_of(f, JustRelax.CPUBackendTrait) == [:kwargs]
+        @test keywords_of(f, JustRelax.StokesArrays) == [Symbol("kwargs...")]
+    end
 end
 
 """Return the interior x-face pressure gradient used by the 2D layout."""
@@ -113,50 +138,79 @@ end
     Gy = _dense_gradient_y(wₚ, wᵥ, dy)
     @test dot(vec(gx), vec(qx)) ≈ dot(vec(p), Gx' * vec(qx))
     @test dot(vec(gy), vec(qy)) ≈ dot(vec(p), Gy' * vec(qy))
-end
 
-@testset "Variational Stokes 2D deformation adjoint" begin
-    nx, ny = 3, 3
-    D = _dense_deformation(nx, ny, 0.7, 1.3)
-    u = collect(range(-0.8, 1.1; length = size(D, 2)))
-    τ = collect(range(0.2, 1.4; length = size(D, 1)))
-    w_center = [1.0 0.4 0.0; 0.7 0.2 0.9; 0.3 0.8 0.6]
-    w_vertex = [0.5 0.0; 0.25 0.9]
-    # Tensor contraction counts the symmetric xy component twice.
-    Wτ = vcat(vec(w_center), vec(w_center), 2 .* vec(w_vertex))
+    # Anchor the layout above to the kernel it models: with zero stress, zero buoyancy and
+    # `dt = 0`, the masked momentum residual is exactly the negated ϕ-weighted pressure gradient.
+    ni = nx, ny
+    grid = Geometry(ni, (nx / dx, ny / dy))
+    ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, ni)
+    copyto!(ϕ.center, wₚ)
+    copyto!(ϕ.Vx, wᵤ)
+    copyto!(ϕ.Vy, wᵥ)
+    fill!(ϕ.vertex, 1.0)
 
-    @test dot(D * u, Wτ .* τ) ≈ dot(u, D' * (Wτ .* τ))
-    @test all(iszero, (Wτ .* τ)[Wτ .== 0])
+    stokes = StokesArrays(JustRelax.CPUBackend, ni)
+    copyto!(stokes.P, p)
+    @parallel (JustRelax.JustRelax2D.@idx ni) JustRelax.JustRelax2D.compute_PH_residual_V!(
+        stokes.R.Rx, stokes.R.Ry,
+        JustRelax.JustRelax2D.@velocity(stokes)...,
+        stokes.P, stokes.ΔPψ,
+        JustRelax.JustRelax2D.@stress(stokes)...,
+        zeros(ni), zeros(ni),
+        ϕ, grid._di.center, grid._di.vertex, 0.0,
+    )
+    @test stokes.R.Rx ≈ -gx
+    @test stokes.R.Ry ≈ -gy
 end
 
 @testset "Variational Stokes 2D rigid-body modes" begin
-    nx, ny = 4, 3
-    dx, dy = 0.7, 1.3
-    xfaces = (0:nx) .* dx
-    yfaces = (0:ny) .* dy
-    xcenters = ((0:(nx - 1)) .+ 0.5) .* dx
-    ycenters = ((0:(ny - 1)) .+ 0.5) .* dy
+    # A rigid translation and a rigid rotation carry no strain, so the masked strain-rate kernel
+    # must annihilate both — for a full rock domain and for one the RockRatio partially masks.
+    ni = nx, ny = 4, 3
+    grid = Geometry(ni, (nx * 0.7, ny * 1.3))
+    xci, xvi = grid.xci, grid.xvi
 
-    function strain(Vx, Vy)
-        εxx = [(Vx[i + 1, j] - Vx[i, j]) / dx for i in 1:nx, j in 1:ny]
-        εyy = [(Vy[i, j + 1] - Vy[i, j]) / dy for i in 1:nx, j in 1:ny]
-        εxy = [
-            0.5 * (
-                    (Vx[i + 1, j + 1] - Vx[i + 1, j]) / dy +
-                    (Vy[i + 1, j + 1] - Vy[i, j + 1]) / dx
-                ) for i in 1:(nx - 1), j in 1:(ny - 1)
-        ]
-        return εxx, εyy, εxy
+    function kernel_strain!(stokes, ϕ)
+        # compute_strain_rate! reads ∇V rather than computing it
+        @parallel (JustRelax.JustRelax2D.@idx ni) JustRelax.JustRelax2D.compute_∇V!(
+            stokes.∇V, JustRelax.JustRelax2D.@velocity(stokes), ϕ, grid._di.vertex
+        )
+        @parallel (JustRelax.JustRelax2D.@idx ni .+ 1) JustRelax.JustRelax2D.compute_strain_rate!(
+            JustRelax.JustRelax2D.@strain(stokes)...,
+            stokes.∇V,
+            JustRelax.JustRelax2D.@velocity(stokes)...,
+            ϕ,
+            grid._di.vertex,
+            grid._di.velocity...,
+        )
+        return (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V)
     end
 
-    translation = strain(fill(2.0, nx + 1, ny), fill(-3.0, nx, ny + 1))
-    @test all(all(iszero, ε) for ε in translation)
+    full_rock() = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, ni)
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ
+    end
+    ϕ_cut = full_rock()
+    ϕ_cut.center[1, 1] = 0.0
+    ϕ_cut.Vx[1, 1] = 0.0
 
     ω = 1.7
-    Vx = [-ω * y for _ in xfaces, y in ycenters]
-    Vy = [ω * x for x in xcenters, _ in yfaces]
-    rotation = strain(Vx, Vy)
-    @test all(all(x -> isapprox(x, 0.0; atol = 10eps()), ε) for ε in rotation)
+    for ϕ in (full_rock(), ϕ_cut), mode in (:translation, :rotation)
+        stokes = StokesArrays(JustRelax.CPUBackend, ni)
+        if mode === :translation
+            fill!(stokes.V.Vx, 2.0)
+            fill!(stokes.V.Vy, -3.0)
+        else
+            # Vx carries a ghost row in y only, Vy a ghost column in x only; the ghosts hold the
+            # analytic field too, so the whole stencil sees the rigid mode.
+            ghost(c) = (d = c[2] - c[1]; vcat(c[1] - d, c..., c[end] + d))
+            stokes.V.Vx .= [-ω * y for _ in xvi[1], y in ghost(xci[2])]
+            stokes.V.Vy .= [ω * x for x in ghost(xci[1]), _ in xvi[2]]
+        end
+        for field in kernel_strain!(stokes, ϕ)
+            @test all(x -> isapprox(x, 0.0; atol = 1.0e3 * eps()), field)
+        end
+    end
 end
 
 @testset "Variational Stokes 2D active-volume policy" begin
@@ -193,6 +247,21 @@ end
     store!(D, λmax, 4.0, 12.0, 1.0, 1, 1)
     @test D[1, 1] == 4.0
     @test λmax[1, 1] ≈ 3.0
+
+    # A decoupled mask-boundary row — every surrounding stress weight vanishes — is preconditioned
+    # with the identity.
+    store!(D, λmax, 0.0, 0.0, 1.0, 1, 1)
+    @test D[1, 1] == 1.0
+    @test λmax[1, 1] == 1.0
+
+    # A row the FSSA term inverts, or one fed a degenerate viscosity, is not silently rescued.
+    store!(D, λmax, -2.0, 12.0, 1.0, 1, 1)
+    @test isnan(D[1, 1])
+    @test isnan(λmax[1, 1])
+
+    store!(D, λmax, NaN, 12.0, 1.0, 1, 1)
+    @test isnan(D[1, 1])
+    @test isnan(λmax[1, 1])
 end
 
 @testset "Variational DYREL weighted pressure residual" begin

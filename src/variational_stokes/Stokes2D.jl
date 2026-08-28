@@ -1,16 +1,6 @@
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
-function _variational_stokes_options(kwargs)
-    options = (; kwargs...)
-    if haskey(options, :kwargs)
-        legacy = options.kwargs
-        legacy isa NamedTuple || throw(ArgumentError("`kwargs` must be a NamedTuple"))
-        options = merge(legacy, Base.structdiff(options, (; kwargs = legacy)))
-    end
-    return options
-end
-
 """
     solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
 
@@ -39,11 +29,41 @@ The free_surface keyword enables the density-gradient correction in the
 vertical momentum row. In this solver it is included implicitly in the local
 face diagonal, so the physical timestep does not create an explicit feedback
 instability.
+
+# Arguments (in the following order)
+- `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
+- `pt_stokes`: Pseudo-transient coefficients, from `PTStokesCoeffs`.
+- `grid`: `Geometry{2}` object carrying grid spacing and staggered-grid coordinates. A legacy
+  2D spacing tuple or named tuple is also accepted and converted to a uniform `Geometry`.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `ρg`: buoyancy forces arrays.
+- `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `ϕ`: `JustRelax.RockRatio` carrying the cell, vertex and face volume fractions.
+- `rheology`: Material properties and rheological laws.
+- `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
+- `dt`: Time step.
+- `igg`: `IGG` object for global grid information (MPI).
+
+# Keyword Arguments
+- `air_phase`: Phase index excluded from material averages; `0` disables the correction. Default: `0`.
+- `viscosity_cutoff`: Limits for viscosity `(min, max)`. Default: `(-Inf, Inf)`.
+- `viscosity_relaxation`: Relaxation factor for viscosity updates. Default: `1.0e-2`.
+- `λ_relaxation`: Relaxation factor for the plastic multiplier. Default: `0.2`.
+- `strain_increment`: Solve for displacement increments alongside velocity. Default: `false`.
+- `iterMax`: Maximum number of pseudo-transient iterations. Default: `50.0e3`.
+- `iterMin`: Minimum number of pseudo-transient iterations. Default: `1.0e2`.
+- `nout`: Output frequency for residuals. Default: `500`.
+- `verbose`: Print iteration info. Default: `true`.
+- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
+
+Options may be passed either as plain keywords or bundled as a single
+`kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
-    options = _variational_stokes_options(kwargs)
-    out = solve_VariationalStokes!(backend(stokes), stokes, args...; options...)
-    return out
+    return solve_VariationalStokes!(
+        backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
+    )
 end
 
 # entry point for extensions
@@ -52,7 +72,7 @@ end
 
 Stokes solver entry point for variational Stokes solvers. This function dispatches to the appropriate implementation based on the backend provided in the function call.
 """
-function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs...)
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 

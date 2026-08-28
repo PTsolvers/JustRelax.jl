@@ -2,25 +2,50 @@
 
 # backend trait
 """
-    solve_VariationalStokes!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ::RockRatio, rheology, args, dt, igg; kwargs...)
+    solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
 
-Solve the 3D viscoelastoplastic Stokes equations to pseudo-transient convergence using the
-variational (ghost-node-free) formulation, updating `stokes` in place for one physical
-time step `dt`. Cells are weighted by the rock ratio `ϕ` (see [`RockRatio`](@ref)), so
-partially- or fully-air/sticky-air cells contribute less (or not at all) to the momentum
-balance. `grid` may be replaced by the grid spacing `di` alone.
+Solve the 3D volume-fraction variational Stokes problem with matrix-free
+pseudo-transient iterations.
 
-`rheology` is one `GeoParams.MaterialParams` per phase; `args` carries auxiliary fields
-(e.g. temperature `T`, pressure `P`). Keyword tolerances, iteration limits, and relaxation
-factors default as in `_solve_VS!`. Dispatches on the CPU/CUDA/AMDGPU backend selected by
-`stokes`.
+`ϕ` carries liquid weights at pressure cells, stress vertices and staggered
+velocity faces; zero-weight rows are written as zero instead of being solved
+with air material properties. See the 2D method for the pressure/velocity
+connectivity rule the weights encode.
+
+# Arguments (in the following order)
+- `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
+- `pt_stokes`: Pseudo-transient coefficients, from `PTStokesCoeffs`.
+- `grid`: `Geometry{3}` object carrying grid spacing and staggered-grid coordinates. A legacy
+  3D spacing tuple or named tuple is also accepted and converted to a uniform `Geometry`.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `ρg`: buoyancy forces arrays.
+- `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `ϕ`: `JustRelax.RockRatio` carrying the cell, vertex and face volume fractions.
+- `rheology`: Material properties and rheological laws.
+- `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
+- `dt`: Time step.
+- `igg`: `IGG` object for global grid information (MPI).
+
+# Keyword Arguments
+- `air_phase`: Phase index excluded from material averages; `0` disables the correction. Default: `0`.
+- `viscosity_cutoff`: Limits for viscosity `(min, max)`. Default: `(-Inf, Inf)`.
+- `viscosity_relaxation`: Relaxation factor for viscosity updates. Default: `1.0e-2`.
+- `iterMax`: Maximum number of pseudo-transient iterations. Default: `10.0e3`.
+- `nout`: Output frequency for residuals. Default: `500`.
+- `verbose`: Print iteration info. Default: `true`.
+- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 4)`.
+
+Options may be passed either as plain keywords or bundled as a single
+`kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
-    return solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs...)
+    return solve_VariationalStokes!(
+        backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
+    )
 end
 
 # entry point for extensions
-function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs...)
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 

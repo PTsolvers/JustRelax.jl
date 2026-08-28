@@ -45,18 +45,23 @@ function _solve_VariationalDYREL!(
     residuals = @residuals(stokes.R)
     fields = dyrel_fields(dyrel, dim)
 
-    # masks: only count residuals over the valid (rock) part of the domain
-    maskV = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
-    maskP = ϕ.center .> 0
+    # Masks: only count residuals over the valid (rock) part of the domain. `similar` keeps the
+    # element type a `Bool`, not a `Bit`: the kernels below write single entries from concurrent
+    # threads, and `BitArray` `setindex!` is a non-atomic read-modify-write of a whole 64-bit
+    # chunk, so neighbouring columns would race.
+    maskV = (
+        similar(ϕ.Vx, Bool, (size(ϕ.Vx, 1) - 2, size(ϕ.Vx, 2))),
+        similar(ϕ.Vy, Bool, (size(ϕ.Vy, 1), size(ϕ.Vy, 2) - 2)),
+    )
+    maskP = similar(ϕ.center, Bool)
     @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
     @parallel (@idx ni) update_valid_v_masks!(maskV..., ϕ)
     # velocity interiors, which is what maskV is shaped like; views alias the parent, so these
     # stay current for the whole solve
     Vi = ntuple(d -> @views(@velocity(stokes)[d][2:(end - 1), 2:(end - 1)]), dim)
-    # Momentum-residual norms run over the same boundary-trimmed interior as the non-variational
-    # solver, so that a boundary-condition row cannot set the residual scale. Trimming mask,
-    # residual and preconditioner diagonal identically keeps them index-aligned. The continuity
-    # residual is not trimmed, again matching `_solve_DYREL!`.
+    # Momentum-residual norms run over the interior only, so that a boundary-condition row cannot
+    # set the residual scale; the continuity residual is not trimmed. Trimming mask, residual and
+    # preconditioner diagonal identically keeps them index-aligned.
     maskRi = ntuple(d -> @views(maskV[d][2:(end - 1), 2:(end - 1)]), dim)
     Ri = ntuple(d -> @views(residuals[d][2:(end - 1), 2:(end - 1)]), dim)
     R0i = ntuple(d -> @views(fields.R0[d][2:(end - 1), 2:(end - 1)]), dim)
@@ -118,14 +123,12 @@ function _solve_VariationalDYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
     compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
-    sanitize_ρg!(ρg)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args; air_phase)
-        sanitize_ρg!(ρg)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, true)
@@ -160,8 +163,16 @@ function _solve_VariationalDYREL!(
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
         Vspan = nonzero_span(maximum(map(masked_value_scale, maskV, Vi)))
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
-        errPt = masked_norm_mpi(maskP, stokes.R.RP) / Vspan * lx / √(nP)
+        RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
+        errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt))
+        # Convergence additionally accepts a continuity residual that is negligible in absolute
+        # terms: a field at rest has no velocity scale, so `Vspan` collapses to the residual-level
+        # noise and `errPt` stops carrying information. `RP` is a divergence, so `RP·dt` is the
+        # volumetric strain the step would accumulate — dimensionless and solution-independent.
+        # Only the convergence test uses it; `err` continues to drive the tolerance schedule below,
+        # which is tuned against the relative form.
+        err_converged = max(maximum(errV), min(errPt, RP_rms * dt))
 
         if itPH ≤ 2
             errV0 = map(x -> x + eps(), errV)
@@ -177,7 +188,7 @@ function _solve_VariationalDYREL!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
-        if err < ϵ && itPH > 1
+        if err_converged < ϵ && itPH > 1
             converged = true
             break
         end
@@ -231,7 +242,9 @@ function _solve_VariationalDYREL!(
             end
             @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
 
-            # Velocity residual + ϕ-damped pseudo-transient velocity update (fused, masked)
+            # Velocity residual + damped pseudo-transient velocity update (fused, masked). The face
+            # fraction enters only through `variational_face_mass` inside `D`; the damping
+            # recurrence itself carries no ϕ factor.
             @parallel (@idx ni) compute_DR_residual_update_V!(
                 residuals...,
                 @velocity(stokes)...,
@@ -292,7 +305,14 @@ function _solve_VariationalDYREL!(
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
         @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
-        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation)
+        # The uniform volumetric mode is fitted to what the local update above left behind, so RP
+        # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
+        # Both the refresh and the relaxation are skipped where the mode carries no correction.
+        compliance = volumetric_compliance_total(dyrel.ηb, maskP)
+        if !iszero(compliance)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
+            relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
+        end
 
         iter > total_iterMax && break
     end

@@ -136,3 +136,16 @@ include("DYREL/Gershgorin_VS.jl")
 
 include("thermal_diffusion/DiffusionPT.jl")
 export PTThermalCoeffs, heatdiffusion_PT!, compute_shear_heating!
+
+# Solver entry points forward their keywords to the backend-trait methods as a
+# single `kwargs` NamedTuple. Callers may pass the options either as plain
+# keywords or pre-bundled as `kwargs = (; ...)`; both normalize to the same
+# NamedTuple here.
+function flatten_solver_kwargs(kwargs)
+    options = (; kwargs...)
+    haskey(options, :kwargs) || return options
+    bundle = options.kwargs
+    bundle isa NamedTuple ||
+        throw(ArgumentError("`kwargs` must be a NamedTuple, got $(typeof(bundle))"))
+    return merge(bundle, Base.structdiff(options, (; kwargs = bundle)))
+end

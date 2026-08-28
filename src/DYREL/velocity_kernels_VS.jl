@@ -3,31 +3,6 @@
 # Masked (RockRatio ϕ) counterparts of the fused DYREL kernels in velocity_kernels.jl, used by the
 # variational `_solve_DYREL!` (solver_VS.jl). 2D only — the variational DYREL path is 2D-only.
 
-# `compute_ρg!` derives buoyancy from the particle phase ratios without the
-# `correct_phase_ratio` guard the viscosity path applies, so a degenerate sample at the free
-# surface leaves ρg non-finite at cells the marker-chain ϕ still marks partially valid. The
-# ϕ-masked stencils pass partial cells through as `ρg * ϕ`, so that NaN reaches the momentum
-# residual and, through the velocity, particle advection: ρg must be finite here. Zero is safe
-# because these cells are ϕ-weighted and nearly air; extrapolating the neighbouring valid
-# buoyancy would be more accurate.
-@parallel_indices (i, j) function zero_nonfinite_ρg!(ρgy)
-    if all((i, j) .≤ size(ρgy)) && !isfinite(ρgy[i, j])
-        ρgy[i, j] = zero(eltype(ρgy))
-    end
-    return nothing
-end
-
-# Every buoyancy refresh has to be followed by the guard above, not just the one that seeds the
-# field: `update_ρg!` recomputes ρg from the phase ratios on every Powell-Hestenes pass whenever
-# the density is not constant, and reintroduces the non-finite entries each time. All components
-# are swept because `update_ρg!` writes the whole tuple.
-sanitize_ρg!(ρg::NTuple) = foreach(sanitize_ρg!, ρg)
-
-function sanitize_ρg!(ρgᵢ::AbstractArray)
-    @parallel (@idx size(ρgᵢ)) zero_nonfinite_ρg!(ρgᵢ)
-    return nothing
-end
-
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused, masked)
 # Masked analogue of `compute_∇V_strain_rate_RP!`: divergence, deviatoric strain rate and the
 # pressure residual RP are computed in a single pass over the (rock) valid cells, reusing the

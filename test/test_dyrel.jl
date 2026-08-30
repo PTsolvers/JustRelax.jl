@@ -22,7 +22,7 @@ end
     @testset "DYREL 2D allocator" begin
         # NTuple constructor
         nx, ny = 8, 6
-        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25)
+        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25, γfact = 31.0)
         @test dyrel isa JustRelax.DYREL
         @test size(dyrel.γ_eff) == (nx, ny)
         @test size(dyrel.ηb) == (nx, ny)
@@ -41,6 +41,7 @@ end
         @test size(dyrel.Ry0) == (nx, ny - 1)
         @test size(dyrel.Rz0) == (1, 1)
         @test dyrel.CFL === 0.5
+        @test dyrel.γfact === 31.0
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.25

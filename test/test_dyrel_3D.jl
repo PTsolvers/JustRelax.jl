@@ -59,9 +59,10 @@ end
             dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
         ))
 
-        dyrel_forwarded = JustRelax3D.DYREL(backend_JR, nx, ny, nz; CFL = 0.7)
+        dyrel_forwarded = JustRelax3D.DYREL(backend_JR, nx, ny, nz; CFL = 0.7, γfact = 31.0)
         @test size(dyrel_forwarded.Dz) == velocity_sizes[3]
         @test dyrel_forwarded.CFL === 0.7
+        @test dyrel_forwarded.γfact === 31.0
     end
 
     @testset "update_α_β!" begin

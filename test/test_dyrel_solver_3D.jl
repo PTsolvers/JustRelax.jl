@@ -91,6 +91,14 @@ end
             backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
             ϵ = 1.0e-6, CFL = 0.99,
         )
+        @test_throws ErrorException solve_DYREL!(
+            stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+            kwargs = (;
+                free_surface = true,
+                verbose_PH = false,
+                verbose_DR = false,
+            ),
+        )
         out = solve_DYREL!(
             stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
             kwargs = (;

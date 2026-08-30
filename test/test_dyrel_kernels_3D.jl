@@ -117,15 +117,43 @@ end
         stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
 
         dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt; γfact = 37.0)
-        γ_eff_before = copy(dyrel.γ_eff)
         JR3K.DYREL!(dyrel, stokes, local_rheology, local_phases, grid.di, local_dt)
         @test dyrel.γfact === 37.0
-        @test Array(dyrel.γ_eff) == Array(γ_eff_before)
+        @test all(Array(dyrel.ηb) .≈ 5.0)
+        @test all(Array(dyrel.γ_eff) .≈ 5.0 * 37.0 / (5.0 + 37.0))
+        @test all(A -> all(isfinite, Array(A)), (
+            dyrel.Dx, dyrel.Dy, dyrel.Dz,
+            dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
+            dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
+        ))
+        @test all(A -> all(>(0), Array(A)), (dyrel.Dx, dyrel.Dy, dyrel.Dz))
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
         JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, local_rheology, local_phases, grid._di, local_ni, local_dt, args)
         @test all(Array(stokes.R.RP) .≈ -(a + b + c))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b + c) / 3)
+
+        thermal_rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                Density = PT_Density(; ρ0 = 1.0, α = 0.02, β = 0.0, T0 = 0.0),
+                Gravity = ConstantGravity(; g = 1.0),
+                CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), elasticity)),
+                Elasticity = elasticity,
+            ),
+        )
+        ΔT = @ones(local_ni .+ 2...) .* 10.0
+        thermal_args = merge(args, (; ΔT))
+        JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, thermal_rheology, local_phases, grid._di, local_ni, local_dt, thermal_args)
+        expected_RP = -(a + b + c) + 0.02 * 10.0 / local_dt
+        @test all(Array(stokes.R.RP) .≈ expected_RP)
+
+        divergence = @ones(local_ni...) .* (a + b + c)
+        JR3K.compute_residual_P!(
+            stokes.R.RP, stokes.P, stokes.P0, divergence, stokes.Q, dyrel.ηb,
+            thermal_rheology, local_phases, local_dt, (; ΔT),
+        )
+        @test all(Array(stokes.R.RP) .≈ expected_RP)
 
         θc = copy(dyrel.P_num)
         JR3K.compute_stress_viscosity_DRYEL!(
@@ -152,19 +180,26 @@ end
         )
         @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
 
-        dyrel.Dx .= 1.0
-        dyrel.Dy .= 1.0
-        dyrel.Dz .= 1.0
-        dyrel.βVx .= 0.0
-        dyrel.βVy .= 0.0
-        dyrel.βVz .= 0.0
-        dyrel.αVx .= 0.0
-        dyrel.αVy .= 0.0
-        dyrel.αVz .= 0.0
-        dyrel.dτVx .= 1.0
-        dyrel.dτVy .= 1.0
-        dyrel.dτVz .= 1.0
-        V_before = map(copy, (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz))
+        residuals = (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz)
+        velocities = (stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)
+        active_velocities = (
+            @view(stokes.V.Vx[2:nx, 2:(ny + 1), 2:(nz + 1)]),
+            @view(stokes.V.Vy[2:(nx + 1), 2:ny, 2:(nz + 1)]),
+            @view(stokes.V.Vz[2:(nx + 1), 2:(ny + 1), 2:nz]),
+        )
+        D = (dyrel.Dx, dyrel.Dy, dyrel.Dz)
+        αV = (dyrel.αVx, dyrel.αVy, dyrel.αVz)
+        βV = (dyrel.βVx, dyrel.βVy, dyrel.βVz)
+        dτV = (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz)
+        dVdτ = (dyrel.dVxdτ, dyrel.dVydτ, dyrel.dVzdτ)
+        foreach(A -> fill!(A, 0.0), (velocities..., dVdτ..., stokes.P, θc, @stress(stokes)...))
+        for d in 1:3
+            D[d] .= d
+            ρg[d] .= d
+            αV[d] .= 0.0
+            βV[d] .= 0.5
+            dτV[d] .= 0.25
+        end
         @parallel (@idx local_ni) JR3K.compute_DR_residual_update_V!(
             stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
             stokes.V.Vx, stokes.V.Vy, stokes.V.Vz,
@@ -176,8 +211,60 @@ end
             dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
             grid._di.center, grid._di.vertex, 0.0,
         )
-        @test all(A -> all(isfinite, Array(A)), (stokes.R.Rx, stokes.R.Ry, stokes.R.Rz))
-        @test all(i -> Array((stokes.V.Vx, stokes.V.Vy, stokes.V.Vz)[i]) == Array(V_before[i]), 1:3)
+        @test all(A -> all(Array(A) .≈ -1.0), residuals)
+        @test all(A -> all(Array(A) .≈ -1.0), dVdτ)
+        @test all(A -> all(Array(A) .≈ -0.125), active_velocities)
+
+        foreach(A -> fill!(A, 0.0), (ρg..., stokes.P, stokes.ΔPψ, θc, @stress(stokes)...))
+        stokes.V.Vz .= 2.0
+        ρg[3] .= PTArray(backend_JR)([
+            k for _ in 1:nx, _ in 1:ny, k in 1:nz
+        ])
+        @parallel (@idx local_ni) JR3K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.P, stokes.ΔPψ, @stress(stokes)..., ρg...,
+            grid._di.center, grid._di.vertex,
+        )
+        PH_unstabilized = map(copy, residuals)
+        @parallel (@idx local_ni) JR3K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.V.Vx, stokes.V.Vy, stokes.V.Vz,
+            stokes.P, stokes.ΔPψ, @stress(stokes)..., ρg...,
+            grid._di.center, grid._di.vertex, 0.5,
+        )
+        expected_correction = 2.0 * grid._di.center[3] * 0.5
+        @test Array(stokes.R.Rx) ≈ Array(PH_unstabilized[1])
+        @test Array(stokes.R.Ry) ≈ Array(PH_unstabilized[2])
+        @test Array(stokes.R.Rz) ≈ Array(PH_unstabilized[3]) .+ expected_correction
+
+        foreach(A -> fill!(A, 1.0), D)
+        foreach(A -> fill!(A, 0.0), (αV..., βV..., dVdτ...))
+        @parallel (@idx local_ni) JR3K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.V.Vx, stokes.V.Vy, stokes.V.Vz,
+            dyrel.dVxdτ, dyrel.dVydτ, dyrel.dVzdτ,
+            stokes.P, θc, @stress(stokes)..., ρg...,
+            dyrel.Dx, dyrel.Dy, dyrel.Dz,
+            dyrel.αVx, dyrel.αVy, dyrel.αVz,
+            dyrel.βVx, dyrel.βVy, dyrel.βVz,
+            dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
+            grid._di.center, grid._di.vertex, 0.0,
+        )
+        DR_unstabilized = map(copy, residuals)
+        @parallel (@idx local_ni) JR3K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.V.Vx, stokes.V.Vy, stokes.V.Vz,
+            dyrel.dVxdτ, dyrel.dVydτ, dyrel.dVzdτ,
+            stokes.P, θc, @stress(stokes)..., ρg...,
+            dyrel.Dx, dyrel.Dy, dyrel.Dz,
+            dyrel.αVx, dyrel.αVy, dyrel.αVz,
+            dyrel.βVx, dyrel.βVy, dyrel.βVz,
+            dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
+            grid._di.center, grid._di.vertex, 0.5,
+        )
+        @test Array(stokes.R.Rx) ≈ Array(DR_unstabilized[1])
+        @test Array(stokes.R.Ry) ≈ Array(DR_unstabilized[2])
+        @test Array(stokes.R.Rz) ≈ Array(DR_unstabilized[3]) .+ expected_correction
     end
 
     elasticity = ConstantElasticity(; G = 1.0, Kb = 5.0)

@@ -206,9 +206,10 @@ end
     stress2grid!(stokes, τ_particles::StressParticles, particles)
 
 Interpolate the particle stress in `τ_particles` back onto the old-stress fields
-`stokes.τ_o`, normal components onto the cell centers and shear components onto the
-vertices. Counterpart of [`rotate_stress!`](@ref), and the step that hands the rotated
-stress to the next Stokes solve.
+`stokes.τ_o`: normal components onto the cell centers, and shear components onto the
+vertices in 2D or onto the cell centers and edges in 3D, matching where the stress kernels
+read them from. Counterpart of [`rotate_stress!`](@ref), and the step that hands the
+rotated stress to the next Stokes solve.
 """
 function stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{backend}, particles
@@ -239,10 +240,23 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particle
     particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.zz, pτzz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-    # shear components
-    particle2grid!(stokes.τ_o.yz, pτyz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-    particle2grid!(stokes.τ_o.xz, pτxz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    # Shear components. Unlike 2D, where `τ.xy` sits on the vertices, the 3D shear
+    # components are edge-centered and each carries its own shape — `yz` is
+    # `(nx, ny + 1, nz + 1)`, `xz` is `(nx + 1, ny, nz + 1)`, `xy` is `(nx + 1, ny + 1, nz)`
+    # — so `particle2grid!`, which writes a full `(nx + 1, ny + 1, nz + 1)` vertex array,
+    # cannot fill them. Interpolate onto the cell centers, which the stress kernels read
+    # through `@tensor_center(stokes.τ_o)`, and average those out onto the edges.
+    particle2centroid!(stokes.τ_o.yz_c, pτyz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.xz_c, pτxz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    center2vertex!(
+        stokes.τ_o.yz,
+        stokes.τ_o.xz,
+        stokes.τ_o.xy,
+        stokes.τ_o.yz_c,
+        stokes.τ_o.xz_c,
+        stokes.τ_o.xy_c,
+    )
 
     return nothing
 end

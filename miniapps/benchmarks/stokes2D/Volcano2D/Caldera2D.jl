@@ -176,7 +176,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         @views hn = 0.5 .* (topo_y[1:(end - 1)] .+ topo_y[2:end])
         @views topo_y[2:(end - 1)] .= 0.5 .* (hn[1:(end - 1)] .+ hn[2:end])
         fill_chain_from_vertices!(chain, PTArray(backend)(topo_y))
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase, (pT,))
     end
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -411,7 +411,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # Enforce the updated marker-chain surface before replenishing
         # particles, so phase ratios never observe newly emptied cells.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(
+            pPhases, chain, particles, origin, di, air_phase, (pT, unwrap(pτ)...)
+        )
 
         # check if we need to inject particles
         center2vertex!(τxx_v, stokes.τ.xx)

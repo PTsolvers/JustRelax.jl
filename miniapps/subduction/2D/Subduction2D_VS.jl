@@ -252,7 +252,9 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # particles.  Filtering first prevents phase-ratio updates from seeing
         # cells that were just emptied by the marker chain.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(
+            pPhases, chain, particles, origin, di, air_phase, (pT, unwrap(pτ)...)
+        )
 
         # check if we need to inject particles
         # need stresses on the vertices for injection purposes

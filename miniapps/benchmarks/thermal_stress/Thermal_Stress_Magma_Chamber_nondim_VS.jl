@@ -512,7 +512,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
 
         # Enforce the new marker-chain surface before replenishing particles.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase, (pT,))
 
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (), ())

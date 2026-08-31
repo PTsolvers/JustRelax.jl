@@ -14,6 +14,17 @@ using Test
     @test_throws "must be a NamedTuple" flatten((; kwargs = 1))
 end
 
+@testset "Marker-chain linear interpolation" begin
+    is_above = JustRelax.JustRelax2D._is_above_chain
+    xvertices = [0.0, 1.0, 2.0]
+    hvertices = [0.0, 1.0, 0.0]
+
+    @test is_above(0.5, 0.75, hvertices, xvertices, 1)
+    @test !is_above(0.5, 0.25, hvertices, xvertices, 1)
+    @test is_above(1.5, 0.75, hvertices, xvertices, 2)
+    @test !is_above(1.5, 0.25, hvertices, xvertices, 2)
+end
+
 @testset "Solver entry point keyword contract" begin
     # The CUDA/AMDGPU extensions declare their backend-trait methods as `(...; kwargs)` and splat
     # inside, so every trait method must take the options as that single bundle, and every public
@@ -269,16 +280,4 @@ end
     @test weighted_divergence(2.0, 1.0) == 2.0
     @test weighted_divergence(2.0, 0.25) == 0.5
     @test weighted_divergence(2.0, 0.0) == 0.0
-end
-
-@testset "Marker-chain filtering index safety" begin
-    find_cells = JustRelax.JustRelax2D.find_minmax_cell_indices
-
-    # Cell lookup must floor negative coordinates rather than truncate them
-    # toward zero.
-    @test find_cells([-0.2, -1.2], 0.0, (1.0, 1.0)) == (-1, 0)
-
-    # An empty marker column must produce an empty interval without attempting
-    # to convert infinities to integer indices.
-    @test find_cells([NaN, NaN], 0.0, (1.0, 1.0)) == (1, 0)
 end

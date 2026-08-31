@@ -8,6 +8,7 @@ using StaticArrays
 
 import ..JustRelax: Geometry
 import ..JustRelax: IGG
+import ..JustRelax: ImplicitGlobalGrid
 
 include("H5.jl")
 
@@ -25,7 +26,7 @@ export checkpointing_jld2, load_checkpoint_jld2
 
 include("VTK.jl")
 
-export VTKDataSeries, append!, save_vtk, save_marker_chain, save_particles
+export VTKDataSeries, append!, save_vtk, save_pvtk, save_marker_chain, save_particles
 
 export metadata
 
@@ -41,10 +42,16 @@ function metadata(src, dst, files...)
         mkpath(dst)
     end
     for f in vcat(collect(files), ["Manifest.toml", "Project.toml"])
-        !isfile(joinpath(f)) && continue
+        srcfile = if isfile(joinpath(src, f))
+            joinpath(src, f)
+        elseif isfile(joinpath(src, "test", f))
+            joinpath(src, "test", f)
+        else
+            continue
+        end
         newfile = joinpath(dst, basename(f))
         isfile(newfile) && rm(newfile)
-        cp(joinpath(src, f), newfile)
+        cp(srcfile, newfile, force = true)
     end
     return
 end

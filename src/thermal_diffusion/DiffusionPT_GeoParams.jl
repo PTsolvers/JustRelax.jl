@@ -3,8 +3,20 @@
 @inline get_phase(x::JustPIC.PhaseRatios) = x.center
 @inline get_phase(x) = x
 
-# update_pt_thermal_arrays!(::Vararg{Any,N}) where {N} = nothing
+@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::NTuple{2}) = x.Vx, x.Vy
+@inline get_phase_fluxes(x, ::NTuple{2}) = x, x
+@inline get_phase_fluxes(x::JustPIC.PhaseRatios, ::NTuple{3}) = x.Vx, x.Vy, x.Vz
+@inline get_phase_fluxes(x, ::NTuple{3}) = x, x, x
 
+"""
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+
+Recompute the pseudo-transient thermal coefficient arrays stored in
+`pt_thermal` from phase-weighted material properties.
+
+This helper is used by the pseudo-transient thermal solver when the local phase
+mixture changes over time.
+"""
 function update_pt_thermal_arrays!(
         pt_thermal, phase_ratios::JustPIC.PhaseRatios, rheology, args, _dt
     )
@@ -29,7 +41,7 @@ end
 end
 
 @inline function compute_phase(fn::F, rheology, phase::Int) where {F}
-    return fn(rheology, phase, args)
+    return fn(rheology, phase)
 end
 
 @inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}
@@ -46,7 +58,7 @@ end
 @inline Base.@propagate_inbounds function getindex_phase(
         phase::AbstractArray, I::Vararg{Int, N}
     ) where {N}
-    return phase[I...]
+    return @cell phase[I...]
 end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing
@@ -77,10 +89,7 @@ end
 @inline function compute_diffusivity(
         rheology::NTuple{N, AbstractMaterialParamsStruct}, phase_ratios::SArray, args
     ) where {N}
-    ρ = compute_density_ratio(phase_ratios, rheology, args)
-    conductivity = fn_ratio(compute_conductivity, rheology, phase_ratios, args)
-    heatcapacity = fn_ratio(compute_heatcapacity, rheology, phase_ratios, args)
-    return conductivity * inv(heatcapacity * ρ)
+    return fn_ratio(compute_diffusivity, rheology, phase_ratios, args)
 end
 
 # ρ*Cp
@@ -103,8 +112,7 @@ end
 end
 
 @inline function compute_ρCp(rheology, phase_ratios::SArray, args)
-    return fn_ratio(compute_heatcapacity, rheology, phase_ratios, args) *
-        fn_ratio(compute_density, rheology, phase_ratios, args)
+    return fn_ratio(compute_ρCp, rheology, phase_ratios, args)
 end
 
 @inline function compute_ρCp(rheology, ρ, phase_ratios::SArray, args)
@@ -113,10 +121,30 @@ end
 
 # α
 
+"""
+    compute_α(rheology, phase)
+
+Return the thermal expansivity `α` used by the adiabatic heating kernels.
+
+`phase` can be a single phase index, `nothing`, or a phase-ratio vector. In the
+latter case the result is phase-weighted.
+"""
 function compute_α(rheology, phase::SArray)
     return fn_ratio(get_α, rheology, phase)
 end
 
 function compute_α(rheology, phase::Union{Int, Nothing})
     return compute_phase(get_α, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::SArray)
+    return fn_ratio(compute_radioactive_heat, rheology, phase)
+end
+
+function compute_radioactive_heating(rheology, phase::Union{Int, Nothing})
+    if isempty(rheology.RadioactiveHeat)
+        return 0.0e0
+    else
+        compute_phase(compute_radioactive_heat, rheology, phase)
+    end
 end

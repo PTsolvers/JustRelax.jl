@@ -1,14 +1,34 @@
-using LinearAlgebra, CairoMakie
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+# Load script dependencies
+using LinearAlgebra, CairoMakie
 using MPI: MPI
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
-
-const backend_JR = CPUBackend
 
 # choose benchmark
-benchmark = :Burstedde
+benchmark = :solvi
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16
@@ -39,8 +59,10 @@ if benchmark == :taylorGreen
     # plot results
     f = plot(stokes, geometry; cmap = :vik)
 
+    display(f)
+
     # compute error
-    L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
+    L2_p, L2_vx, L2_vy, L2_vz = error_norms(stokes, geometry)
 
 elseif benchmark == :Burstedde
     # benchmark reference:
@@ -62,8 +84,10 @@ elseif benchmark == :Burstedde
     # plot results
     f = plot(stokes, geometry; cmap = :vik)
 
+    display(f)
+
     # compute error
-    L2_p, L2_vx, L2_vy, L2_vz = error(stokes, geometry)
+    L2_p, L2_vx, L2_vy, L2_vz = error_norms(stokes, geometry)
 
 elseif benchmark == :solvi
     # Benchmark reference:
@@ -95,6 +119,8 @@ elseif benchmark == :solvi
     )
     # plot results
     f = plot(stokes, geometry, rc; cmap = :vik)
+
+    display(f)
 
 else
     throw("Benchmark not available.")

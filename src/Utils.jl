@@ -14,6 +14,37 @@ end
 @inline _idx(args::Vararg{Int, N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
 """
+    getindex_NamedTuple(args::NamedTuple, [sz_min::NTuple], I...)
+
+Sample every array in `args` at `I`, offsetting entries larger than `sz_min` by one to
+skip their ghost nodes. `sz_min` is the size of the grid `I` indexes over; pass it
+whenever it is known, as inferring it from `args` reads the ghost node as a cell center
+when `args` carries no cell-sized entry.
+"""
+@inline function getindex_NamedTuple(args::NamedTuple, I::Vararg{Integer, N}) where {N}
+    sz_min = reduce((a, b) -> min.(a, b), filter(!isempty, size.(values(args))))
+    return getindex_NamedTuple(args, sz_min, I...)
+end
+
+@inline function getindex_NamedTuple(
+        args::NamedTuple, sz_min::NTuple{N, Int}, I::Vararg{Integer, N}
+    ) where {N}
+    k = keys(args)
+    v = values(args)
+    sz = size.(v)
+
+    vᵢⱼₖ = ntuple(Val(length(v))) do i
+        if v[i] isa AbstractArray
+            offsets = sz[i] .> sz_min
+            getindex(v[i], I .+ offsets...)
+        else
+            v[i]
+        end
+    end
+    return (; zip(k, vᵢⱼₖ)...)
+end
+
+"""
     copy(B, A)
 
 convenience macro to copy data from the array `A` into array `B`
@@ -36,7 +67,11 @@ function detect_args_size(A::NTuple{N, AbstractArray{T, Dims}}) where {N, T, Dim
         return maximum(s)
     end
 end
+"""
+    multi_copy!(dst::NTuple{N, T}, src::NTuple{N, T}) where {N, T}
 
+Copy data from the tuple of arrays `src` into the tuple of arrays `dst` in parallel.
+"""
 @parallel_indices (I...) function multi_copy!(
         dst::NTuple{N, T}, src::NTuple{N, T}
     ) where {N, T}
@@ -47,19 +82,6 @@ end
         end
     end
     return nothing
-end
-
-Base.@propagate_inbounds @generated function unrolled_copy!(
-        dst::NTuple{N, T}, src::NTuple{N, T}, I::Vararg{Int, NI}
-    ) where {N, NI, T}
-    return quote
-        Base.@_inline_meta
-        Base.@nexprs $N n -> begin
-            if all(tuple(I...) .≤ size(dst[n]))
-                dst[n][I...] = src[n][I...]
-            end
-        end
-    end
 end
 
 """
@@ -75,6 +97,12 @@ macro add(I, args...)
     end
 end
 
+"""
+    @tuple(A)
+
+Convenience maktro to unpack the fields of the struct `A` into a tuple.
+Works with Velocity and SymmetricTensor structs.
+"""
 macro tuple(A)
     return quote
         _tuple($(esc(A)))
@@ -165,6 +193,18 @@ macro strain(A)
 end
 
 """
+    @strain_increment(A)
+
+Unpacks the strain rate tensor `ε` from the StokesArrays `A`, where its components are defined in the staggered grid.
+Shear components are unpack following Voigt's notation.
+"""
+macro strain_increment(A)
+    return quote
+        unpack_tensor_stag(($(esc(A))).Δε)
+    end
+end
+
+"""
     @plastic_strain(A)
 
 Unpacks the plastic strain rate tensor `ε_pl` from the StokesArrays `A`, where its components are defined in the staggered grid.
@@ -232,6 +272,29 @@ end
         A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
     ) where {T}
     return A.yz, A.xz, A.xy
+end
+
+"""
+    @shear_center(A)
+
+Unpacks the shear components of the symmetric tensor `A`, where its components are defined in the center of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro shear_center(A)
+    return quote
+        unpack_shear_center(($(esc(A))))
+    end
+end
+
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
+    return A.xy_c
+end
+@inline function unpack_shear_center(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}
+    ) where {T}
+    return A.yz_c, A.xz_c, A.xy_c
 end
 
 """
@@ -305,6 +368,24 @@ end
 end
 
 """
+    tensor_vertex(A)
+
+Unpacks the symmetric tensor `A`, where its components are defined in the vertices of the grid cells.
+Shear components are unpack following Voigt's notation.
+"""
+macro tensor_vertex(A)
+    return quote
+        unpack_tensor_vertex(($(esc(A))))
+    end
+end
+
+@inline function unpack_tensor_vertex(
+        A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}
+    ) where {T}
+    return A.xx_v, A.yy_v, A.xy
+end
+
+"""
     @residuals(A)
 
 Unpacks the momentum residuals from `A`.
@@ -324,25 +405,17 @@ end
 
 ## Memory allocators
 
+"""
+    @allocate(ni...)
+
+Convenience macro to allocate a `PTArray` of size `ni...` with `undef` values.
+"""
 macro allocate(ni...)
     return esc(:(PTArray(undef, $(ni...))))
 end
 
-function indices(::NTuple{3, T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    k = (blockIdx().z - 1) * blockDim().z + threadIdx().z
-    return i, j, k
-end
-
-function indices(::NTuple{2, T}) where {T}
-    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    return i, j
-end
-
 """
-    maxloc!(B, A; window)
+    compute_maxloc!(B, A; window)
 
 Compute the maximum value of `A` in the `window = (width_x, width_y, width_z)` and store the result in `B`.
 """
@@ -350,7 +423,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     ni = size(A)
 
     @parallel_indices (I...) function _maxloc!(B, A, window)
-        B[I...] = _maxloc_window_clamped(A, I..., window...)
+        @inbounds B[I...] = _maxloc_window_clamped(A, I..., window...)
         return nothing
     end
 
@@ -358,7 +431,7 @@ function compute_maxloc!(B, A; window = (1, 1, 1))
     return nothing
 end
 
-@inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, width_x, width_y)
     nx, ny = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -377,7 +450,7 @@ end
     return x
 end
 
-@inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
+Base.@propagate_inbounds @inline function _maxloc_window_clamped(A, I, J, K, width_x, width_y, width_z)
     nx, ny, nz = size(A)
     I_range = (I - width_x):(I + width_x)
     J_range = (J - width_y):(J + width_y)
@@ -400,7 +473,11 @@ end
     return x
 end
 
-# unpacks fields of the struct x into a tuple
+"""
+    unpack(x::T)
+
+Generated function to unpack the fields of the struct `x` into a tuple.
+"""
 @generated function unpack(x::T) where {T}
     return quote
         Base.@_inline_meta
@@ -409,6 +486,11 @@ end
 end
 _unpack(a, fields) = (getfield(a, fi) for fi in fields)
 
+"""
+    @unpack(x)
+
+Convenience macro to unpack the fields of the struct `x` into a tuple.
+"""
 macro unpack(x)
     return quote
         unpack($(esc(x)))
@@ -441,9 +523,110 @@ end
     _compute_dt(@velocity(S), di, Inf, maximum_mpi)
 
 @inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F <: Function}
-    n = inv(length(V) + 0.1)
-    dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
+    # n = inv(length(V) + 0.1)
+    # dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * n
+
+    dt_adv = mapreduce(x -> x[1] * inv(max_fun(abs.(x[2]))), min, zip(di, V)) * 0.9
+
     return min(dt_diff, dt_adv)
+end
+
+"""
+    compute_lithostatic_pressure!(P, ρg, dz)
+    compute_lithostatic_pressure!(P, ρg, dz, igg::IGG)
+
+Integrate the vertical component of the buoyancy force `ρg` down the columns of the
+cell-centered pressure `P`. The vertical direction is the last dimension of `P` and points
+upwards, so the last entry of a column is the shallowest cell.
+
+`dz` is either a constant cell height or a vector holding the height of every cell along the
+vertical direction. Since `P` is cell-centered, cell `j` carries the weight of all the cells
+above it plus half of its own,
+
+    P[j] = Σ_{k>j} ρg[k] * dz[k] + ρg[j] * dz[j] / 2
+
+The three-argument method integrates each column within the local subdomain, and throws if
+the vertical direction is split across MPI ranks. Pass the MPI topology `igg` to also
+collect the weight of the cells held by the ranks stacked above the local subdomain; `ρg`
+must then be up to date on the halo cells, and the resulting `P` agrees on the cells that
+neighboring ranks share.
+"""
+function compute_lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    if _vertical_ranks(Val(N)) > 1
+        throw(
+            ArgumentError(
+                "the vertical direction is split across MPI ranks; pass the `IGG` topology as fourth argument to integrate the columns across ranks"
+            )
+        )
+    end
+    return _integrate_column!(P, _cell_weights(P, ρg, dz))
+end
+
+function compute_lithostatic_pressure!(
+        P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz, igg::IGG
+    ) where {N}
+    w = _cell_weights(P, ρg, dz)
+    _integrate_column!(P, w)
+    P .+= _weight_above(w, igg) # weight of the cells held by the ranks above
+    return P
+end
+
+@inline function _cell_weights(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    axes(P) == axes(ρg) || throw(
+        DimensionMismatch(
+            "`P` and `ρg` must span the same cells, got axes $(axes(P)) and $(axes(ρg))"
+        )
+    )
+    return ρg .* _cell_heights(dz, size(P, N), Val(N))
+end
+
+@inline function _integrate_column!(P::AbstractArray{<:Any, N}, w) where {N}
+    P .= reverse(cumsum(reverse(w, dims = N), dims = N), dims = N) .- w ./ 2
+    return P
+end
+
+# number of MPI ranks stacked along the vertical direction of an `N`-dimensional grid
+@inline function _vertical_ranks(::Val{N}) where {N}
+    ImplicitGlobalGrid.grid_is_initialized() || return 1
+    return ImplicitGlobalGrid.global_grid().dims[N]
+end
+
+# total weight of the cells sitting above the local subdomain, one value per column
+function _weight_above(w::AbstractArray{T, N}, igg::IGG) where {T, N}
+    nranks = igg.dims[N]
+    nranks == 1 && return zero(T)
+
+    grid = ImplicitGlobalGrid.global_grid()
+    iszero(grid.periods[N]) || error(
+        "the lithostatic pressure of a column that is periodic along the vertical direction is undefined"
+    )
+    # cells at the bottom of the local column that the rank below also holds
+    nshared = size(w, N) - grid.nxyz[N] + grid.overlaps[N]
+    0 ≤ nshared < size(w, N) || error(
+        "a local column of $(size(w, N)) cells cannot share $nshared cells with the rank below; `P` must be a field of the global grid"
+    )
+    # the ranks above hold the cells the rank below them does not, so their contributions
+    # tile the column above the local subdomain exactly once
+    contribution = sum(selectdim(w, N, (nshared + 1):size(w, N)), dims = N)
+
+    comm = MPI.Cart_sub(igg.comm_cart, ntuple(i -> i == N, length(igg.dims)))
+    # ranks of a Cartesian sub-communicator are ordered by their vertical coordinate
+    columns = reshape(MPI.Allgather(vec(Array(contribution)), comm), :, nranks)
+    above = sum(view(columns, :, (igg.coords[N] + 2):nranks), dims = 2)
+
+    offset = similar(w, ntuple(i -> i == N ? 1 : size(w, i), Val(N)))
+    return copyto!(offset, reshape(above, size(offset)))
+end
+
+@inline _cell_heights(dz::Number, ::Int, ::Val) = dz
+
+@inline function _cell_heights(dz::AbstractVector, nz::Int, ::Val{N}) where {N}
+    length(dz) == nz || throw(
+        DimensionMismatch(
+            "`dz` must hold one height per cell, got $(length(dz)) heights for $nz cells"
+        )
+    )
+    return reshape(dz, ntuple(i -> i == N ? nz : 1, Val(N)))
 end
 
 @inline tupleize(v) = (v,)
@@ -475,10 +658,22 @@ take(fldr::String) = !isdir(fldr) && mkpath(fldr)
 Do a continuation step `exp((1-ν)*log(x_old) + ν*log(x_new))` with damping parameter `ν`
 """
 @inline function continuation_log(x_new::T, x_old::T, ν) where {T}
-    x_cont = exp((1 - ν) * log(x_old) + ν * log(x_new))
-    return isnan(x_cont) ? 0.0 : x_cont
+    # a = iszero(x_old) ? zero(T) : log(x_old)
+    # b = iszero(x_new) ? zero(T) : log(x_new)
+    # x_cont = @fastmath exp((1 - ν) * a + ν * b)
+    # return isnan(x_cont) ? 0.0 : x_cont
+
+    x_cont = @fastmath exp((1 - ν) * log(x_old) + ν * log(x_new))
+    return isnan(x_cont) ? x_old : x_cont
 end
-@inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
+
+"""
+    continuation_linear(x_new, x_old, ν)
+
+Do a continuation step `(1-ν)*x_old + ν*x_new` with damping parameter `ν`
+"""
+@inline continuation_linear(x_new, x_old, ν) = (1 - ν) * x_old + ν * x_new
+# @inline continuation_linear(x_new, x_old, ν) = muladd((1 - ν), x_old, ν * x_new) # (1 - ν) * x_old + ν * x_new
 
 # Others
 
@@ -498,31 +693,64 @@ end
 
 # MPI reductions
 
+"""
+    mean_mpi(A)
+
+Compute the mean of array `A` across all MPI processes.
+"""
 function mean_mpi(A)
     mean_l = _mean(A)
     return MPI.Allreduce(mean_l, MPI.SUM, MPI.COMM_WORLD) / MPI.Comm_size(MPI.COMM_WORLD)
 end
 
+"""
+    norm_mpi(A)
+
+Compute the L2 norm of array `A` across all MPI processes.
+"""
 function norm_mpi(A)
     sum2_l = _sum(A .^ 2)
     return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
 end
 
+"""
+    sum_mpi(A)
+
+Compute the sum of array `A` across all MPI processes.
+"""
+function sum_mpi(A)
+    return MPI.Allreduce(_sum(A), MPI.SUM, MPI.COMM_WORLD)
+end
+
+"""
+    minimum_mpi(A)
+
+Compute the minimum value of array `A` across all MPI processes.
+"""
 function minimum_mpi(A)
     min_l = _minimum(A)
     return MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD)
 end
 
+"""
+    maximum_mpi(A)
+
+Compute the maximum value of array `A` across all MPI processes.
+"""
 function maximum_mpi(A)
     max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
 end
 
+@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
+@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
+@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
+
 for (f1, f2) in zip(
         (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)
     )
     @eval begin
-        $f1(A::AbstractArray) = $f2(Array(A))
+        # $f1(A::AbstractArray) = $f2(Array(A))
         $f1(A) = $f2(A)
     end
 end

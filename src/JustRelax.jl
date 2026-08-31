@@ -16,7 +16,7 @@ using TOML, Crayons
 
 function solve!() end
 #! format: off
-function __init__(io = stdout)
+function _print_banner(io::IO)
     j = string(Crayon(foreground = (50,74,201)))
     u = string(Crayon(foreground = (50,74,201)))
     s = string(Crayon(foreground = (50,74,201)))
@@ -42,12 +42,170 @@ Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
 Latest commit: $(try strip(read(`git log -1 --pretty=%B`, String)) catch _ "N/A" end)
 Commit date: $(try strip(read(`git log -1 --pretty=%cd`, String)) catch _ "N/A" end)
 """, bold=true, color=:default)
+    return nothing
 end
+
+function __init__(io::IO = stdout)
+    isa(stdout, Base.TTY) || return
+    _print_banner(io)
+    return nothing
+end
+
+function _installation_method(pkg_dir::AbstractString, depots = DEPOT_PATH)
+    is_git = isdir(joinpath(pkg_dir, ".git"))
+    is_in_depot = any(d -> startswith(pkg_dir, joinpath(d, "packages")), depots)
+    is_dev = any(d -> startswith(pkg_dir, joinpath(d, "dev")), depots)
+    label = if is_dev
+        "Pkg.develop() or dev mode"
+    elseif is_git
+        "Git clone"
+    elseif is_in_depot
+        "Pkg.add() from registry"
+    else
+        "Custom location"
+    end
+    return (; label, is_git, is_in_depot, is_dev)
+end
+
+"""
+    versioninfo(io::IO=stdout; verbose::Bool=false)
+
+Print information about the version of JustRelax in use. The output includes:
+
+- JustRelax version and installation method
+- Git commit information (if available)
+- Platform information
+- Julia version
+- Key dependencies (verbose mode)
+- Environment variables (verbose mode)
+
+The output is controlled with boolean keyword arguments:
+- `verbose`: print all additional information including dependencies and environment
+
+See also: `Base.versioninfo()`.
+"""
+function versioninfo(io::IO=stdout; verbose::Bool=false)
+    pkg_dir = dirname(@__DIR__)
+    project_file = joinpath(pkg_dir, "Project.toml")
+
+    # Read version
+    version = try
+        get(TOML.parsefile(project_file), "version", "unknown")
+    catch
+        "unknown"
+    end
+
+    println(io, "JustRelax Version $version")
+
+    (; label, is_git, is_dev) = _installation_method(pkg_dir)
+
+    println(io, "Installation: $label")
+
+    # Show git info if available
+    if is_git || is_dev
+        try
+            commit = strip(read(`git -C $pkg_dir log -1 --pretty=%h`, String))
+            date = strip(read(`git -C $pkg_dir log -1 --pretty=%cd --date=short`, String))
+            branch = strip(read(`git -C $pkg_dir rev-parse --abbrev-ref HEAD`, String))
+            println(io, "  Commit: $commit ($date) on $branch")
+
+            if !isempty(strip(read(`git -C $pkg_dir status --porcelain`, String)))
+                println(io, "  ⚠ Uncommitted changes detected")
+            end
+        catch; end
+    end
+
+    # Platform info
+    println(io, "\nPlatform Info:")
+    os_name = Sys.iswindows() ? "Windows" : Sys.isapple() ? "macOS" :
+              Sys.islinux() ? "Linux" : Sys.KERNEL
+    println(io, "  OS: $os_name (", Sys.MACHINE, ")")
+    println(io, "  CPU: ", length(Sys.cpu_info()), " × ", Sys.cpu_info()[1].model)
+
+    verbose && println(io, "  Memory: $(round(Sys.total_memory()/2^30, digits=2)) GB ($(round(Sys.free_memory()/2^20, digits=2)) MB free)")
+
+    println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
+    println(io, "  Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive")
+    println(io, "\nJulia Version: $VERSION")
+
+    # Verbose information
+    if verbose
+        # Helper function for GPU status
+        gpu_status(pkg) = if !isdefined(Main, pkg)
+            "not loaded"
+        elseif try getfield(Main, pkg).functional(); catch; false; end
+            "functional"
+        else
+            "loaded but not functional"
+        end
+
+        println(io, "\nBackends:")
+        println(io, "  CPU: available")
+        println(io, "  CUDA: ", gpu_status(:CUDA))
+        println(io, "  AMDGPU: ", gpu_status(:AMDGPU))
+
+        println(io, "\nComputational packages:")
+        for pkg in ["GeoParams", "JustPIC", "ParallelStencil", "ImplicitGlobalGrid", "MPI"]
+            status = if isdefined(Main, Symbol(pkg))
+                try string(Base.pkgversion(getfield(Main, Symbol(pkg)))); catch; "loaded"; end
+            else
+                "not loaded"
+            end
+            println(io, "  $pkg: $status")
+        end
+
+        # Environment variables
+        env_strs = ["  $k = $(ENV[k])" for k in keys(ENV) if occursin(r"^JULIA_|^MPI_|^CUDA_|^HIP_", uppercase(k))]
+        !isempty(env_strs) && (println(io, "\nEnvironment:"); foreach(s -> println(io, s), env_strs))
+
+        println(io, "\nPackage location:\n  ", pkg_dir)
+    end
+
+    nothing
+end
+
+export versioninfo
+
 #! format: on
+"""
+    AbstractBackend
+
+Supertype for backend tags ([`CPUBackend`](@ref), `CUDABackend`, [`AMDGPUBackend`](@ref))
+selecting which array type and device a model runs on.
+"""
 abstract type AbstractBackend end
+
+"""
+    CPUBackend
+
+Backend tag selecting plain `Array`s, running on the CPU via `ParallelStencil`'s `Threads`
+target. The default backend.
+"""
 struct CPUBackend <: AbstractBackend end
+
+"""
+    CUDABackend
+
+Backend tag selecting `CuArray`s, running on an Nvidia GPU. Only defined once `CUDA.jl` is
+loaded (see [Selecting the backend](@ref)).
+"""
+struct CUDABackend <: AbstractBackend end
+
+"""
+    AMDGPUBackend
+
+Backend tag selecting `ROCArray`s, running on an AMD GPU. Requires `AMDGPU.jl` to be loaded
+(see [Selecting the backend](@ref)).
+"""
 struct AMDGPUBackend <: AbstractBackend end
 
+"""
+    PTArray()
+    PTArray(::Type{<:AbstractBackend})
+
+The array type associated with a backend tag: `Array` for `CPUBackend`, `CuArray` for
+`CUDABackend`, `ROCArray` for `AMDGPUBackend`. `PTArray()` (no argument) is the CPU default.
+"""
 PTArray() = Array
 PTArray(::Type{CPUBackend}) = Array
 PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
@@ -63,6 +221,8 @@ include("types/heat_diffusion.jl")
 
 include("variational_stokes/types.jl")
 
+include("DYREL/types.jl")
+
 include("types/weno.jl")
 
 include("mask/mask.jl")
@@ -76,8 +236,8 @@ export TemperatureBoundaryConditions,
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
-include("topology/Topology.jl")
-export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
+include("grid/Grid.jl")
+export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
 
 include("JustRelax_CPU.jl")
 
@@ -85,5 +245,10 @@ include("IO/DataIO.jl")
 
 include("types/type_conversions.jl")
 export Array, copy
+
+function plot_particles end
+function plot_field end
+
+export plot_particles, plot_field
 
 end # module

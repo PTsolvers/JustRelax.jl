@@ -5,6 +5,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor
 using GeoParams
 using JustRelax, JustRelax.JustRelax3D
@@ -21,14 +23,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._3D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -118,22 +120,22 @@ function main(igg; nx = 64, ny = 64, nz = 64)
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi, di, ni)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     radius = 0.1
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))
     # Assign particles phases anomaly
     init_phases!(pPhases, particles, radius)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -184,12 +186,12 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 3
         # Stokes solver ----------------
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -241,19 +243,28 @@ function main(igg; nx = 64, ny = 64, nz = 64)
     return nothing
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
-        n = 32 + 2
-        nx = n ÷ 2
-        ny = n - 2
-        nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
-        else
-            igg
+let
+    if CSCS_CI != true
+        @suppress begin
+            if backend_JR == CPUBackend
+                n = 32 + 2
+                nx = n ÷ 2
+                ny = n - 2
+                nz = n - 2 # if only 2 CPU/GPU are used nx = 17 - 2 with N =32
+                igg = IGG(init_global_grid(nx, ny, nz; init_MPI = true, select_device = false)...)
+
+                main(igg; nx = nx, ny = ny, nz = nz)
+            else
+                println("This test is only for CPU CI yet")
+            end
         end
-        main(igg; nx = nx, ny = ny, nz = nz)
     else
-        println("This test is only for CPU CI yet")
+        n = 32 #+ 2
+        nx = n #÷ 2
+        ny = n #÷ 2
+        nz = n #÷ 2
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi, select_device = false)...)
+        main(igg; nx = nx, ny = ny, nz = nz)
     end
 end

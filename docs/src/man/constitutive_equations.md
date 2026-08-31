@@ -41,24 +41,10 @@ $\begin{align}
 \end{align}$
 
 where $A$ material specific parameter, $n$ is the stress powerlaw exponent, $p$ is the negative defined grain size exponent, $f$ is the water fugacity, $r$ is the water fugacity exponent, $E$ is the activation energy, $PV$ is the activation volume, and $R$ is the universal gas constant.
+
 ## Elastic stress
 
-### Method (1): Jaumann derivative
-$\begin{align}
-\frac{D\boldsymbol{\tau}}{Dt} =
-\boldsymbol{v}\frac{\partial\boldsymbol{\tau}}{\partial t} +
-\boldsymbol{\omega}\boldsymbol{\tau} -
-\boldsymbol{\tau}\boldsymbol{\omega}^T
-\end{align}$
-
-where $\boldsymbol{\omega}$ is the vorticity tensor
-
-$\begin{align}
-\boldsymbol{\omega} =
-\frac{1}{2} \left(\nabla\boldsymbol{v} - \nabla^T \boldsymbol{v} \right)
-\end{align}$
-
-### Method (2): Euler-Rodrigues rotation
+The elastic stress is rotated on the particles level, and it is done using Euler-Rodrigues rotation method, with the following steps:
 
 1. Compute unit rotation axis
 $\begin{align}
@@ -171,7 +157,7 @@ The effective viscosity is computed internally during the Stokes solver. However
 
 ```julia
 # Rheology
-args             = (T=T, P=P, dt = dt) # or (T=thermal.Tc, P=stokes.P, dt=dt)
+args             = (T=T, P=P, dt = dt)
 viscosity_cutoff = (1e18, 1e23)
 compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 ```
@@ -196,16 +182,16 @@ pτ = StressParticles(particles)
 3. During time stepping:
 ```julia
 # 1. interpolate stress back to the grid
-stress2grid!(stokes, pτ, xvi, xci, particles)
+stress2grid!(stokes, pτ, particles)
 # 2. solve Stokes equations....
 #
 # 3. rotate stresses
-rotate_stress!(pτ, stokes, particles, xci, xvi, dt)
+rotate_stress!(pτ, stokes, particles, dt)
 # 4. advection step
     # advect particles in space
-advection!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+advection!(particles, RungeKutta2(), @velocity(stokes), dt)
     # advect particles in memory
-move_particles!(particles, xvi, particle_args)
+move_particles!(particles, particle_args)
     # check if we need to inject particles
     # need stresses on the vertices for injection purposes
 center2vertex!(τxx_v, stokes.τ.xx)
@@ -214,8 +200,7 @@ inject_particles_phase!(
         particles,
         pPhases,
         pτ,
-        (τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
-        xvi
+        (τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
 )
 ```
 

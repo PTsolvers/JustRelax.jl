@@ -6,7 +6,6 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
@@ -22,13 +21,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 using GeoParams
@@ -43,7 +42,7 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end
@@ -134,7 +133,7 @@ function Sinking_Block2D()
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -145,20 +144,20 @@ function Sinking_Block2D()
     r_anomaly = 50.0e3   # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-5, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni .+ 2...), P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; T = @ones(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = Inf)
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
@@ -174,7 +173,7 @@ function Sinking_Block2D()
     iters = solve!(
         stokes,
         pt_stokes,
-        di,
+        grid,
         flow_bcs,
         ρg,
         phase_ratios,

@@ -21,8 +21,8 @@ function init_rheology_nonNewtonian_plastic()
     # plasticity
     ϕ_wet_olivine = asind(0.1)
     C_wet_olivine = 1.0e6
-    η_reg = 1.0e16
-    el = ConstantElasticity(; G = 40.0e9, ν = 0.45)
+    η_reg = 1.0e20
+    el = ConstantElasticity(; G = 40.0e9, ν = 0.25)
     lithosphere_rheology = CompositeRheology(
         (
             el,
@@ -84,13 +84,13 @@ function init_rheologies(lithosphere_rheology)
 end
 
 function init_phases!(phases, phase_grid, particles, xvi)
-    ni = size(phases)
+    ni = size(phase_grid) .- 1
     return @parallel (@idx ni) _init_phases!(phases, phase_grid, particles.coords, particles.index, xvi)
 end
 
 @parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
 
-    ni = size(phases)
+    ni = size(phase_grid)
 
     for ip in cellaxes(phases)
         # quick escape

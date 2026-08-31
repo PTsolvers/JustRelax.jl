@@ -1,40 +1,52 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax3D
+using Pkg; Pkg.activate("miniapps")
 
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-const backend_JR = CPUBackend
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 3)
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
 
-using JustPIC, JustPIC._3D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
+# Load script dependencies
 using GeoParams, CairoMakie
 
 @parallel_indices (i, j, k) function init_T!(T, z, lz)
-    if z[k] ≥ 0.0
-        T[i, j, k] = 300.0
-    elseif z[k] == -lz
-        T[i, j, k] = 3500.0
-    else
-        T[i, j, k] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
-    end
+    T[i, j, k + 1] = z[k] * (1900.0 - 1600.0) / (-lz) + 1600.0
     return nothing
 end
 
-function elliptical_perturbation!(T, δT, xc, yc, zc, r, xvi)
+function elliptical_perturbation!(T, δT, xc, yc, zc, r, xci)
 
     @parallel_indices (i, j, k) function _elliptical_perturbation!(T, x, y, z)
-        @inbounds if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
-            T[i, j, k] += δT
+        if (((x[i] - xc))^2 + ((y[j] - yc))^2 + ((z[k] - zc))^2) ≤ r^2
+            T[(i, j, k) .+ 1...] += δT
         end
         return nothing
     end
-
-    return @parallel _elliptical_perturbation!(T, xvi...)
+    ni = size(T) .- 2
+    return @parallel (@idx ni) _elliptical_perturbation!(T, xci...)
 end
 
 function init_phases!(phases, particles, xc, yc, zc, r)
@@ -116,7 +128,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.H .= 1.0e-6
     # physical parameters
     ρ = @fill(ρ0, ni...)
@@ -125,46 +137,48 @@ function diffusion_3D(;
     ρCp = @. Cp * ρ
 
     # Boundary conditions
+    Ttop = 300.0
+    Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot, front = true, back = true),
     )
 
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[3], lz)
+    @parallel (1:(nx + 2), 1:(ny + 2), 1:nz) init_T!(thermal.T, xci[3], lz)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
     r = 10.0e3 # thermal perturbation radius
     center_perturbation = lx / 2, ly / 2, -lz / 2
-    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xvi)
+    elliptical_perturbation!(thermal.T, δT, center_perturbation..., r, xci)
     update_halo!(thermal.T)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     update_cell_halo!(particles.coords..., particle_args)
     update_cell_halo!(particles.index)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
-    args = (; P = P, T = thermal.Tc)
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    args = (; P = P, T = thermal.T)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t = 0.0
     it = 0
     nt = Int(ceil(ttot / dt))
 
     # Visualization global arrays
-    nx_v = ((nx + 1) - 2) * igg.dims[1]
-    ny_v = ((ny + 1) - 2) * igg.dims[2]
-    nz_v = ((nz + 1) - 2) * igg.dims[3]
-    T_v = zeros(nx_v, ny_v, nz_v)             # plotting is done on the CPU
-    T_nohalo = zeros((nx + 1) - 2, (ny + 1) - 2, (nz + 1) - 2) # plotting is done on the CPU
+    ni_v = ni * igg.dims
+    T_v = zeros(ni_v...)
+    # local array without halo
+    T_nohalo = zeros(ni...)
 
     # Physical time loop
     while it < 10
@@ -175,7 +189,7 @@ function diffusion_3D(;
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,

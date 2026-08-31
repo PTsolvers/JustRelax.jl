@@ -1,18 +1,40 @@
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+const isCUDA = false
+# const isCUDA = true
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using GLMakie
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using Printf, LinearAlgebra, GeoParams, CellArrays
+
+
+using CairoMakie
+
 
 # x-length of the domain
 const λ = 0.9142
@@ -79,25 +101,23 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 20, 30, 10
     particles = init_particles(
-        backend, nxcell, max_p, min_p, xvi, di, ni
+        backend_JP, nxcell, max_p, min_p, grid.xi_vel...
     )
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ = 1.0e-8, CFL = 1 / √2.1)
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
     # Rheology
@@ -138,7 +158,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -157,7 +177,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
 
         # Compute U rms ---------------
         Urms_it = let
-            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes = true)
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
             sum(Vx_v .^ 2) * prod(di) |> sqrt
         end
@@ -166,22 +186,41 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
         # ------------------------------
 
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # inject && break
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
 
         # Plotting ---------------------
         if it == 1 || rem(it, 25) == 0 || t >= tmax
-            fig = Figure(size = (1000, 1000), title = "t = $t")
-            ax1 = Axis(fig[1, 1], aspect = 1 / λ, title = "t=$t")
-            heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :oleron)
+            fig = Figure(size = (1000, 1000), font = "TeX Gyre Heros Makie")
+            ax1 = Axis(
+                fig[1:2, 1], aspect = 1 / λ, title = "VanKeken ",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            h = heatmap!(ax1, xvi[1], xvi[2], Array(ρg[2]), colormap = :lapaz)
+            Colorbar(fig[1:2, 2], h; height = Relative(1.0), label = "Density", labelsize = 20, ticklabelsize = 12)
+            ax2 = Axis(
+                fig[3, 1], aspect = 2.25, xlabel = L"Time", ylabel = L"V_{RMS}",
+                titlesize = 20,
+                yticklabelsize = 12,
+                xticklabelsize = 12,
+                xlabelsize = 12,
+                ylabelsize = 12
+            )
+            ylims!(ax2, 0, 0.005)
+            lines!(ax2, trms, Urms, color = :black)
+
             save(joinpath(figdir, "$(it).png"), fig)
             fig
         end
@@ -189,7 +228,7 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     end
 
     # df = DataFrame(t=trms, Urms=Urms)
-    # CSV.write(joinpath(figdir, "Urms.csv"), df)
+    # CSV.write(joinpath(figdir, "Urms_$(nx)x$(ny).csv"), df)
 
     return nothing
 end

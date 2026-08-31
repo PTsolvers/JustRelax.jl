@@ -6,6 +6,8 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
+const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
+
 using Test, Suppressor
 using GeoParams, CellArrays
 using JustRelax, JustRelax.JustRelax2D
@@ -22,14 +24,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -62,25 +64,25 @@ end
 function main(igg; nx = 64, ny = 64)
 
     # Physical domain ------------------------------------
-    ly = 1.0e0          # domain length in y
-    lx = ly           # domain length in x
-    ni = nx, ny       # number of cells
-    li = lx, ly       # domain length in x- and y-
+    ly = 1.0e0                    # domain length in y
+    lx = ly                       # domain length in x
+    ni = nx, ny                   # number of cells
+    li = lx, ly                   # domain length in x- and y-
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
-    origin = 0.0, 0.0     # origin coordinates
+    origin = 0.0, 0.0             # origin coordinates
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid           # nodes at the center and vertices of the cells
     dt = Inf
 
     # Physical properties using GeoParams ----------------
-    τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
-    ϕ = 30            # friction angle
-    C = τ_y           # Cohesion
-    η0 = 1.0           # viscosity
-    G0 = 1.0           # elastic shear modulus
+    τ_y = 1.6              # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+    ϕ = 30                 # friction angle
+    C = τ_y                # Cohesion
+    η0 = 1.0               # viscosity
+    G0 = 1.0               # elastic shear modulus
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
-    εbg = 1.0           # background strain-rate
-    η_reg = 8.0e-3          # regularisation "viscosity"
+    εbg = 1.0              # background strain-rate
+    η_reg = 8.0e-3         # regularisation "viscosity"
     dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
@@ -119,11 +121,11 @@ function main(igg; nx = 64, ny = 64)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -168,13 +170,13 @@ function main(igg; nx = 64, ny = 64)
     sol = Float64[]
     ttot = Float64[]
 
-    while t < tmax
+    while it < 5
 
         # Stokes solver ----------------
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -225,19 +227,27 @@ function main(igg; nx = 64, ny = 64)
 
 end
 
-@suppress begin
-    if backend_JR == CPUBackend
-        N = 30
-        n = N
-        nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
-        ny = n * 2
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
+let
+    if CSCS_CI != true
+        @suppress begin
+            if backend_JR == CPUBackend
+                N = 32
+                nx = N  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+                ny = N
+                init_mpi = JustRelax.MPI.Initialized() ? false : true
+                igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+                main(igg; nx = nx, ny = ny)
+            else
+                println("This test is only for CPU CI yet")
+            end
         end
-        main(igg; nx = nx, ny = ny)
     else
-        println("This test is only for CPU CI yet")
+        N = 32
+        nx = N   # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
+        ny = N
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi, select_device = false)...)
+
+        main(igg; nx = nx, ny = ny)
     end
 end

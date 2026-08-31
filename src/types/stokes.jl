@@ -58,9 +58,10 @@ end
 ## Viscosity type
 
 struct Viscosity{T}
-    η::T # with no plasticity
+    η::T # with no plasticity nor elasticity @ centers
+    ηv::T # with no plasticity nor elasticity @ vertices
     η_vep::T # with plasticity
-    ητ::T # PT viscosi
+    ητ::T # PT viscosity
 
     Viscosity(args::Vararg{T, N}) where {T, N} = new{T}(args...)
 end
@@ -78,6 +79,11 @@ struct SymmetricTensor{T}
     xx::T
     yy::T
     zz::Union{T, Nothing}
+
+    xx_v::T
+    yy_v::T
+    zz_v::Union{T, Nothing}
+
     xy::T
     yz::Union{T, Nothing}
     xz::Union{T, Nothing}
@@ -90,6 +96,9 @@ struct SymmetricTensor{T}
             xx::T,
             yy::T,
             zz::Union{T, Nothing},
+            xx_v::T,
+            yy_v::T,
+            zz_v::Union{T, Nothing},
             xy::T,
             yz::Union{T, Nothing},
             xz::Union{T, Nothing},
@@ -98,13 +107,13 @@ struct SymmetricTensor{T}
             xz_c::Union{T, Nothing},
             II::T,
         ) where {T}
-        return new{T}(xx, yy, zz, xy, yz, xz, xy_c, yz_c, xz_c, II)
+        return new{T}(xx, yy, zz, xx_v, yy_v, zz_v, xy, yz, xz, xy_c, yz_c, xz_c, II)
     end
 end
 
-function SymmetricTensor(xx::T, yy::T, xy::T, xy_c::T, II::T) where {T}
+function SymmetricTensor(xx::T, yy::T, xx_v::T, yy_v::T, xy::T, xy_c::T, II::T) where {T}
     return SymmetricTensor(
-        xx, yy, nothing, xy, nothing, nothing, xy_c, nothing, nothing, II
+        xx, yy, nothing, xx_v, yy_v, nothing, xy, nothing, nothing, xy_c, nothing, nothing, II
     )
 end
 
@@ -136,6 +145,17 @@ function Residual(::Number, ::Number, ::Number)
     throw(ArgumentError("Residual dimensions must be given as integers"))
 end
 
+## PrincipalStress type
+struct PrincipalStress{T}
+    σ1::T
+    σ2::T
+    σ3::T
+
+    PrincipalStress(σ1::T, σ2::T, σ3::T) where {T <: AbstractArray} = new{T}(σ1, σ2, σ3)
+end
+
+Adapt.@adapt_structure PrincipalStress
+
 ## StokesArrays type
 
 struct StokesArrays{A, B, C, D, E, F, T}
@@ -148,12 +168,21 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ε::B
     ε_pl::B
     EII_pl::T
+    EVol_pl::T    # accumulated volumetric plastic strain @ cell centers
+    ε_vol_pl::T   # volumetric plastic strain rate @ cell centers
     viscosity::D
     τ_o::Union{B, Nothing}
     R::C
     U::E
     ω::F
+    Δε::B
+    ∇U::T
+    λ::T
+    λv::T
+    ΔPψ::T
 end
+
+Adapt.@adapt_structure StokesArrays
 
 function StokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
     return StokesArrays(tuple(ni...))
@@ -167,11 +196,33 @@ function StokesArrays(::Number, ::Number, ::Number)
     throw(ArgumentError("StokesArrays dimensions must be given as integers"))
 end
 
-## PTStokesCoeffs type
+@inline dims(stokes::StokesArrays) = size(stokes.P)
+@inline static_dims(::StokesArrays{Velocity{A}}) where {A <: AbstractArray{T, N}} where {T, N} = Val(N)
 
+## PTStokesCoeffs type
+"""
+    PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL=0.9/√2.1, r=0.7)
+
+Pseudo-transient damping coefficients for the Stokes solver, derived from the domain size
+`li`, grid spacing `di`, Reynolds number `Re` and bulk-to-shear damping ratio `r` following
+[Räss et al. (2022)](https://gmd.copernicus.org/articles/15/5757/2022/). Passed as
+`pt_stokes` to `solve!`.
+
+`ηdτ / ητ` is the local velocity pseudo-time step, while `θ_dτ` controls the stress and
+pressure updates. In the 2D free-surface-stabilized velocity kernel, the vertical
+pseudo-time step also includes the local diagonal `-dt * ∂y(ρg)` introduced by
+stabilization.
+
+# Keyword arguments
+- `ϵ_rel`, `ϵ_abs`: relative/absolute convergence tolerances.
+- `Re`: Reynolds number.
+- `CFL`: Courant-Friedrichs-Lewy number bounding the pseudo-time step.
+- `r`: ratio of the damping coefficients for the bulk and shear rheology.
+"""
 struct PTStokesCoeffs{T}
     CFL::T
-    ϵ::T # PT tolerance
+    ϵ_rel::T # relative PT tolerance
+    ϵ_abs::T # absolute PT tolerance
     Re::T # Reynolds Number
     r::T #
     Vpdτ::T
@@ -181,7 +232,8 @@ struct PTStokesCoeffs{T}
     function PTStokesCoeffs(
             li::NTuple{N, T},
             di;
-            ϵ::Float64 = 1.0e-8,
+            ϵ_rel::Float64 = 1.0e-6,
+            ϵ_abs::Float64 = 1.0e-12,
             Re::Float64 = 3π,
             CFL::Float64 = (N == 2 ? 0.9 / √2.1 : 0.9 / √3.1),
             r::Float64 = 0.7,
@@ -191,6 +243,6 @@ struct PTStokesCoeffs{T}
         θ_dτ = lτ * (r + 4 / 3) / (Re * Vpdτ)
         ηdτ = Vpdτ * lτ / Re
 
-        return new{Float64}(CFL, ϵ, Re, r, Vpdτ, θ_dτ, ηdτ)
+        return new{Float64}(CFL, ϵ_rel, ϵ_abs, Re, r, Vpdτ, θ_dτ, ηdτ)
     end
 end

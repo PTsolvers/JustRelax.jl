@@ -1,37 +1,65 @@
-using GeoParams, GLMakie, CellArrays
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using JustPIC, JustPIC._2D
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend = JustPIC.CPUBackend
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
-# HELPER FUNCTIONS ---------------------------------------------------------------
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams, CairoMakie, CellArrays
+
+
+import JustPIC.GridGeometryUtils as GGU
+
+
+# HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-    origin = 0.5, 0.5
 
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
-        if ((x - o_x)^2 + (y - o_y)^2) > radius^2
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
 
@@ -94,18 +122,20 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     )
 
     # Initialize phase ratios -------------------------------
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.9 / √2.1)
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.9 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -116,8 +146,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(stokes.V.Vx, stokes.V.Vy)
 
@@ -139,7 +169,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -190,7 +220,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 128
+n = 64
 nx = n
 ny = n
 figdir = "Shearband_Softening"

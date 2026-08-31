@@ -1,11 +1,12 @@
-# const isCUDA = false
-const isCUDA = true
+const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -21,21 +22,18 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+using JustPIC
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CellArrays
+using CairoMakie
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
 include("VariationalSubduction2D_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -63,9 +61,11 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
+function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do_vtk::Bool = false)
 
     # Physical domain ------------------------------------
+    li = 3000.0e3, 750.0e3
+    origin = 0.0, -700.0e3
     ni = nx, ny           # number of cells
     di = @. li / ni       # grid steps
     grid = Geometry(ni, li; origin = origin)
@@ -82,35 +82,34 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     max_xcell = 125
     min_xcell = 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
     # Assign particles phases anomaly
-    phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(pPhases, phases_device, particles, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, xvi)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
-
-    # RockRatios
-    air_phase = 3
-    ϕ_R = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
 
     # marker chain
     nxcell, min_xcell, max_xcell = 100, 75, 125
     initial_elevation = 0.0e0
     chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
 
+    # RockRatios
+    air_phase = 3
+    ϕ_R = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ_R, chain, xvi, di)
+    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 15π, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -119,11 +118,11 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 
     # Rheology
-    args = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
@@ -157,16 +156,16 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
     t, it = 0.0, 0
     dt = 25.0e3 * (3600 * 24 * 365.25)
     dt_max = 250.0e3 * (3600 * 24 * 365.25)
-    while it < 500 # run only for 5 Myrs
+    while it < 15 # run only for 5 Myrs
 
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             solve_VariationalStokes!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,
@@ -176,14 +175,14 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 dt,
                 igg;
                 kwargs = (;
+                    air_phase = air_phase,
                     iterMax = 50.0e3,
                     free_surface = true,
-                    nout = 2.0e3,
+                    nout = 5.0e3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
         end
-
         # println("   Time/iteration:  $(t_stokes / out.iter) s")
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_max)
@@ -194,19 +193,21 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        move_particles!(particles, particle_args)
 
-        # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # Filter against the new surface before injection so emptied cells are
+        # replenished before phase ratios are recomputed.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         @show it += 1
         t += dt
@@ -222,6 +223,7 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η = Array(η_vep),
                 )
                 velocity_v = (
@@ -279,21 +281,19 @@ function main(li, origin, phases_GMG, igg; nx::Int64 = 16, ny::Int64 = 16, figdi
             save(joinpath(figdir, "$(it).png"), fig)
         end
         # ------------------------------
-
     end
 
-    return stokes
+    return
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_MQS_variational"
-nx, ny = 250, 100
-li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
+figdir = "Schmelling2D_APT_variational"
+nx, ny = (250, 100) .÷ 2
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
 
-stokes = main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

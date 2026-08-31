@@ -24,11 +24,15 @@ export @allocate,
     @normal,
     @stress_center,
     @strain_center,
+    @strain_increment,
     @tensor_center,
+    @tensor_vertex,
+    @shear_center,
     @qT,
     @qT2,
     @residuals,
     compute_dt,
+    compute_lithostatic_pressure!,
     multi_copy!,
     take
 
@@ -45,28 +49,35 @@ export AbstractBoundaryConditions,
     VelocityBoundaryConditions,
     flow_bcs!,
     thermal_bcs!,
-    pureshear_bc!
+    pureshear_bc!,
+    simpleshear_bc!
 
 include("MiniKernels.jl")
 
 include("phases/phases.jl")
 export fn_ratio
 
+include("phases/PhaseRatios.jl")
+export update_phase_ratios_2D!, update_phase_ratios_3D!
+
 include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 
 include("rheology/Viscosity.jl")
-export compute_viscosity!
+export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
-export compute_melt_fraction!
+export compute_melt_fraction!, compute_melt_fraction_derivative!
+
+include("rheology/Solubility.jl")
+export compute_dissolved_volatiles!
 
 include("particles/subgrid_diffusion.jl")
 export subgrid_characteristic_time!
 
 include("Interpolations.jl")
 export vertex2center!,
-    center2vertex!, temperature2center!, velocity2vertex!, velocity2center!
+    center2vertex!, velocity2vertex!, velocity2center!, shear2center!
 
 include("advection/weno5.jl")
 export WENO_advection!
@@ -79,9 +90,13 @@ export update_phases_given_markerchain!
 include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
+export compute_yieldfunction_phase, compute_plastic_gradients_phase
 
 include("stokes/StressKernels.jl")
-export tensor_invariant!
+export tensor_invariant!, accumulate_tensor!, accumulate_vol!
+
+include("stokes/PrincipalStresses.jl")
+export compute_principal_stresses, compute_principal_stresses!, PrincipalStress
 
 include("stokes/PressureKernels.jl")
 export rotate_stress_particles!
@@ -105,6 +120,14 @@ export StressParticles
 
 include("stress_rotation/stress_rotation_particles.jl")
 export rotate_stress!, stress2grid!
+
+## DYREL solver
+
+include("DYREL/constructors.jl")
+include("DYREL/pressure_kernels.jl")
+include("DYREL/stress_kernels.jl")
+include("DYREL/velocity_kernels.jl")
+include("DYREL/Gershgorin.jl")
 
 # thermal diffusion
 

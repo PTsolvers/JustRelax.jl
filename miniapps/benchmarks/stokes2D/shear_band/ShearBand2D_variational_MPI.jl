@@ -1,36 +1,66 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
 using GeoParams
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO, CairoMakie
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using CairoMakie
 
-const backend = CPUBackend
 
-using JustPIC, JustPIC._2D
-const backend_JP = JustPIC.CPUBackend
+import JustPIC.GridGeometryUtils as GGU
+
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
 # Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-    origin = 0.5, 0.5
 
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
-        if ((x - o_x)^2 + (y - o_y)^2) > radius^2
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
 
@@ -95,21 +125,24 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     perturbation_C = @rand(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius = 0.1
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
     air_phase = 0
     ϕ = RockRatio(backend, ni)
     update_rock_ratio!(ϕ, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
+    # pt_stokes = PTStokesCoeffs(li, di; ϵ_rel=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
@@ -164,7 +197,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         iters = solve_VariationalStokes!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -174,6 +207,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 50.0e3,
                 nout = 2.0e3,
                 viscosity_cutoff = (-Inf, Inf),
@@ -248,7 +282,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 64 - 2
+n = 32 - 2
 nx = n * 2
 ny = n * 2
 figdir = "Variational_ShearBands2D_MPI"

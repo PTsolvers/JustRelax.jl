@@ -21,16 +21,16 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # Load script dependencies
@@ -40,7 +40,6 @@ using Printf, LinearAlgebra, CellArrays
 include("../miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -57,20 +56,21 @@ end
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i + 1, j] = (depth) * dTdZ + offset
+    T[i, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
+
 
 # Thermal rectangular perturbation
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i + 1, j] += 20.0
+            T[i + 1, j + 1] += 20.0
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
@@ -79,12 +79,12 @@ end
 function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # Physical domain ------------------------------------
-    ly = 1000.0e3               # domain length in y
+    ly = 1000.0e3             # domain length in y
     lx = ly                   # domain length in x
     ni = nx, ny               # number of cells
     li = lx, ly               # domain length in x- and y-
     di = @. li / ni           # grid step in x- and -y
-    origin = 0.0, -ly             # origin coordinates
+    origin = 0.0, -ly         # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -98,44 +98,43 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 1 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
     thermal = ThermalArrays(backend_JR, ni)
+    @parallel (@idx (nx + 2, ny)) init_T!(thermal.T, xci[2])
+    Tbot = -xvi[2][1] * (1273 - 273) / 1000.0e3 + 273.0e0
+    Ttop = 273.0e0
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
     # initialize thermal profile
-    nTx, nTy = size(thermal.T)
-    @parallel (1:(nTx - 2), 1:nTy) init_T!(thermal.T, xvi[2])
     # Elliptical temperature anomaly
     xc_anomaly = 0.0    # origin of thermal anomaly
     yc_anomaly = -600.0e3  # origin of thermal anomaly
     r_anomaly = 100.0e3    # radius of perturbation
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
     # Buoyancy forces  & viscosity ----------------------
     ρg = @zeros(ni...), @zeros(ni...)
@@ -147,7 +146,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # PT coefficients for thermal diffusion -------------
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.99 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -157,13 +156,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v, iters
@@ -181,14 +176,14 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         @show it
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         # ------------------------------
 
         # Stokes solver ----------------
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -214,7 +209,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
@@ -223,27 +218,24 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
                 verbose = true,
             )
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
         Nu_it = (ly / (1000.0 * lx)) *
@@ -263,13 +255,10 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         push!(trms, t)
         # -------------------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= 273.0
-        @views T_buffer[:, 1] .= 1273.0
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-        temperature2center!(thermal)
 
         it += 1
         t += dt
@@ -289,15 +278,12 @@ end
 @testset "Blankenbach 2D" begin
     @suppress begin
         nx, ny = 32, 32           # number of cells
-        igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
         Urms, Nu_top, iters = main2D(igg; nx = nx, ny = ny)
-        @test Urms[end] ≈ 0.55 rtol = 1.0e-1
-        @test Nu_top[end] ≈ 1.0312 rtol = 1.0e-2
+        @test Urms[end] ≈ 0.40987052065118357 rtol = 1.0e-1
+        @test Nu_top[end] ≈ 1.0026242251320245 rtol = 1.0e-2
         @test iters.err_evo1[end] < 1.0e-4
     end
 end

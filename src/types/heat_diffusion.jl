@@ -1,9 +1,7 @@
 struct ThermalArrays{_T}
-    T::_T  # Temperature @ grid nodes
-    Tc::_T # Temperature @ cell centers
+    T::_T  # Temperature at cell centers with ghost nodes
     Told::_T
     ΔT::_T
-    ΔTc::_T
     adiabatic::_T # adiabatic term α (u ⋅ ∇P)
     dT_dt::_T
     qTx::_T

@@ -1,14 +1,35 @@
-using JustRelax, JustRelax.JustRelax2D, Printf, LinearAlgebra
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+# Load script dependencies
+using Printf, LinearAlgebra
 using MPI: MPI
-using GLMakie
+using CairoMakie
 
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
-
-const backend = CPUBackend
 
 # choose benchmark
-benchmark = :solcx
+benchmark = :solviel
 
 # model resolution (number of gridpoints)
 nx, ny = 64, 64

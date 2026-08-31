@@ -7,11 +7,11 @@ function get_bulk_modulus(args::Vararg{Any, N}) where {N}
 end
 
 function get_shear_modulus(args::Vararg{Any, N}) where {N}
-    Kb = GeoParams.get_G(args...)
-    if isnan(Kb) || iszero(Kb)
+    G = GeoParams.get_G(args...)
+    if isnan(G) || iszero(G)
         return Inf
     end
-    return Kb
+    return G
 end
 
 get_thermal_expansion(args::Vararg{Any, N}) where {N} = get_α(args...)
@@ -23,8 +23,8 @@ function get_α(rho::MeltDependent_Density; ϕ::T = 0.0, kwargs...) where {T}
 end
 
 function get_α(rho::BubbleFlow_Density; P = 0.0e0, kwargs...)
-    αmelt = get_α(rho.ρmelt, kwargs...)
-    αgas = get_α(rho.ρgas, kwargs...)
+    αmelt = get_α(rho.ρmelt)
+    αgas = get_α(rho.ρgas)
 
     @unpack_val c0, a = rho
 
@@ -40,8 +40,8 @@ function get_α(rho::BubbleFlow_Density; P = 0.0e0, kwargs...)
 end
 
 function get_α(rho::GasPyroclast_Density; kwargs...)
-    αmelt = get_α(rho.ρmelt, kwargs...)
-    αgas = get_α(rho.ρgas, kwargs...)
+    αmelt = get_α(rho.ρmelt)
+    αgas = get_α(rho.ρgas)
     @unpack_val δ, β = rho
 
     return δ * αgas + (1 - δ) * αmelt
@@ -51,9 +51,9 @@ end
 @inline get_α(p::MaterialParams, args::NamedTuple) = get_α(p.Density[1], args)
 @inline get_α(p::Union{T_Density, PT_Density, Melt_DensityX}) = GeoParams.get_α(p)
 @inline get_α(p::Union{T_Density, PT_Density, Melt_DensityX}, ::Any) = GeoParams.get_α(p)
-@inline get_α(rho::MeltDependent_Density, ::Any) = get_α(rho)
-@inline get_α(rho::BubbleFlow_Density, ::Any) = get_α(rho)
-@inline get_α(rho::GasPyroclast_Density, ::Any) = get_α(rho)
+@inline get_α(rho::MeltDependent_Density, args::NamedTuple) = get_α(rho; args...)
+@inline get_α(rho::BubbleFlow_Density, args::NamedTuple) = get_α(rho; args...)
+@inline get_α(rho::GasPyroclast_Density, args::NamedTuple) = get_α(rho; args...)
 @inline get_α(rho::Melt_DensityX, ::Any) = get_α(rho)
 @inline get_α(rho::ConstantDensity, args) = 0
 @inline get_α(rho::ConstantDensity) = 0

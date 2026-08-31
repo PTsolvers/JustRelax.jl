@@ -1,24 +1,59 @@
+# # Blankenbach thermal-convection benchmark
+#
+# This two-dimensional model reproduces the thermal-convection benchmark of
+# [Blankenbach et al. (1989)](https://academic.oup.com/gji/article/98/1/23/622167).
+# It couples Stokes flow, pseudo-transient thermal diffusion, and particle-based
+# subgrid diffusion to follow a temperature anomaly in a viscous mantle.
+#
+# Run the miniapp from the repository root with
+#
+# ```sh
+# julia --project=miniapps --startup-file=no miniapps/benchmarks/stokes2D/Blankenbach2D/Benchmark2D_sgd.jl
+# ```
+#
+# ## Imports and backends
+
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CPUBackend
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC
-using JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 
-# Load file with all the rheology configurations
+# The material parameters are defined in
+# [`Blankenbach_Rheology.jl`](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl).
 include("Blankenbach_Rheology.jl")
 
-## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+# ## Helper functions
 
+# Copy the interior `x` values of an array into a halo field.
 function copyinn_x!(A, B)
 
     @parallel function f_x(A, B)
@@ -29,34 +64,38 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-# Initial thermal profile
+# Initialize the conductive thermal profile between the 273 K surface and the
+# 1273 K basal temperature.
 @parallel_indices (i, j) function init_T!(T, y)
     depth = -y[j]
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i, j] = (depth) * dTdZ + offset
+    T[i + 1, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
 
-# Thermal rectangular perturbation
+# Add the rectangular thermal perturbation that drives the convection.
 function rectangular_perturbation!(T, xc, yc, r, xvi)
     @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
         if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i + 1, j] += 20.0
+            T[i + 1, j + 1] += 20.0
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
     return nothing
 end
-## END OF HELPER FUNCTION ------------------------------------------------------------
 
-## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false)
+# ## Model setup and solution
 
-    # Physical domain ------------------------------------
+function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false, finalize_MPI = true)
+
+    # ### Model domain
+
+    # The domain is `1000 km` high and has aspect ratio `ar`. `Geometry`
+    # provides the staggered cell-center and vertex coordinates.
     ly = 1000.0e3               # domain length in y
     lx = ly                   # domain length in x
     ni = nx, ny               # number of cells
@@ -67,60 +106,73 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
 
-    # Physical properties using GeoParams ----------------
+    # ### Material properties
+
+    # The benchmark uses the single-phase material configuration from
+    # `Blankenbach_Rheology.jl`. Its thermal diffusivity sets the diffusive
+    # time-step limit.
     rheology = init_rheologies()
     κ = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
-    # Initialize particles -------------------------------
+    # ### Particles and phase ratios
+
+    # Particles carry temperature and phase information. `SubgridDiffusionCellArrays`
+    # supplies the particle-scale diffusion state, and `PhaseRatios` transfers
+    # particle phases to the staggered grid.
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
-    # STOKES ---------------------------------------------
-    # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-4, CFL = 1 / √2.1)
+    # ### Stokes and thermal state
+
+    # Allocate the Stokes and thermal fields together with their
+    # pseudo-transient coefficients.
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
-    # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
+
+    # Initialize the conductive profile and impose fixed temperatures at the
+    # top and bottom, with insulating sidewalls.
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    Ttop = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    # initialize thermal profile
-    @parallel (@idx size(thermal.T)) init_T!(thermal.T, xvi[2])
-    # Elliptical temperature anomaly
+    # The perturbation is centered at 600 km depth and spans 200 km in each
+    # direction despite the helper's historical `rectangular` name.
     xc_anomaly = 0.0    # origin of thermal anomaly
     yc_anomaly = -600.0e3  # origin of thermal anomaly
     r_anomaly = 100.0e3    # radius of perturbation
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     thermal_bcs!(thermal, thermal_bc)
     thermal.Told .= thermal.T
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
-    # Rayleigh number
+    # The printed Rayleigh number characterizes the relative importance of
+    # buoyancy and viscous resistance for this setup.
     ΔT = thermal.T[1, 1] - thermal.T[1, end]
     Ra = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0) /
         (κ * rheology[1].CompositeRheology[1].elements[1].η)
     @show Ra
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
-    # Buoyancy forces  & viscosity ----------------------
+    # Initialize buoyancy and viscosity from the thermal field.
     ρg = @zeros(ni...), @zeros(ni...)
     η = @ones(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
@@ -128,20 +180,22 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
 
-    # PT coefficients for thermal diffusion -------------
+    # Allocate pseudo-transient coefficients for thermal diffusion.
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
     )
 
-    # Boundary conditions -------------------------------
+    # Use free-slip velocity boundaries and synchronize the velocity halos.
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
     )
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # IO ------------------------------------------------
-    # if it does not exist, make folder where figures are stored
+    # ### Output
+
+    # Create the figure directory and, optionally, a VTK directory for
+    # ParaView output.
     if do_vtk
         vtk_dir = joinpath(figdir, "vtk")
         take(vtk_dir)
@@ -149,14 +203,14 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     take(figdir)
     # ----------------------------------------------------
 
-    # Plot initial T and η profiles-----------------------
+    # Plot the initial temperature and viscosity depth profiles.
     fig = let
         Yv = [y for x in xvi[1], y in xvi[2]][:]
         Y = [y for x in xci[1], y in xci[2]][:]
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv ./ 1.0e3)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y ./ 1.0e3)
         scatter!(ax2, Array(log10.(η[:])), Y ./ 1.0e3)
         ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
         ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
@@ -165,13 +219,9 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    centroid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v
@@ -179,7 +229,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         Vx_v = @zeros(ni .+ 1...)
         Vy_v = @zeros(ni .+ 1...)
     end
-    # Time loop
+    # ### Advancing one time step
+
+    # Each iteration updates buoyancy and viscosity, solves Stokes, advances
+    # thermal and subgrid diffusion, advects particles, and records the Nusselt
+    # number and root-mean-square velocity.
     t, it = 0.0, 1
     Urms = Float64[]
     Nu_top = Float64[]
@@ -192,17 +246,17 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     while it ≤ nit
         @show it
 
-        # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        # 1. Update buoyancy and viscosity.
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
         # ------------------------------
 
-        # Stokes solver ----------------
+        # 2. Solve Stokes and select an adaptive time step.
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -220,7 +274,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         dt = compute_dt(stokes, di, dt_diff)
         # ------------------------------
 
-        # Thermal solver ---------------
+        # 3. Advance grid- and particle-scale thermal diffusion.
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -228,7 +282,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
@@ -237,36 +291,36 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
                 verbose = true,
             )
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
-        # Advection --------------------
-        # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        # 4. Advect particles and update the phase ratios.
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        # Nusselt number, Nu = H/ΔT/L ∫ ∂T/∂z dx ----
+        # 5. Record the Nusselt number and root-mean-square velocity.
         Nu_it = (ly / (1000.0 * lx)) *
             sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
         push!(Nu_top, Nu_it)
         # -------------------------------------------
 
-        # Compute U rms -----------------------------
-        # U₍ᵣₘₛ₎ = H*ρ₀*c₍ₚ₎/k * √ 1/H/L * ∫∫ (vx²+vz²) dx dz
+        # Compute the dimensionless root-mean-square velocity:
+        #
+        # $$
+        # U_{\mathrm{rms}} = \frac{H \rho_0 c_p}{k}
+        # \sqrt{\frac{1}{LH} \int_\Omega (v_x^2 + v_y^2)\,\mathrm{d}\Omega}.
+        # $$
         Urms_it = let
             velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
             @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
@@ -277,21 +331,17 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         push!(trms, t)
         # -------------------------------------------
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= 273.0
-        @views T_buffer[:, 1] .= 1273.0
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        # 6. Interpolate particle temperature back to the thermal grid.
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-        temperature2center!(thermal)
 
-        # Data I/O and plotting ---------------------
+        # 7. Write snapshots and time-series figures at the requested interval.
         if it == 1 || rem(it, 200) == 0 || it == nit
 
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(thermal.T[2:(end - 1), :]),
                     τxy = Array(stokes.τ.xy),
                     εxy = Array(stokes.ε.xy),
                     Vx = Array(Vx_v),
@@ -299,6 +349,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     τxx = Array(stokes.τ.xx),
                     τyy = Array(stokes.τ.yy),
                     εxx = Array(stokes.ε.xx),
@@ -335,7 +386,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
             ax3 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "T [K]")
             #
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), :]), colormap = :lajolla, colorrange = (273, 1273))
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)]), colormap = :lajolla, colorrange = (273, 1273))
             #
             h2 = heatmap!(ax2, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(stokes.V.Vy), colormap = :batlow)
             #
@@ -366,7 +417,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # ------------------------------
     end
 
-    # Horizontally averaged depth profile
+    # Plot horizontally averaged temperature and viscosity profiles.
     Tmean = @zeros(ny + 1)
     Emean = @zeros(ny)
 
@@ -392,15 +443,19 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
     @show Urms[Int64(nit)] Nu_top[Int64(nit)]
 
-    return nothing
-end
-## END OF MAIN SCRIPT ----------------------------------------------------------------
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
 
-# (Path)/folder where output data and figures are stored
+    return Urms, Nu_top, trms, thermal.T, xvi
+end
+
+# ## Run configuration
+
+# Configure the output directory, optional VTK output, domain aspect ratio,
+# resolution, and number of time steps for a standalone benchmark run.
 figdir = "Blankenbach_subgrid"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
-n = 128
+n = 64
 nx = n
 ny = n
 nit = 6.0e3
@@ -410,5 +465,10 @@ else
     igg
 end
 
-# run main script
 main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);
+
+# ## Reference results
+
+# This resolution study compares the benchmark diagnostics across grid sizes.
+#
+# ![Blankenbach resolution study](../assets/Blankenbach_resolution_study.png)

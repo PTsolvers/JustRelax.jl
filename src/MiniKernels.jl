@@ -50,9 +50,9 @@ Base.@propagate_inbounds @inline _d_yi(
     A::AbstractArray, _dy, I::Vararg{Integer, 2}
 ) = (-right(A, I...) + next(A, I...)) * _dy
 
-@inline _d_xi(A, _dx, i::I, j::I, k::I) where {I <: Integer} = (-A[i, j + 1, k + 1] + next(A, i, j, k)) * _dx
-@inline _d_yi(A, _dy, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j, k + 1] + next(A, i, j, k)) * _dy
-@inline _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
+Base.@propagate_inbounds @inline _d_xi(A, _dx, i::I, j::I, k::I) where {I <: Integer} = (-A[i, j + 1, k + 1] + next(A, i, j, k)) * _dx
+Base.@propagate_inbounds @inline _d_yi(A, _dy, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j, k + 1] + next(A, i, j, k)) * _dy
+Base.@propagate_inbounds @inline _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Integer} = (-A[i + 1, j + 1, k] + next(A, i, j, k)) * _dz
 
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer, 2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)
@@ -67,21 +67,30 @@ Base.@propagate_inbounds @inline _av_xa(A::T, I::Vararg{Integer, 2}) where {T <:
 Base.@propagate_inbounds @inline _av_ya(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
     (center(A, I...) + front(A, I...)) * 0.5
 Base.@propagate_inbounds @inline _av_xi(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
-    (front(A, I...), next(A, I...)) * 0.5
+    (front(A, I...) + next(A, I...)) * 0.5
 Base.@propagate_inbounds @inline _av_yi(A::T, I::Vararg{Integer, 2}) where {T <: T2} =
-    (right(A, I...), next(A, I...)) * 0.5
-# harmonic averages
+    (right(A, I...) + next(A, I...)) * 0.5
+# Average of the cells around vertex (i, j), valid on the domain boundary: an index that
+# falls outside the array is clamped onto its in-range neighbour, so the stencil degenerates
+# to the one-sided average of the cells that do exist.
+Base.@propagate_inbounds @inline function _av_ai_clamped(A::T, i, j) where {T <: T2}
+    i0, i1 = clamp(i - 1, 1, size(A, 1)), clamp(i, 1, size(A, 1))
+    j0, j1 = clamp(j - 1, 1, size(A, 2)), clamp(j, 1, size(A, 2))
+    return 0.25 * (A[i0, j0] + A[i1, j0] + A[i0, j1] + A[i1, j1])
+end
+
+# harmonic averages: n / Σ(1/A) over the n cells of the stencil
 Base.@propagate_inbounds @inline function _harm(A::T, i, j) where {T <: T2}
-    return eltype(A)(4) * mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2))
+    return eltype(A)(4) * inv(mysum(inv, A, (i + 1):(i + 2), (j + 1):(j + 2)))
 end
 Base.@propagate_inbounds @inline function _harm_a(A::T, i, j) where {T <: T2}
-    return eltype(A)(4) * mysum(inv, A, (i):(i + 1), (j):(j + 1))
+    return eltype(A)(4) * inv(mysum(inv, A, (i):(i + 1), (j):(j + 1)))
 end
 Base.@propagate_inbounds @inline function _harm_xa(A::T, I::Vararg{Integer, 2}) where {T <: T2}
-    return eltype(A)(2) * (inv(right(A, I...)) + inv(center(A, I...)))
+    return eltype(A)(2) * inv(inv(right(A, I...)) + inv(center(A, I...)))
 end
 Base.@propagate_inbounds @inline function _harm_ya(A::T, I::Vararg{Integer, 2}) where {T <: T2}
-    return eltype(A)(2) * (inv(front(A, I...)) + inv(center(A, I...)))
+    return eltype(A)(2) * inv(inv(front(A, I...)) + inv(center(A, I...)))
 end
 #others
 Base.@propagate_inbounds @inline function _gather(A::T, I::Vararg{Integer, 2}) where {T <: T2}
@@ -116,7 +125,27 @@ Base.@propagate_inbounds @inline _av_xzi(A::T, i, j, k) where {T <: T3} =
     0.25 * mysum(A, (i - 1):i, j:j, (k - 1):k)
 Base.@propagate_inbounds @inline _av_yzi(A::T, i, j, k) where {T <: T3} =
     0.25 * mysum(A, i:i, (j - 1):j, (k - 1):k)
-# harmonic averages
+
+# Edge averages that also work on the domain boundary planes, where one of the two
+# contributing cells falls outside the array: the out-of-range index is clamped onto its
+# in-range neighbour, so the stencil degenerates to the one-sided average of the cells
+# that do exist.
+Base.@propagate_inbounds @inline function _av_xyi_clamped(A::T, i, j, k) where {T <: T3}
+    i0, i1 = clamp(i - 1, 1, size(A, 1)), clamp(i, 1, size(A, 1))
+    j0, j1 = clamp(j - 1, 1, size(A, 2)), clamp(j, 1, size(A, 2))
+    return 0.25 * (A[i0, j0, k] + A[i1, j0, k] + A[i0, j1, k] + A[i1, j1, k])
+end
+Base.@propagate_inbounds @inline function _av_xzi_clamped(A::T, i, j, k) where {T <: T3}
+    i0, i1 = clamp(i - 1, 1, size(A, 1)), clamp(i, 1, size(A, 1))
+    k0, k1 = clamp(k - 1, 1, size(A, 3)), clamp(k, 1, size(A, 3))
+    return 0.25 * (A[i0, j, k0] + A[i1, j, k0] + A[i0, j, k1] + A[i1, j, k1])
+end
+Base.@propagate_inbounds @inline function _av_yzi_clamped(A::T, i, j, k) where {T <: T3}
+    j0, j1 = clamp(j - 1, 1, size(A, 2)), clamp(j, 1, size(A, 2))
+    k0, k1 = clamp(k - 1, 1, size(A, 3)), clamp(k, 1, size(A, 3))
+    return 0.25 * (A[i, j0, k0] + A[i, j1, k0] + A[i, j0, k1] + A[i, j1, k1])
+end
+# harmonic averages: n / Σ(1/A) over the n cells of the stencil
 @inline function _harm_x(A::T, i, j, k) where {T <: T3}
     return eltype(A)(2) * inv(inv(center(A, i, j, k)) + inv(right(A, i, j, k)))
 end
@@ -127,22 +156,40 @@ end
     return eltype(A)(2) * inv(inv(center(A, i, j, k)) + inv(top(A, i, j, k)))
 end
 @inline function _harm_xy(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:(j + 1), k:k))
+    return eltype(A)(4) * inv(mysum(inv, A, i:(i + 1), j:(j + 1), k:k))
 end
 @inline function _harm_xz(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, i:(i + 1), j:j, k:(k + 1)))
+    return eltype(A)(4) * inv(mysum(inv, A, i:(i + 1), j:j, k:(k + 1)))
 end
 @inline function _harm_yz(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, i:i, j:(j + 1), k:(k + 1)))
+    return eltype(A)(4) * inv(mysum(inv, A, i:i, j:(j + 1), k:(k + 1)))
 end
 @inline function _harm_xyi(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, (i - 1):i, (j - 1):j, k:k))
+    return eltype(A)(4) * inv(mysum(inv, A, (i - 1):i, (j - 1):j, k:k))
 end
 @inline function _harm_xzi(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, (i - 1):i, j:j, (k - 1):k))
+    return eltype(A)(4) * inv(mysum(inv, A, (i - 1):i, j:j, (k - 1):k))
 end
 @inline function _harm_yzi(A::T, i, j, k) where {T <: T3}
-    return eltype(A)(4) * inv(mysum(A, i:i, (j - 1):j, (k - 1):k))
+    return eltype(A)(4) * inv(mysum(inv, A, i:i, (j - 1):j, (k - 1):k))
+end
+
+# Boundary-safe counterparts of _harm_xyi/_harm_xzi/_harm_yzi, clamping out-of-range
+# indices the same way _av_xyi_clamped and friends do.
+@inline function _harm_xyi_clamped(A::T, i, j, k) where {T <: T3}
+    i0, i1 = clamp(i - 1, 1, size(A, 1)), clamp(i, 1, size(A, 1))
+    j0, j1 = clamp(j - 1, 1, size(A, 2)), clamp(j, 1, size(A, 2))
+    return eltype(A)(4) * inv(inv(A[i0, j0, k]) + inv(A[i1, j0, k]) + inv(A[i0, j1, k]) + inv(A[i1, j1, k]))
+end
+@inline function _harm_xzi_clamped(A::T, i, j, k) where {T <: T3}
+    i0, i1 = clamp(i - 1, 1, size(A, 1)), clamp(i, 1, size(A, 1))
+    k0, k1 = clamp(k - 1, 1, size(A, 3)), clamp(k, 1, size(A, 3))
+    return eltype(A)(4) * inv(inv(A[i0, j, k0]) + inv(A[i1, j, k0]) + inv(A[i0, j, k1]) + inv(A[i1, j, k1]))
+end
+@inline function _harm_yzi_clamped(A::T, i, j, k) where {T <: T3}
+    j0, j1 = clamp(j - 1, 1, size(A, 2)), clamp(j, 1, size(A, 2))
+    k0, k1 = clamp(k - 1, 1, size(A, 3)), clamp(k, 1, size(A, 3))
+    return eltype(A)(4) * inv(inv(A[i, j0, k0]) + inv(A[i, j1, k0]) + inv(A[i, j0, k1]) + inv(A[i, j1, k1]))
 end
 
 # others
@@ -170,7 +217,7 @@ end
 
 @inline function mysum(f::F, A::AbstractArray, ranges_i, ranges_j) where {F <: Function}
     s = 0.0
-    for i in ranges_i, j in ranges_j
+    for j in ranges_j, i in ranges_i
         s += f(A[i, j])
     end
     return s
@@ -180,7 +227,7 @@ end
         f::F, A::AbstractArray, ranges_i, ranges_j, ranges_k
     ) where {F <: Function}
     s = 0.0
-    for i in ranges_i, j in ranges_j, k in ranges_k
+    for k in ranges_k, j in ranges_j, i in ranges_i
         s += f(A[i, j, k])
     end
     return s

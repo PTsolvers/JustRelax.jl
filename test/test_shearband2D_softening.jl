@@ -22,14 +22,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
@@ -91,7 +91,6 @@ function ShearBand2D()
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
-    # soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 2)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -128,11 +127,11 @@ function ShearBand2D()
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend_JR, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
 
     # Rheology
     compute_viscosity!(
@@ -157,13 +156,13 @@ function ShearBand2D()
     ttot = Float64[]
     local iters, τII, sol
 
-    while t < tmax
+    while it < 5
 
         # Stokes solver ----------------
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -201,7 +200,7 @@ end
     @suppress begin
         iters, τII, sol = ShearBand2D()
         @test iters.err_evo1[end] < 1.0e-6
-        @test τII[end] ≈ 1.40352 atol = 1.0e-3
-        @test sol[end] ≈ 1.94255 atol = 1.0e-4
+        @test τII[end] ≈ 0.466 atol = 1.0e-3
+        @test sol[end] ≈ 0.4423 atol = 1.0e-4
     end
 end

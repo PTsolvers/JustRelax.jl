@@ -1,43 +1,102 @@
-using GeoParams, GLMakie, CellArrays
+# # Shear-band localization
+#
+# This two-dimensional visco-elasto-plastic model localizes deformation around
+# a circular inclusion with lower elastic shear modulus than the background.
+# It uses a Drucker-Prager material model and compares the simulated stress
+# evolution with the analytical response of a Maxwell material.
+#
+# A higher-resolution run shows the localized shear-band evolution:
+#
+# ![Shear-band evolution](../assets/movies/DP_nx2058_2D.gif)
+#
+# Run this miniapp from the repository root with
+#
+# ```sh
+# julia --project=miniapps --startup-file=no miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl
+# ```
+#
+# The simulation writes one figure per time step to `ShearBands2D/`.
+#
+# ## Imports and backends
+
+# The model uses the threaded CPU backend for both JustRelax and JustPIC.
+# `ParallelStencil` supplies the device-agnostic phase-initialization kernel,
+# `GeoParams` defines the material behavior, and CairoMakie writes the figures.
+
+using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using Pkg; Pkg.activate("miniapps")
 
-const backend = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using JustPIC, JustPIC._2D
-const backend_JP = JustPIC.CPUBackend
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-# HELPER FUNCTIONS ----------------------------------- ----------------------------
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams, CairoMakie
+
+
+import JustPIC.GridGeometryUtils as GGU
+
+const backend_JP = JustPIC.CPU
+
+# ## Helper functions
+
+# `solution` is the analytical normal-stress response used for comparison in
+# the final time-history panel.
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
 
-# Initialize phases on the particles
-function init_phases!(phase_ratios, xci, xvi, radius)
+# Initialize the particle phases from a circular inclusion. The kernel fills
+# the phase-ratio fields at both cell centers and vertices.
+function init_phases!(phase_ratios, xci, xvi, circle)
     ni = size(phase_ratios.center)
-    origin = 0.5, 0.5
 
-    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, circle)
         x, y = xc[i], yc[j]
-        if ((x - o_x)^2 + (y - o_y)^2) > radius^2
+        p = GGU.Point(x, y)
+        if GGU.inside(p, circle)
+            @index phases[1, i, j] = 0.0
+            @index phases[2, i, j] = 1.0
+
+        else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
 
-        else
-            @index phases[1, i, j] = 0.0
-            @index phases[2, i, j] = 1.0
         end
         return nothing
     end
 
-    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., origin..., radius)
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
+    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
     return nothing
 end
 
-# MAIN SCRIPT --------------------------------------------------------------------
+
+# ## Model setup and solution
+
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
-    # Physical domain ------------------------------------
+    # ### Model domain
+
+    # The unit-square domain is discretized with `nx × ny` cells. `Geometry`
+    # provides the staggered center and vertex coordinates used below.
+
     ly = 1.0e0          # domain length in y
     lx = ly           # domain length in x
     ni = nx, ny       # number of cells
@@ -46,9 +105,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     origin = 0.0, 0.0     # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    dt = Inf
 
-    # Physical properties using GeoParams ----------------
+    # ### Material properties
+
+    # The background and inclusion use the same viscous and plastic laws, but
+    # the inclusion has a lower elastic shear modulus. The material model is a
+    # linear viscosity, elasticity, and regularized Drucker-Prager plasticity.
+
     τ_y = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
     ϕ = 30            # friction angle
     C = τ_y           # Cohesion
@@ -57,7 +120,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Gi = G0 / (6.0 - 4.0)  # elastic shear modulus perturbation
     εbg = 1.0           # background strain-rate
     η_reg = 8.0e-3          # regularisation "viscosity"
-    dt = η0 / G0 / 4.0     # assumes Maxwell time of 4
+    dt = η0 / G0 / 6.0     # assumes Maxwell time of 4
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
@@ -89,29 +152,39 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ),
     )
 
-    # perturbation array for the cohesion
+    # ### Phase anomaly
+
+    # Allocate a cohesion perturbation and initialize the circular inclusion.
+    # `PhaseRatios` carries phase fractions on the staggered grid; the circle
+    # occupies phase 2 and the background is phase 1.
     perturbation_C = @zeros(ni...)
 
     # Initialize phase ratios -------------------------------
-    radius = 0.1
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(phase_ratios, xci, xvi, radius)
+    radius = 0.1
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
+    init_phases!(phase_ratios, xci, xvi, circle)
 
-    # STOKES ---------------------------------------------
-    # Allocate arrays needed for every Stokes problem
+    # ### Stokes state and boundary conditions
+
+    # `StokesArrays` stores the velocity, pressure, stress, and strain-rate
+    # fields. `PTStokesCoeffs` allocates the pseudo-transient solver state.
+
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.95 / √2.1)
-    # pt_stokes = PTStokesCoeffs(li, di; ϵ=1e-6, Re=3e0, r=0.7, CFL = 0.95 / √2.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
-    # Buoyancy forces
+    # The phases have zero density, so buoyancy is zero in this benchmark.
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
-    # Rheology
+    # Initialize the viscosity from the phase ratios and material parameters.
     compute_viscosity!(
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
-    # Boundary conditions
+    # The imposed velocity is extension in `x` and compression in `y`; all
+    # boundaries are free slip. Halo updates make the fields consistent when
+    # the model is distributed across MPI ranks.
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
@@ -121,7 +194,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    # IO -------------------------------------------------
+    # ### Time integration and visualization
+
+    # Each time step solves Stokes to the requested residual tolerance, then
+    # records the maximum normal stress with the analytical Maxwell response.
+    # The four-panel figure shows stress, plastic strain, strain rate, and the
+    # stress history, and is written to `figdir`.
+
     take(figdir)
 
     # Time loop
@@ -131,13 +210,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
     # while t < tmax
-    for _ in 1:15
+    for _ in 1:19
 
         # Stokes solver ----------------
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -148,11 +227,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             kwargs = (
                 verbose = false,
                 iterMax = 50.0e3,
-                nout = 1,
+                nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
         tensor_invariant!(stokes.ε)
+        tensor_invariant!(stokes.ε_pl)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
@@ -167,7 +247,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
         yunit = @. radius * sin(th) + 0.5
-
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
@@ -175,7 +254,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ax4 = Axis(fig[2, 2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
@@ -183,15 +262,13 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
-
     end
 
     return nothing
 end
 
-n = 128
-nx = n
-ny = n
+nx = 128
+ny = 256
 figdir = "ShearBands2D"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)

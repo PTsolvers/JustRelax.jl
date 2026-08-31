@@ -4,7 +4,7 @@ steps:
       setup:
         version:
           - "1.10"
-          - "1.11"
+          - "1"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -19,18 +19,18 @@ steps:
                 using Pkg
                 Pkg.test("JustRelax"; test_args=["--backend=CUDA"], coverage=true)'
     agents:
-      queue: "juliagpu"
-      cuda: "*"
+      queue: "cuda"
     timeout_in_minutes: 120
     soft_fail:
       - exit_status: 3
+    env:
+      JULIA_NUM_THREADS: 4
 
   - label: "AMDGPU Julia {{matrix.version}}"
     matrix:
       setup:
         version:
-          - "1.10"
-          - "1.11"
+          - "1"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -45,8 +45,7 @@ steps:
                 using Pkg
                 Pkg.test("JustRelax"; test_args=["--backend=AMDGPU"], coverage=true)'
     agents:
-      queue: "juliagpu"
-      rocm: "*"
+      queue: "rocm"
       rocmgpu: "*"
     timeout_in_minutes: 120
     soft_fail:

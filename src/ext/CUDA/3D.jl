@@ -28,6 +28,7 @@ import JustRelax:
     isdirichlet
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 

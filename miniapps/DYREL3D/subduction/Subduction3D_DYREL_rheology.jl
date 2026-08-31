@@ -47,7 +47,10 @@ end
 
 @parallel_indices (I...) function _init_phases!(phases, phase_grid, pcoords::NTuple{N, T}, index, xvi) where {N, T}
 
-    ni = size(phases)
+    # Bound the vertex lookup by the vertex grid, NOT by `size(phases)`: the particle
+    # arrays are laid out on the velocity grid and are `ni .+ 2`, while `xvi` and
+    # `phase_grid` are `ni .+ 1`, so the latter would be indexed out of bounds.
+    ni = size(phase_grid)
 
     for ip in cellaxes(phases)
         # quick escape

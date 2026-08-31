@@ -382,7 +382,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 150.0e3,
-                nout = 10,
+                nout = 1,
                 rel_drop = 1.0e-2,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,

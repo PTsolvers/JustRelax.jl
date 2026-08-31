@@ -1,4 +1,4 @@
-import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h="/JustRelax.jl/previews/PR524/assets/mktzbll.BKM8rkfB.png",y=JSON.parse('{"title":"Periodic 2D thermal diffusion","description":"","frontmatter":{},"headers":[],"relativePath":"man/diffusion2D_periodic.md","filePath":"man/diffusion2D_periodic.md","lastUpdated":null}'),p={name:"man/diffusion2D_periodic.md"};function k(e,s,t,r,d,E){return a(),n("div",null,[...s[0]||(s[0]=[l(`<h1 id="Periodic-2D-thermal-diffusion" tabindex="-1">Periodic 2D thermal diffusion <a class="header-anchor" href="#Periodic-2D-thermal-diffusion" aria-label="Permalink to &quot;Periodic 2D thermal diffusion {#Periodic-2D-thermal-diffusion}&quot;">​</a></h1><p>The smallest complete JustRelax.jl model: heat diffusing through a 2D slab with periodic left/right boundaries, fixed top/bottom temperatures, and a circular hot perturbation partway down. It runs on a small grid, with no particles and no separate rheology file — the natural first thing to run. For larger, physically richer setups see the <a href="/JustRelax.jl/previews/PR524/man/Blankenbach#Blankenbach-thermal-convection-benchmark">Blankenbach benchmark</a> and the other worked examples.</p><p>Set <code>isCUDA = true</code> to run the same model on an NVIDIA GPU.</p><div class="language-julia vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">julia</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">const</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> isCUDA </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> false</span></span>
+import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h="/JustRelax.jl/previews/PR524/assets/kvrypee.BKM8rkfB.png",y=JSON.parse('{"title":"Periodic 2D thermal diffusion","description":"","frontmatter":{},"headers":[],"relativePath":"man/diffusion2D_periodic.md","filePath":"man/diffusion2D_periodic.md","lastUpdated":null}'),p={name:"man/diffusion2D_periodic.md"};function k(e,s,t,r,d,E){return a(),n("div",null,[...s[0]||(s[0]=[l(`<h1 id="Periodic-2D-thermal-diffusion" tabindex="-1">Periodic 2D thermal diffusion <a class="header-anchor" href="#Periodic-2D-thermal-diffusion" aria-label="Permalink to &quot;Periodic 2D thermal diffusion {#Periodic-2D-thermal-diffusion}&quot;">​</a></h1><p>The smallest complete JustRelax.jl model: heat diffusing through a 2D slab with periodic left/right boundaries, fixed top/bottom temperatures, and a circular hot perturbation partway down. It runs on a small grid, with no particles and no separate rheology file — the natural first thing to run. For larger, physically richer setups see the <a href="/JustRelax.jl/previews/PR524/man/Blankenbach#Blankenbach-thermal-convection-benchmark">Blankenbach benchmark</a> and the other worked examples.</p><p>Set <code>isCUDA = true</code> to run the same model on an NVIDIA GPU.</p><div class="language-julia vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">julia</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">const</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> isCUDA </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> false</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">@static</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;"> if</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> isCUDA</span></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">    using</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> CUDA</span></span>
@@ -91,7 +91,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 1.8842 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 1.7629 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -101,7 +101,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049799 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046736 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -111,7 +111,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049853 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046747 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -121,7 +121,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049774 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046832 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -131,7 +131,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049319 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.04663 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -141,7 +141,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049678 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046673 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -151,7 +151,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.04928 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046325 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -161,7 +161,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049213 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046789 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -171,7 +171,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049422 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046312 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -181,7 +181,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.053665 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046764 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -191,7 +191,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049493 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046562 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -201,7 +201,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049485 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046386 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -211,7 +211,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.050146 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046465 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -221,7 +221,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.053034 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046235 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -231,7 +231,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049511 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046374 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -241,7 +241,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049683 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046438 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -251,7 +251,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049672 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046553 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -261,7 +261,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049493 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046248 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -271,7 +271,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049438 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046535 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span>
 <span class="line"></span>
@@ -281,7 +281,7 @@ import{_ as i,o as a,c as n,ap as l}from"./chunks/framework.BJ06sPJ9.js";const h
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">Starting thermal diffusion solver...</span></span>
 <span class="line"></span>
 <span class="line"></span>
-<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.049399 seconds</span></span>
+<span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;"> ...solver finished in 0.046293 seconds</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;">====================================</span></span></code></pre></div><h2 id="Result" tabindex="-1">Result <a class="header-anchor" href="#Result" aria-label="Permalink to &quot;Result {#Result}&quot;">​</a></h2><p>Zooming in on the perturbation, the sharp circular anomaly has visibly spread and flattened after 1 Myr of diffusion:</p><div class="language-julia vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">julia</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">x_km </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> grid</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">xci[</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">1</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">] </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">./</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> 1.0e3</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">z_km </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> grid</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">xci[</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;">2</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">] </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">./</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF;"> 1.0e3</span></span>

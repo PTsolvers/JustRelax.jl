@@ -43,9 +43,19 @@ struct Vorticity{T}
     yz::Union{T, Nothing}
     xz::Union{T, Nothing}
     xy::T
+    yz_c::Union{T, Nothing}
+    xz_c::Union{T, Nothing}
+    xy_c::Union{T, Nothing}
 
-    function Vorticity(yz::Union{T, Nothing}, xz::Union{T, Nothing}, xy::T) where {T}
-        return new{T}(yz, xz, xy)
+    function Vorticity(
+            yz::Union{T, Nothing},
+            xz::Union{T, Nothing},
+            xy::T,
+            yz_c::Union{T, Nothing},
+            xz_c::Union{T, Nothing},
+            xy_c::Union{T, Nothing},
+        ) where {T}
+        return new{T}(yz, xz, xy, yz_c, xz_c, xy_c)
     end
 end
 

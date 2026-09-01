@@ -1,5 +1,4 @@
 const isCUDA = false
-# const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -8,7 +7,7 @@ end
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
-const backend = @static if isCUDA
+const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -22,14 +21,15 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-
-# Load script dependencies
 using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -148,13 +148,12 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     xc_anomaly = 250.0e3   # origin of thermal anomaly
     yc_anomaly = -(ly - 400.0e3) # origin of thermal anomaly
     r_anomaly = 50.0e3   # radius of perturbation
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     # init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
     # update_phase_ratios!(phase_ratios, particles, pPhases)
 
     phases = @zeros(ni...)
-    # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
-    weno = WENO5(backend, Val(2), ni) # ni.+1 for Temp
+    weno = WENO5(backend_JR, Val(2), ni)
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
     phases_blob = @zeros(ni...) # for plotting purposes
@@ -169,7 +168,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend, ni)
+    stokes = StokesArrays(backend_JR, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -178,7 +177,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; dt = dt, ΔT = @zeros(ni...))
+    args = (; dt = dt, ΔT = @zeros(ni .+ 2...))
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
@@ -190,10 +189,13 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
+    Vx_c = @zeros(ni...)
+    Vy_c = @zeros(ni...)
+
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
-        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
         solve!(
             stokes,
             pt_stokes,
@@ -215,18 +217,13 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
-        Vx_c = @zeros(ni...)
-        Vy_c = @zeros(ni...)
         velocity2center!(Vx_c, Vy_c, @velocity(stokes)...)
-        velocity = @. √(Vx_v^2 + Vy_v^2)
+        velocity = @. √(Vx_c^2 + Vy_c^2)
 
         # Advection ---------------------
-        WENO_advection!(phases, (Vx_c, Vy_c), weno_c, di, dt)
-        WENO_advection!(phases_blob, (Vx_c, Vy_c), weno_c, di, dt)
         WENO_advection!(phases, (Vx_c, Vy_c), weno, di, dt)
         WENO_advection!(phases_blob, (Vx_c, Vy_c), weno, di, dt)
         WENO_advection!(phases_bg, (Vx_c, Vy_c), weno, di, dt)
-
         # update phase ratios
         update_phase_ratios_2D!(phase_ratios, (phases_bg, phases_blob), xci, xvi)
 
@@ -245,7 +242,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
         pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
 
-        h1 = heatmap!(ax1, (xvi ./ 1.0e3)..., Array(velocity), colormap = :vikO)
+        h1 = heatmap!(ax1, (xci ./ 1.0e3)..., Array(velocity), colormap = :vikO)
         Colorbar(fig[1, 2], h1)
 
         h2 = heatmap!(ax2, (xci ./ 1.0e3)..., Array(pp_c); colormap = :roma)

@@ -23,6 +23,9 @@ else
 end
 
 using JustPIC
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
@@ -31,6 +34,7 @@ end
 
 # Load script dependencies
 using GeoParams
+using Random
 using CairoMakie
 
 # Velocity helper grids for the particle advection
@@ -108,7 +112,6 @@ function main(igg, nx, ny)
     origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
-    grid_vxi = velocity_grids(xci, xvi, di)
     # ----------------------------------------------------
 
     # Physical properties using GeoParams ----------------
@@ -168,6 +171,7 @@ function main(igg, nx, ny)
     air_phase = 1
     ϕ = RockRatio(backend, ni)
     compute_rock_fraction!(ϕ, chain, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem

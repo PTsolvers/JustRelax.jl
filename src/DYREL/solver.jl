@@ -4,6 +4,10 @@
         stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
         kwargs...,
     )
+    solve_DYREL!(
+        stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
+        kwargs...,
+    )
 
 Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 
@@ -13,6 +17,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `dyrel`: DYREL-specific parameters and fields.
 - `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
 - `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `ϕ`: Optional `RockRatio` selecting the variational 2D solver and its reduced pressure and
+  velocity spaces.
 - `rheology`: Material properties and rheological laws.
 - `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
 - `grid`: `Geometry` object carrying grid spacing and staggered-grid coordinates. A legacy
@@ -26,13 +32,27 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `iterMax`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
+  For the variational solver this is a compatibility alias for `iterMax_DR`.
+- `iterMax_PH`: Maximum number of Powell-Hestenes iterations in the variational solver.
+  Default: `1.0e3`.
+- `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve in the
+  variational solver. Default: `50.0e3`.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
 - `nout`: Output frequency for residuals. Default: `100`.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
-- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `free_surface`: Enable the implicit free-surface stabilization term. Default: `false`.
+
+The variational solver rebuilds the reduced masks at every call. State on newly eliminated
+degrees of freedom and all dynamic-relaxation history are reset before iteration, so an advected
+marker chain may safely change the mask between time steps. Residual norms, damping estimates,
+pressure updates, and the volumetric compatibility correction all use the same reduced space.
+
+# Returns
+A named tuple containing residual histories, final normalized residual `err`, iteration count
+`iter`, and `converged`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -75,6 +95,7 @@ function _solve_DYREL!(
     di = grid.di
     _di = grid._di
     di_center = di.center
+    lx = grid.max_li
     ni = size(stokes.P)
 
     residuals = @residuals(stokes.R)
@@ -99,12 +120,13 @@ function _solve_DYREL!(
     # Iteration loop
     err_min = Inf
     err = 1.0
-    errV0 = ntuple(_ -> 1.0, dim)
-    errPt0 = 1.0
-    errV00 = ntuple(_ -> 1.0, dim)
+    converged = false
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
+
+    errV0 = ntuple(_ -> 1.0, dim)
+    errPt0 = 1.0
     err_evo_tot = Float64[]
     err_evo_V = Float64[]
     err_evo_P = Float64[]
@@ -118,12 +140,7 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
-    if free_surface
-        N == 2 || error("DYREL free-surface stabilization currently supports only 2D")
-        apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
-        update_dτV_α_β!(dyrel)
-    end
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
@@ -136,13 +153,12 @@ function _solve_DYREL!(
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
-        free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        # compute velocity residuals
+        # compute velocity residuals (free-surface stabilization via dt * free_surface)
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
             @velocity(stokes)...,
@@ -157,18 +173,20 @@ function _solve_DYREL!(
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
-        # Residual check
-        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
-        errPt = norm_mpi(stokes.R.RP) / √(p_dof)
-        if isone(itPH)
+        # Residual check. Same normalization as the APT solver (solve!): momentum
+        # residuals measured against the pressure span, continuity against the velocity
+        # span, so ϵ means the same thing in both solvers, for every component, at every
+        # resolution.
+        Pspan = nonzero_span(value_span(stokes.P))
+        Vspan = nonzero_span(maximum(value_scale, @velocity(stokes)))
+        errV = ntuple(d -> norm_mpi(@views residuals[d][2:(end - 1), 2:(end - 1)]) / Pspan * lx / √(v_dofs[d]), dim)
+        errPt = norm_mpi(stokes.R.RP) / Vspan * lx / √(p_dof)
+        err = maximum((errV..., errPt))
+
+        if itPH ≤ 2
             errV0 = map(x -> x + eps(), errV)
             errPt0 = errPt + eps()
         end
-        if itPH == 2
-            errPt0 = errPt + eps()
-        end
-        errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
-        err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -178,8 +196,11 @@ function _solve_DYREL!(
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
+        if err < ϵ && itPH > 1
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -190,9 +211,23 @@ function _solve_DYREL!(
             err_min = err
         end
 
-        ϵ_vel = err * rel_drop
+        # Target a drop of `errV`, the residual the loop below measures — `err` mixes in `errPt`,
+        # which is normalized by a different span. Both guards are load-bearing: an identically
+        # zero momentum residual (boundary-driven flow) would otherwise set `ϵ_vel = 0` and burn
+        # `iterMax`, and `Inf` makes the loop always reach its first residual check.
+        ϵ_vel = max(maximum(errV) * rel_drop, ϵ)
+        err_vel = Inf
         itPT = 0
-        while (err > ϵ_vel && itPT ≤ iterMax)
+        # Initialize dτ for the FSSA-stabilized operator. The in-loop dτ refresh only
+        # fires every `nout` iterations; without this the first window of velocity
+        # updates would drive the free-surface-stabilization residual term against a
+        # dτ tuned for the plain viscous operator (Gershgorin without the FSSA
+        # diagonal) and diverge.
+        if !iszero(free_surface)
+            Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt, ρg[end])
+            update_dτV_α_β!(dyrel)
+        end
+        while (err_vel > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
             itg += 1
             iter += 1
@@ -214,7 +249,6 @@ function _solve_DYREL!(
             else
                 update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
             end
-            free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
             # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
             # correction θc = γ_eff·RP + ΔPψ was assembled by the stress kernel above; P stays separate)
@@ -235,51 +269,49 @@ function _solve_DYREL!(
                 dt * free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
-            free_surface_bcs!(
-                stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
-            )
             update_halo!(@velocity(stokes)...)
 
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
+                # D·(stored residual) is the raw momentum residual; normalize it exactly
+                # like the outer check so ϵ_vel = err_vel·rel_drop compares like with like.
+                # P is fixed within a pass, so the outer Pspan is still current here.
+                errV = ntuple(d -> norm_mpi((@views fields.D[d][2:(end - 1), 2:(end - 1)]), (@views residuals[d][2:(end - 1), 2:(end - 1)])) / Pspan * lx / √(v_dofs[d]), dim)
+                err_vel = maximum(errV)
+                isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 
-                if iter == nout
-                    errV_scale = maximum(errV) + eps()
-                    errV00 = ntuple(_ -> errV_scale, dim)
-                end
-
-                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
-                err = maximum(errV_ratio)
-                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
-
-                push!(err_evo_tot, err)
-                push!(err_evo_V, maximum(errV_ratio))
-                push!(err_evo_P, errPt / errPt0)
+                push!(err_evo_tot, err_vel)
+                push!(err_evo_V, err_vel)
+                push!(err_evo_P, errPt)
                 push!(err_evo_it, iter)
 
-                # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
                 if verbose_DR && igg.me == 0
-                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err_vel)
                 end
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
-                free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
             end
         end
+        if itPT > iterMax && igg.me == 0
+            @warn "DYREL velocity solve exhausted iterMax before reaching ϵ_vel" itPH iter itPT iterMax err_vel ϵ_vel maxlog = 10
+        end
 
         # update pressure
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
+        relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb)
 
         iter > total_iterMax && break
+    end
+    if !converged && igg.me == 0
+        @warn "DYREL returned without meeting ϵ — the velocity/pressure fields are not converged" err ϵ iter total_iterMax
     end
 
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
@@ -305,7 +337,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot, err, iter, converged)
 
 end
 
@@ -356,6 +388,99 @@ end
     )
 end
 
+# Amplitude scales for the residual normalization. `value_span` is the range of a field's
+# values; the velocity scale is the largest component span, because in buoyancy-driven flow the
+# cross-axis component can be orders smaller than the dominant one and normalizing the
+# continuity residual by it would make the criterion arbitrarily strict. A zero span (cold
+# start, V ≡ 0 or P ≡ 0) leaves the residual unnormalized — large, so the solve continues
+# rather than exiting spuriously.
+@inline function value_span(A)
+    mn, mx = extrema(A)
+    return mx - mn
+end
+@inline function value_scale(A)
+    lo, hi = extrema(A)
+    return max(hi - lo, abs(lo), abs(hi))
+end
+@inline nonzero_span(s) = iszero(s) ? one(s) : s
+
+# Compressibility of a cell, `0` for the incompressible limit `ηb = Inf` and for the cells a
+# `RockRatio` eliminates (`ηb = 0`).
+@inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
+
+"""
+    relax_volumetric_mode!(P, RP, ηb)
+
+Shift `P` by the constant that zeroes the uniform part of the continuity residual, `Σ RP = 0`.
+
+Momentum sees only `∇P`, so a constant in `P` is invisible to the velocity solve; with a finite
+bulk modulus `RP` still sees it, through `(P - P0)/ηb` alone, and the Powell-Hestenes update
+relaxes it at `1 - γ_eff/ηb` per pass — `O(1e-10)` for a stiff `ηb = Kb·dt` against a soft
+phase, which pins `RP` at its initial level. Solving that one scalar equation directly costs two
+reductions.
+
+A no-op in the incompressible limit, where the mode is a true null space of the whole system, and
+consistent under any boundary conditions: `δ → 0` as `RP → 0`.
+"""
+function relax_volumetric_mode!(P, RP, ηb)
+    compliance = sum_mpi(volumetric_compliance, ηb)
+    iszero(compliance) && return nothing
+    δ = sum_mpi(RP) / compliance
+    @. P += δ
+    return nothing
+end
+
+"""
+    relax_volumetric_mode!(P, RP, ηb, mask)
+
+Reduced-space counterpart of [`relax_volumetric_mode!`](@ref). The scalar compatibility
+correction is assembled from the retained pressure equations and applied only to those pressure
+unknowns. Applying it to an eliminated cut-cell pressure would undo the reduced-space
+projection; such a cell can still have positive center volume even though its coupled velocity
+or viscous-stress stencil makes its pressure degree of freedom invalid.
+"""
+function relax_volumetric_mode!(P, RP, ηb, mask)
+    compliance = sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
+    iszero(compliance) && return nothing
+    δ = sum_mpi((RPᵢ, valid) -> valid ? RPᵢ : zero(RPᵢ), RP, mask) / compliance
+    @. P += ifelse(mask, δ, zero(δ))
+    return nothing
+end
+
+# Extrema over the entries `mask` marks valid, without materializing the selection. Masked-out
+# entries take the neutral element from the value itself, which keeps `eltype(A)` (a non-isbits
+# `Type`) out of the device closure. `Array` gets both bounds in one traversal; every other array
+# type — GPU arrays among them — takes one whole-array reduction per bound, so that the reducers
+# stay `min` and `max`, for which a device backend knows the neutral element.
+@inline function masked_extrema(mask, A::Array)
+    lo, hi = typemax(eltype(A)), typemin(eltype(A))
+    for I in eachindex(mask, A)
+        if mask[I]
+            a = A[I]
+            lo, hi = min(lo, a), max(hi, a)
+        end
+    end
+    return lo, hi
+end
+@inline function masked_extrema(mask, A)
+    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    return lo, hi
+end
+
+# An empty mask gives zero, which `nonzero_span` then turns into the unnormalized fallback.
+@inline function masked_value_span(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? hi - lo : zero(eltype(A))
+end
+
+# As above, floored by the largest magnitude — the velocity scale. A near-uniform flow has a
+# vanishing span while the round-off in `RP` still scales with |V|, which pins `errPt`.
+@inline function masked_value_scale(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? max(hi - lo, abs(hi), abs(lo)) : zero(eltype(A))
+end
+
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
@@ -371,9 +496,20 @@ end
 function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
 
-    numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
-    denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
+    numerator = sum(ntuple(d -> sum_mpi((dv, r, r0) -> dv * (r - r0), fields.dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi(abs2, fields.dV[d]), Val(N)))
     return abs(numerator) / denominator
+end
+
+# Reduced-space Rayleigh quotient used by variational DYREL. The masks and arrays are
+# deliberately passed as equally-shaped views: eliminated cut-cell and boundary rows must not
+# influence the damping estimate for the active velocity operator.
+@inline rayleigh_quotient(numerator, denominator) = iszero(denominator) ? zero(denominator) : abs(numerator) / denominator
+
+function masked_λminV(dV::NTuple{N}, residuals::NTuple{N}, residuals0::NTuple{N}, masks::NTuple{N}) where {N}
+    numerator = sum(ntuple(d -> sum_mpi((m, dv, r, r0) -> m ? dv * (r - r0) : zero(dv), masks[d], dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(N)))
+    return rayleigh_quotient(numerator, denominator)
 end
 
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})

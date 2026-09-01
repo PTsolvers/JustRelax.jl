@@ -179,7 +179,7 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "FreeSurfacePlume"
+    figdir = "FreeSurfacePlume_VS"
     take(figdir)
 
     # Time loop
@@ -267,7 +267,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n = 64
+n = 128
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

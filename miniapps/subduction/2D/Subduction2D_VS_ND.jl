@@ -90,7 +90,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
@@ -309,18 +309,26 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    τII = ustrip(dimensionalize(Array(stokes.τ.II), Pa, CharDim)),
-                    εII = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
-                )
+                        stress_xy = ustrip(dimensionalize(Array(stokes.τ.xy), Pa, CharDim)),
+                        strain_rate_xy = ustrip(dimensionalize(Array(stokes.ε.xy), s^-1, CharDim)),
+                        phase_vertices = [argmax(p) for p in Array(phase_ratios.vertex)],
+                    )
                 data_c = (;
                     P = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
                     T = ustrip(dimensionalize(Array(T_buffer), C, CharDim)),
-                    η_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
-                    η = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
+                    viscosity_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
+                    viscosity = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
+                    phases = [argmax(p) for p in Array(phase_ratios.center)],
+                    Melt_fraction = Array(ϕ_m),
+                    EII_pl = Array(stokes.EII_pl),
+                    stress_II = ustrip(dimensionalize(Array(stokes.τ.II),Pa, CharDim)),
+                    strain_rate_II = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
+                    plastic_strain_rate_II = ustrip(dimensionalize(Array(stokes.ε_pl.II),s^-1, CharDim)),
+                    density = ustrip(dimensionalize(Array(ρg[2]), kg / m^2 / s^2, CharDim)) ./ 9.81,
                 )
                 velocity_v = (
-                    ustrip(dimensionalize(Array(Vx_v), m / s, CharDim)),
-                    ustrip(dimensionalize(Array(Vy_v), m / s, CharDim)),
+                    ustrip(dimensionalize(Array(Vx_v), cm / yr, CharDim)),
+                    ustrip(dimensionalize(Array(Vy_v), cm / yr, CharDim)),
                 )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
@@ -329,7 +337,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     data_v,
                     data_c,
                     velocity_v;
-                    t = t
+                    t = round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3),
+                    pvd = joinpath(vtk_dir, "Subduction2D_VS")
                 )
             end
 
@@ -388,7 +397,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D_VS"
-n = 64
+n = 128
 nx, ny = n * 2, n
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

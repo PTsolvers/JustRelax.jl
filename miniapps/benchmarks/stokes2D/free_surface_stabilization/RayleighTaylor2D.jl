@@ -1,36 +1,39 @@
-const isCUDA = false
-# const isCUDA = true
-
-@static if isCUDA
-    using CUDA
-end
-
+using CUDA
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
+const backend_JR = CUDABackend
+# const backend_JR = CPUBackend
 
-const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-end
+using JustPIC, JustPIC._2D
+const backend = CUDABackend
+# const backend = JustPIC.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-
-@static if isCUDA
-    @init_parallel_stencil(CUDA, Float64, 2)
-else
-    @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-end
+@init_parallel_stencil(CUDA, Float64, 2)
 
 # Load script dependencies
-using GeoParams, CairoMakie
+using LinearAlgebra, GeoParams, CairoMakie
+
+# Velocity helper grids for the particle advection
+function copyinn_x!(A, B)
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+    return @parallel f_x(A, B)
+end
+
+import ParallelStencil.INDICES
+const idx_j = INDICES[2]
+macro all_j(A)
+    return esc(:($A[$idx_j]))
+end
+
+# Initial pressure profile - not accurate
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
+    return nothing
+end
 
 function init_phases!(phases, particles, A)
     ni = size(phases)
@@ -117,7 +120,7 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -125,27 +128,32 @@ function main(igg, nx, ny)
 
     # Elliptical temperature anomaly
     A = 5.0e3    # Amplitude of the anomaly
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, A)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, air_phase)
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-4, Re = 6.0e0, r = 0.7, CFL = 0.98 / √2.1)
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-4, Re = 3.0e0, r = 0.7, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend, ni)
+    thermal = ThermalArrays(backend_JR, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -163,32 +171,43 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
-    dt_max = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = 50.0e3 * (3600 * 24 * 365.25)
 
+    _di = inv.(di)
+    (; ϵ_rel, r, θ_dτ, ηdτ) = pt_stokes
+    (; η, η_vep) = stokes.viscosity
+    ni = size(stokes.P)
+    iterMax = 15.0e3
+    nout = 1.0e3
+    viscosity_cutoff = (-Inf, Inf)
+    free_surface = false
+    ητ = @zeros(ni...)
     while it < 1000
 
-        # Use one physical timestep for stabilization, advection, and elapsed time.
-        dt = compute_dt(stokes, di, dt_max)
-
+        ## variational solver
         # Stokes solver ----------------
-        solve!(
+        solve_VariationalStokes!(
             stokes,
             pt_stokes,
             grid,
             flow_bcs,
             ρg,
             phase_ratios,
+            ϕ,
             rheology,
             args,
             dt,
             igg;
-            kwargs = (;
+            kwargs = (
                 iterMax = 50.0e3,
-                nout = 1.0e3,
+                iterMin = 1.0e3,
+                viscosity_relaxation = 1.0e-2,
+                nout = 2.0e3,
                 viscosity_cutoff = (-Inf, Inf),
-                free_surface = true,
+                air_phase = air_phase,
             )
         )
+        dt = compute_dt(stokes, di, dt_max)
         # ------------------------------
 
         # Advection --------------------
@@ -200,6 +219,7 @@ function main(igg, nx, ny)
         inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+        update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1
         t += dt

@@ -23,7 +23,7 @@ end
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend = @static if isCUDA
+const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -37,15 +37,17 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # The material parameters are defined in
 # [`Blankenbach_Rheology.jl`](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl).
@@ -71,7 +73,7 @@ end
 
     dTdZ = (1273 - 273) / 1000.0e3
     offset = 273.0e0
-    T[i + 1, j + 1] = (depth) * dTdZ + offset
+    T[i, j + 1] = (depth) * dTdZ + offset
     return nothing
 end
 
@@ -101,7 +103,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     ni = nx, ny               # number of cells
     li = lx, ly               # domain length in x- and y-
     di = @. li / ni           # grid step in x- and -y
-    origin = 0.0, -ly             # origin coordinates
+    origin = 0.0, -ly         # origin coordinates
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
     # ----------------------------------------------------
@@ -123,13 +125,13 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # particle phases to the staggered grid.
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
@@ -151,7 +153,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     Tbot = thermal.T[1, 1]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
-        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+        constant_value = (left = true, right = true, top = Ttop, bot = Tbot),
     )
     # The perturbation is centered at 600 km depth and spans 200 km in each
     # direction despite the helper's historical `rectangular` name.
@@ -182,7 +184,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
 
     # Allocate pseudo-transient coefficients for thermal diffusion.
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
     )
 
     # Use free-slip velocity boundaries and synchronize the velocity halos.
@@ -242,6 +244,52 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
     # Buffer arrays to compute velocity rms
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
+
+    # Stokes solver ----------------
+    solve!(
+        stokes,
+        pt_stokes,
+        grid,
+        flow_bcs,
+        ρg,
+        phase_ratios,
+        rheology,
+        args,
+        Inf,
+        igg;
+        kwargs = (;
+            iterMax = 150.0e3,
+            nout = 200,
+            viscosity_cutoff = (-Inf, Inf),
+            verbose = true,
+        )
+    )
+    # ------------------------------
+
+    # Thermal solver ---------------
+    heatdiffusion_PT!(
+        thermal,
+        pt_thermal,
+        thermal_bc,
+        rheology,
+        args,
+        dt,
+        grid;
+        kwargs = (;
+            igg = igg,
+            phase = phase_ratios,
+            iterMax = 10.0e3,
+            nout = 1.0e2,
+            verbose = true,
+        )
+    )
+    subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+    )
+    centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+    subgrid_diffusion_centroid!(
+        pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+    )
 
     while it ≤ nit
         @show it
@@ -305,7 +353,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 

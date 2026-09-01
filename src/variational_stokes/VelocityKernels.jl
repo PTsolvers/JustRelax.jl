@@ -1,3 +1,5 @@
+@inline fssa_pt_denominator(ητ, ηdτ, S) = ητ + ηdτ * abs(S)
+
 """
     compute_∇V!(∇V, V, ϕ, _di)
 

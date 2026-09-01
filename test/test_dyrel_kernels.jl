@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test, LinearAlgebra
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -41,6 +41,97 @@ end
 @parallel_indices (i, j) function _init_single_phase!(phases)
     @index phases[1, i, j] = 1.0
     return nothing
+end
+
+# Allocation probes for the host reductions, called from function scope: a tuple returned to
+# top-level scope is boxed there on some Julia versions, which measures the caller rather than
+# the reduction.
+noninf_stats_allocated(A) = @allocated JR2K.noninf_stats(A)
+masked_extrema_allocated(mask, A) = @allocated JR2K.masked_extrema(mask, A)
+
+# Assemble the reduced variational velocity Jacobian by applying the actual matrix-free DYREL
+# kernels to unit velocity vectors. This is intentionally tiny: it catches mask/operator/
+# Gershgorin disagreements without maintaining a second hand-written stencil.
+function reduced_velocity_matrix(phi_case, ni = (4, 4); cut_fraction = 0.35)
+    grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1, Density = ConstantDensity(; ρ = 0.0), Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+        ),
+    )
+    phase_ratios = PhaseRatios(backend_JP, 1, ni)
+    @parallel (@idx ni) _init_single_phase!(phase_ratios.center)
+    @parallel (@idx ni .+ 1) _init_single_phase!(phase_ratios.vertex)
+
+    ϕ = RockRatio(backend_JR, ni)
+    for a in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
+        a .= 1
+    end
+    if phi_case == :cut
+        cut_j = ni[2] ÷ 2 + 1
+        ϕ.center[:, cut_j] .= cut_fraction
+        ϕ.center[:, (cut_j + 1):end] .= 0
+        ϕ.vertex[:, cut_j + 1] .= cut_fraction
+        ϕ.vertex[:, (cut_j + 2):end] .= 0
+        ϕ.Vx[:, cut_j] .= cut_fraction
+        ϕ.Vx[:, (cut_j + 1):end] .= 0
+        ϕ.Vy[:, cut_j + 1] .= cut_fraction
+        ϕ.Vy[:, (cut_j + 2):end] .= 0
+    end
+
+    stokes = StokesArrays(backend_JR, ni)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = 1.0)
+    compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, (-Inf, Inf); air_phase = 0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, ϕ, grid.di, 1.0; γfact = 20.0)
+    gersh_D = Array(dyrel.Dx), Array(dyrel.Dy)
+    gersh_bounds = Array(dyrel.λmaxVx), Array(dyrel.λmaxVy)
+    ρg = @zeros(ni...), @zeros(ni...)
+    θc = dyrel.P_num
+
+    # The reduced space is whatever the kernels solve on, so the degrees of freedom have to be
+    # enumerated with the solver's own face predicate: a face carrying rock is still eliminated
+    # when its stencil reaches a void cell or vertex.
+    maskV = (
+        [JR2K.isvalid_vx_strict(ϕ, i + 1, j) for i in axes(stokes.R.Rx, 1), j in axes(stokes.R.Rx, 2)],
+        [JR2K.isvalid_vy_strict(ϕ, i, j + 1) for i in axes(stokes.R.Ry, 1), j in axes(stokes.R.Ry, 2)],
+    )
+    dofs = [(d, I) for d in 1:2 for I in CartesianIndices(maskV[d]) if maskV[d][I]]
+    A = zeros(length(dofs), length(dofs))
+
+    for column in eachindex(dofs)
+        stokes.V.Vx .= 0
+        stokes.V.Vy .= 0
+        d, I = dofs[column]
+        (d == 1 ? stokes.V.Vx : stokes.V.Vy)[I[1] + 1, I[2] + 1] = 1
+        stokes.P .= 0
+        stokes.P0 .= 0
+        stokes.Q .= 0
+        stokes.ΔPψ .= 0
+        stokes.λ .= 0
+        stokes.λv .= 0
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, grid._di, ni, 1.0, args, true)
+        JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, 1.0)
+        @. θc = dyrel.γ_eff * stokes.R.RP
+        dyrel.Dx .= 1
+        dyrel.Dy .= 1
+        dyrel.αVx .= 0
+        dyrel.αVy .= 0
+        dyrel.βVx .= 0
+        dyrel.βVy .= 0
+        dyrel.dτVx .= 0
+        dyrel.dτVy .= 0
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ, stokes.P, θc, stokes.τ.xx, stokes.τ.yy,
+            stokes.τ.xy, ρg..., dyrel.Dx, dyrel.Dy, dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy, dyrel.dτVx, dyrel.dτVy, ϕ,
+            grid._di.center, grid._di.vertex, 0.0,
+        )
+        R = Array(stokes.R.Rx), Array(stokes.R.Ry)
+        A[:, column] .= [-R[d][I] for (d, I) in dofs]
+    end
+    return A, dofs, gersh_D, gersh_bounds
 end
 
 @testset "DYREL kernels" begin
@@ -91,36 +182,6 @@ end
         @test all(Array(stokes.ε.xx) .≈ a - div / 3)
         @test all(Array(stokes.ε.yy) .≈ b - div / 3)
         @test all(abs.(Array(stokes.ε.xy)) .< 1.0e-12)
-    end
-
-    @testset "standard APT free-surface pseudo-time" begin
-        nx, ny = 5, 4
-        ni = nx, ny
-        grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
-        stokes = StokesArrays(backend_JR, ni)
-        stokes.V.Vy .= 1.0
-        ρgx = @zeros(ni...)
-        ρgy = PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
-        ητ = @ones(ni...) .* 2.0
-        ηdτ = 0.5
-        dt = 0.25
-        i, j = 2, 2
-        Vy_old = Array(stokes.V.Vy)[i + 1, j + 1]
-
-        @parallel (@idx ni) JR2K.compute_V!(
-            stokes.V.Vx, stokes.V.Vy, stokes.P,
-            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
-            ηdτ, ρgx, ρgy, ητ,
-            grid._di.center, grid._di.vertex, dt,
-        )
-
-        _dy = grid._di.center[2]
-        ρgy_host = Array(ρgy)
-        ρg_S, ρg_N = ρgy_host[i, j], ρgy_host[i, j + 1]
-        c_fs = JustRelax2D.free_surface_diagonal(ρg_S, ρg_N, _dy, dt)
-        residual = -JustRelax2D._av_ya(ρgy_host, i, j) - c_fs * Vy_old
-        expected = Vy_old + residual * JustRelax2D.free_surface_pseudotime(ηdτ, 2.0, c_fs)
-        @test Array(stokes.V.Vy)[i + 1, j + 1] ≈ expected
     end
 
     # ------------------------------------------------------------------ #
@@ -188,9 +249,10 @@ end
         # --- Powell-Hestenes velocity residual (no D division: safe) ---
         ρg = @zeros(ni...), @zeros(ni...)
         @parallel (@idx ni) JR2K.compute_PH_residual_V!(
-            stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-            _di.center, _di.vertex,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))
@@ -214,47 +276,257 @@ end
             dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
-            _di.center, _di.vertex,
-            0.0,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
         @test Array(stokes.V.Vy) == Array(Vy_before)
+    end
 
-        # The stabilized residual adds Vy*dt*∂y(ρg), using the same local
-        # density-gradient coefficient included in the DYREL diagonal.
-        ρg[2] .= PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
-        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
-            stokes.R.Rx, stokes.R.Ry,
-            stokes.V.Vx, stokes.V.Vy,
-            dyrel.dVxdτ, dyrel.dVydτ,
-            stokes.P, θc,
-            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
-            ρg...,
-            dyrel.Dx, dyrel.Dy,
-            dyrel.αVx, dyrel.αVy,
-            dyrel.βVx, dyrel.βVy,
-            dyrel.dτVx, dyrel.dτVy,
-            _di.center, _di.vertex,
-            0.0,
+    @testset "masked stencil ϕ=0 guard" begin
+        # A fully-masked neighbor (ϕ == 0) must contribute exactly 0 even when its stored value is
+        # non-finite — air cells hold τ = Inf under an unbounded viscosity cutoff — so `Inf * 0 =
+        # NaN` cannot leak into a valid cell's residual stencil. A non-masked neighbor (ϕ != 0)
+        # still propagates a non-finite value, preserving fail-fast for genuine interior NaNs.
+        A = fill(Inf, 3, 3)
+        ϕ0 = zeros(3, 3)
+        ϕ1 = ones(3, 3)
+        for f in (JR2K.center, JR2K.front, JR2K.right, JR2K.next)
+            @test f(A, ϕ0, 1, 1) == 0.0
+            @test !isfinite(f(A, ϕ1, 1, 1))
+        end
+        # a partially-valid neighbor (ϕ != 0) at a non-finite cell must NOT be silenced
+        Ap = ones(3, 3); Ap[1, 1] = Inf
+        @test !isfinite(JR2K.center(Ap, fill(0.5, 3, 3), 1, 1))
+    end
+
+    @testset "reduced pressure mask" begin
+        if backend_JR === CPUBackend
+            ϕ = RockRatio(backend_JR, (3, 3))
+            for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
+                A .= 1
+            end
+            # A pressure constraint must be removed with any velocity face its divergence reads,
+            # otherwise the pressure and velocity reduced spaces are incompatible.
+            ϕ.Vy[2, 3] = 0
+            maskP = ϕ.center .> 0
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test !Array(maskP)[2, 2]
+            ϕ.Vy[2, 3] = 1
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test Array(maskP)[2, 2]
+            @test Array(maskP)[1, 1]
+
+            maskV = (ϕ.Vx[2:(end - 1), :] .> 0, ϕ.Vy[:, 2:(end - 1)] .> 0)
+            ϕ.vertex[2, 2] = 0
+            @parallel (@idx size(maskP)) JR2K.update_valid_v_masks!(maskV..., ϕ)
+            @test !Array(maskV[1])[1, 1]
+            @test !Array(maskV[2])[1, 1]
+            @parallel (@idx size(maskP)) JR2K.update_valid_c_mask!(maskP, ϕ)
+            @test !Array(maskP)[1, 1]
+            @test !Array(maskP)[2, 2]
+
+            # Carried state is projected whenever the marker-chain mask changes. Pressure-like
+            # fields and eliminated interior velocities must not retain values from the old
+            # reduced operator.
+            P = fill(2.0, 3, 3); P0 = fill(3.0, 3, 3)
+            ΔPψ = fill(4.0, 3, 3); λ = fill(5.0, 3, 3)
+            Vx = fill(6.0, 4, 5); Vy = fill(7.0, 5, 4)
+            ϕ.center[2, 2] = 0
+            @parallel (@idx size(maskP)) JR2K.project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ)
+            @test (P[2, 2], P0[2, 2], ΔPψ[2, 2], λ[2, 2]) == (0.0, 0.0, 0.0, 0.0)
+            @test Vx[2, 2] == 0.0
+            @test Vy[2, 2] == 0.0
+
+            # The uniform compressibility correction must not repopulate an eliminated
+            # pressure sample whose center fraction is positive but whose stencil is invalid.
+            P .= 0; P0 .= 0
+            RP = fill(1.0, 3, 3); ηb = fill(2.0, 3, 3)
+            maskP .= true; maskP[2, 2] = false
+            JustRelax.MPI.Initialized() || JustRelax.MPI.Init()
+            JR2K.relax_volumetric_mode!(P, RP, ηb, maskP)
+            @test P[2, 2] == 0.0
+            @test all(P[maskP] .== 2.0)
+        end
+    end
+
+    # ------------------------------------------------------------------ #
+    # FSSA (free-surface stabilization) helpers added to the DYREL
+    # preconditioner/penalty pipeline (Gershgorin.jl, constructors.jl,
+    # solver.jl, velocity_kernels_VS.jl).
+    # ------------------------------------------------------------------ #
+    @testset "fssa_diagonal_y" begin
+        ρgy = reshape(collect(1.0:12.0), 3, 4)  # nx=3, ny=4
+        _dy = 2.0
+        dt = 0.5
+        i, j = 2, 2
+
+        # no buoyancy field ⇒ exact zero, independent of everything else
+        @test JR2K.fssa_diagonal_y(nothing, i, j, _dy, dt) == false
+
+        # last row: no north neighbour ⇒ exact zero
+        @test JR2K.fssa_diagonal_y(ρgy, i, size(ρgy, 2), _dy, dt) == 0.0
+
+        # interior, unmasked: matches the plain finite difference
+        expected = JR2K._d_ya(ρgy, _dy, i, j) * dt
+        @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt) ≈ expected
+
+        # interior, ϕ-masked: matches the masked finite difference through ϕ.center. Host arrays
+        # throughout: `fssa_diagonal_y` is called directly, outside any kernel.
+        ϕ = JustRelax.JustRelax2D.RockRatio(CPUBackend, (3, 4))
+        ϕ.center .= reshape(collect(0.1:0.1:1.2), 3, 4)
+        expected_ϕ = JR2K._d_ya(ρgy, ϕ.center, _dy, i, j) * dt
+        @test JR2K.fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ) ≈ expected_ϕ
+    end
+
+    @testset "set_preconditioner!" begin
+        D = zeros(2, 2)
+        λmax = zeros(2, 2)
+
+        JR2K.set_preconditioner!(D, λmax, 4.0, 8.0, 1, 1)
+        @test D[1, 1] == 4.0
+        @test λmax[1, 1] == 2.0  # inv(4.0) * 8.0
+
+        # non-positive diagonal (degenerate mask-boundary cell) falls back to 1/1,
+        # matching the pre-existing invalid-cell branch
+        JR2K.set_preconditioner!(D, λmax, -1.0, 8.0, 2, 1)
+        @test D[2, 1] == 1.0 && λmax[2, 1] == 1.0
+        JR2K.set_preconditioner!(D, λmax, 0.0, 8.0, 1, 2)
+        @test D[1, 2] == 1.0 && λmax[1, 2] == 1.0
+    end
+
+    @testset "ϕ_weighted_harmonic" begin
+        # G·dt > 0: viscoelastic harmonic combine, as before the fix
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, 4.0, 0.5) ≈ 1.0
+
+        # ϕ == 0 ⇒ exact zero regardless of η, G, dt
+        @test JR2K.ϕ_weighted_harmonic(0.0, 2.0, 4.0, 0.5) == 0.0
+
+        # G == Inf (no elasticity) ⇒ same elastic-free combine ϕ·η as before the fix
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, Inf, 0.5) ≈ 2.0
+
+        # G == 0 or NaN (degenerate modulus): falls back to ϕ·η instead of a naive
+        # inv(G*dt) poisoning the row with Inf/NaN
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, 0.0, 0.5) ≈ 2.0
+        @test JR2K.ϕ_weighted_harmonic(1.0, 2.0, NaN, 0.5) ≈ 2.0
+    end
+
+    @testset "noninf_mean" begin
+        stats_input = [1.0, 2.0, Inf, 3.0]
+        noninf_stats_allocated(stats_input) # compile before measuring
+        @test noninf_stats_allocated(stats_input) == 0
+        @test JR2K.noninf_mean([1.0, 2.0, Inf, 3.0]) ≈ 2.0
+        @test isnan(JR2K.noninf_mean([1.0, NaN, 3.0]))  # NaN must propagate, not be filtered
+        @test_throws ArgumentError JR2K.noninf_mean([Inf, Inf])
+    end
+
+    @testset "fssa_penalty_floor" begin
+        di_center = (0.1, 0.2)
+        dt = 0.5
+        ρg_v = reshape(collect(1.0:12.0), 3, 4)  # constant column-to-column step of 3
+
+        @test JR2K.fssa_penalty_floor(nothing, di_center, dt, 2, 2) == false
+
+        for j in 1:4
+            @test JR2K.fssa_penalty_floor(ρg_v, di_center, dt, 2, j) ≈ 3.0 * dt * di_center[2] / 2
+        end
+    end
+
+    @testset "value_span / nonzero_span / masked_value_span" begin
+        @test JR2K.value_span([1.0, 5.0, 3.0]) == 4.0
+        @test JR2K.value_span([2.0, 2.0]) == 0.0
+        @test JR2K.value_scale([-5.0, -4.0]) == 5.0
+        @test JR2K.value_scale([1.0, 5.0, 3.0]) == 5.0
+        @test JR2K.nonzero_span(0.0) == 1.0
+        @test JR2K.nonzero_span(4.0) == 4.0
+
+        mask = [true, false, true, true]
+        A = [1.0, 100.0, 5.0, 2.0]
+        masked_extrema_allocated(mask, A) # compile before measuring
+        @test masked_extrema_allocated(mask, A) == 0
+        @test JR2K.masked_value_span(mask, A) == 4.0  # span over {1.0, 5.0, 2.0}
+        @test JR2K.masked_value_scale(mask, A) == 5.0
+        @test JR2K.masked_value_span([false, false], [1.0, 2.0]) == 0.0  # empty mask ⇒ 0
+    end
+
+    @testset "Rayleigh quotient guard" begin
+        @test JR2K.rayleigh_quotient(-6.0, 3.0) == 2.0
+        @test JR2K.rayleigh_quotient(1.0, 0.0) == 0.0
+    end
+
+    @testset "reduced variational operator" begin
+        if backend_JR === CPUBackend
+            λmin = Float64[]
+            for phi_case in (:full, :cut)
+                A, dofs, Dfields, bounds_fields = reduced_velocity_matrix(phi_case)
+                @test A ≈ A' atol = 1.0e-12
+                @test rank(A) == size(A, 1)
+                push!(λmin, minimum(eigvals(Symmetric(A))))
+
+                D = [Dfields[d][I] for (d, I) in dofs]
+                bounds = [bounds_fields[d][I] for (d, I) in dofs]
+                exact_rows = vec(sum(abs, Diagonal(inv.(D)) * A; dims = 2))
+                @test all(exact_rows .<= bounds .+ 100eps(maximum(bounds)))
+            end
+            # The cut domain is nonsingular but genuinely less well conditioned.
+            @test 0 < λmin[2] < λmin[1]
+        end
+    end
+
+    @testset "zero_nonfinite_ρg!" begin
+        ρgy = PTArray(backend_JR)([1.0 Inf NaN; -2.0 0.0 3.0])
+        @parallel (@idx size(ρgy)) JR2K.zero_nonfinite_ρg!(ρgy)
+        @test Array(ρgy) == [1.0 0.0 0.0; -2.0 0.0 3.0]
+    end
+
+    @testset "compute_bulk_viscosity_and_penalty! FSSA floor" begin
+        nx, ny = 4, 4
+        ni = nx, ny
+        li = 1.0, 1.0
+        grid = Geometry(ni, li; origin = (0.0, 0.0))
+        di = grid.di
+        dt = 1.0
+
+        el = ConstantElasticity(; G = 1.0, Kb = 5.0)
+        rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                Density = ConstantDensity(; ρ = 1.0),
+                Gravity = ConstantGravity(; g = 1.0),
+                CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), el)),
+                Elasticity = el,
+            ),
         )
-        Ry_without_fs = copy(stokes.R.Ry)
-        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
-            stokes.R.Rx, stokes.R.Ry,
-            stokes.V.Vx, stokes.V.Vy,
-            dyrel.dVxdτ, dyrel.dVydτ,
-            stokes.P, θc,
-            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
-            ρg...,
-            dyrel.Dx, dyrel.Dy,
-            dyrel.αVx, dyrel.αVy,
-            dyrel.βVx, dyrel.βVy,
-            dyrel.dτVx, dyrel.dτVy,
-            _di.center, _di.vertex,
-            0.5,
-        )
-        ∂ρg∂y = -inv(grid.di.center[2])
-        expected_correction = Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]) .* (0.5 * ∂ρg∂y)
-        @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
+        phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+        @parallel (@idx ni) _init_single_phase!(phase_ratios.center)
+        @parallel (@idx ni .+ 1) _init_single_phase!(phase_ratios.vertex)
+
+        stokes = StokesArrays(backend_JR, ni)
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+        # baseline: no buoyancy field ⇒ physical γ_eff only (existing behavior)
+        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt)
+        γ_baseline = copy(Array(dyrel.γ_eff))
+
+        # flat buoyancy ⇒ zero floor ⇒ γ_eff unchanged from the physical value
+        flat_ρg = PTArray(backend_JR)(fill(5.0, ni...))
+        JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, flat_ρg)
+        @test Array(dyrel.γ_eff) ≈ γ_baseline
+
+        # In the variational formulation γ is an algorithmic penalty on the retained RP=0
+        # constraint. The momentum gradient supplies the single cell-volume weight; γ itself
+        # must therefore remain unweighted or the augmented block would scale as ϕ².
+        ϕ = RockRatio(backend_JR, ni)
+        for A in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
+            A .= 0.5
+        end
+        JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, dyrel.γfact, dt, di.center, flat_ρg)
+        @test Array(dyrel.γ_eff) ≈ γ_baseline
+
+        # steep buoyancy gradient ⇒ the FSSA floor exceeds the physical value everywhere
+        steep_ρg = PTArray(backend_JR)([100.0 * j for i in 1:nx, j in 1:ny])
+        JR2K.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, dyrel.γfact, dt, di.center, steep_ρg)
+        @test all(Array(dyrel.γ_eff) .> γ_baseline)
     end
 end

@@ -1,4 +1,5 @@
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
+using JLD2
 
 # include plotting and error related functions
 include("vizSolCx.jl")
@@ -37,7 +38,8 @@ function solCx_density(xci, ni, di)
     y = PTArray(backend)([yci for _ in xc, yci in yc])
     ρ = PTArray(backend)(zeros(ni))
 
-    _density(x, y) = -sin(π * y) * cos(π * x)
+    # matches Stokes2D_SolCx_Zhong1996's reference density: ρ = sin(π*y)*cos(π*x)
+    _density(x, y) = sin(π * y) * cos(π * x)
 
     @parallel function density(ρ, x, y)
 
@@ -57,7 +59,7 @@ function solCx(
         ny = 64,
         lx = 1.0e0,
         ly = 1.0e0,
-        init_MPI = true,
+        init_MPI = !JustRelax.MPI.Initialized(),
         finalize_MPI = false,
         b_width = (4, 4),
     )
@@ -107,6 +109,9 @@ function solCx(
         @views η2[:, end] .= η2[:, end - 1]
         η, η2 = η2, η # swap
     end
+    # the swap leaves the last pass in a temporary that is not the stokes array;
+    # copy it back so the solve actually uses all 5 passes
+    stokes.viscosity.η .= η
 
     ## Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -148,8 +153,8 @@ function multiple_solCx(; Δη = 1.0e6, nrange::UnitRange = 6:10)
     L2_vx, L2_vy, L2_p = Float64[], Float64[], Float64[]
     for i in nrange
         nx = ny = 2^i - 1
-        geometry, stokes, = solCx(Δη; nx = nx, ny = ny, init_MPI = false, finalize_MPI = false)
-        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1)
+        geometry, stokes, = solCx(Δη; nx = nx, ny = ny, init_MPI = !JustRelax.MPI.Initialized(), finalize_MPI = false)
+        L2_vxi, L2_vyi, L2_pi = solcx_error(geometry, stokes; order = 1, Δη = Δη)
         push!(L2_vx, L2_vxi)
         push!(L2_vy, L2_vyi)
         push!(L2_p, L2_pi)
@@ -175,6 +180,8 @@ function multiple_solCx(; Δη = 1.0e6, nrange::UnitRange = 6:10)
     ax.ylabel = "L1 norm"
 
     save("SolCx_error.png", f)
+
+    jldsave(joinpath(@__DIR__, "solcx_normal_error.jld2"); h, L2_vx, L2_vy, L2_p, Δη, nrange)
 
     return f
 end

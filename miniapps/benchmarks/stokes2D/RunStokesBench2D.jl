@@ -29,7 +29,7 @@ using CairoMakie
 
 
 # choose benchmark
-benchmark = :solviel
+benchmark = :solcx
 
 # model resolution (number of gridpoints)
 nx, ny = 64, 64
@@ -39,7 +39,7 @@ finalize_MPI = false
 
 # :single for a single run model with nx, ny resolution
 # :multiple for grid sensitivity error plot
-runtype = :single
+runtype = :multiple
 
 if benchmark == :solcx
     # benchmark reference:

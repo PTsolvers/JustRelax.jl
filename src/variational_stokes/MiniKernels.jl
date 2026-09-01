@@ -1,9 +1,17 @@
 # masked versions
+# A fully-masked neighbor (ϕ == 0) lies outside the rock domain, where the stored `A` is
+# meaningless and may be non-finite (τ = Inf where an unbounded cutoff lets air η = Inf). Forcing
+# an exact zero, rather than relying on `A * 0`, stops that poisoning a valid cell's stencil via
+# `Inf * 0 = NaN`. A partially-valid neighbor passes through, so genuine non-finite values from
+# inside the domain still propagate.
 for fn in (:center, :next, :left, :right, :back, :front, :top, :bot)
     @eval begin
-        Base.@propagate_inbounds @inline ($fn)(
-            A::T, ϕ::T, inds::Vararg{Integer, N}
-        ) where {T <: AbstractArray, N} = ($fn)(A, inds...) * ($fn)(ϕ, inds...)
+        Base.@propagate_inbounds @inline function ($fn)(
+                A::T, ϕ::T, inds::Vararg{Integer, N}
+            ) where {T <: AbstractArray, N}
+            w = ($fn)(ϕ, inds...)
+            return iszero(w) ? zero(eltype(A)) : ($fn)(A, inds...) * w
+        end
     end
 end
 

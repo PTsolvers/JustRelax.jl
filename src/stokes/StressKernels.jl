@@ -980,7 +980,7 @@ end
             end
             τII[I...] = τII_ij
         end
-        η_vep[I...] = effective_viscosity(τII_ij, second_invariant(εij), ηij)
+        η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         # augmented pressure: -K dt λ dQdP  (≡ K dt λ sinψ for DP)
         Pr_c[I...] = Pr[I...] - (isinf(K) ? 0.0 : K * dt * λ[I...] * dQdP)
     end
@@ -1136,7 +1136,7 @@ end
             τII_ij
         end
         @inbounds τII[I...] = τII_ij
-        @inbounds η_vep[I...] = effective_viscosity(τII_ij, second_invariant(εij), ηij)
+        @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         @inbounds Pr_c[I...] = Pr[I...] - (isinf(K) ? 0.0 : K * dt * λ[I...] * dQdP)
     end
 
@@ -1294,7 +1294,7 @@ end
         end
 
         @inbounds τII[I...] = τII_ij
-        @inbounds η_vep[I...] = effective_viscosity(τII_ij, second_invariant(εij), ηij)
+        @inbounds η_vep[I...] = τII_ij * 0.5 * inv(second_invariant(εij))
         @inbounds Pr_c[I...] = Pr[I...] - (isinf(K) ? 0.0 : K * dt * λ[I...] * dQdP)
     end
 

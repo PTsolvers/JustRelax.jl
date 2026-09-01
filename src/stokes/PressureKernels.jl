@@ -35,7 +35,7 @@ Compute the pressure field `P` and the residual `RP` for the compressible case. 
 - `RP`: residual field
 - `∇V`: divergence of the velocity field
 - `Q`: volumetric source/sink term which should have the properties of `dV/V_tot [m³/m³]` normalized per cell, default is zero.
-- `ΔT`: temperature difference on the cell center, to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters.
+- `ΔT`: temperature difference on the cell centers, carrying one ghost node per boundary (size `ni .+ 2`), to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters.
 - `η`: viscosity field
 - `rheology`: material parameters
 - `phase_ratio`: phase field
@@ -146,7 +146,7 @@ end
     @inbounds G = fn_ratio(get_shear_modulus, rheology, phase_ratio_I)
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
     @inbounds RP[I...], P[I...] = _compute_P!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
     )
     return nothing
 end
@@ -170,7 +170,7 @@ end
     @inbounds G = fn_ratio(get_shear_modulus, rheology, @cell(phase_ratio[I...]))
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
     @inbounds RP[I...], P[I...] = _compute_P!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
     )
     return nothing
 end

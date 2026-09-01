@@ -1,0 +1,325 @@
+# const isCUDA = false
+const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC, JustPIC._2D
+# Threads is the default backend,
+# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+const backend_JP = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+# Load script dependencies
+using GeoParams
+using CairoMakie
+using Random
+
+# Velocity helper grids for the particle advection
+function copyinn_x!(A, B)
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+    return @parallel f_x(A, B)
+end
+
+import ParallelStencil.INDICES
+const idx_j = INDICES[2]
+macro all_j(A)
+    return esc(:($A[$idx_j]))
+end
+
+# Initial pressure profile - not accurate
+@parallel function init_P!(P, ρg, z)
+    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
+    return nothing
+end
+
+function init_phases!(phases, particles, A)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, A)
+
+        f(x, A, λ) = A * sin(π * x / λ)
+
+        @inbounds for ip in cellaxes(phases)
+            # quick escape
+            @index(index[ip, i, j]) == 0 && continue
+
+            x = @index px[ip, i, j]
+            depth = -(@index py[ip, i, j])
+            @index phases[ip, i, j] = 2.0
+
+            if 0.0e0 ≤ depth ≤ 100.0e3
+                @index phases[ip, i, j] = 1.0
+
+            elseif depth > (-f(x, A, 500.0e3) + (200.0e3 - A))
+                @index phases[ip, i, j] = 3.0
+
+            end
+
+        end
+        return nothing
+    end
+
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, A)
+end
+## END OF HELPER FUNCTION ------------------------------------------------------------
+
+
+## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
+function main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")
+
+    # Physical domain ------------------------------------
+    thick_air = 100.0e3             # thickness of sticky air layer
+    ly = 500.0e3 + thick_air # domain length in y
+    lx = 500.0e3             # domain length in x
+    ni = nx, ny            # number of cells
+    li = lx, ly            # domain length in x- and y-
+    di = @. li / ni        # grid step in x- and -y
+    origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    # ----------------------------------------------------
+
+    # Physical properties using GeoParams ----------------
+    rheology = rheology = (
+        # Name              = "Air",
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1.0e0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e16),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        # Name              = "Crust",
+        SetMaterialParams(;
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 3.3e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e21),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        # Name              = "Mantle",
+        SetMaterialParams(;
+            Phase = 3,
+            Density = ConstantDensity(; ρ = 3.2e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e20),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+    )
+    # ----------------------------------------------------
+
+    # Initialize particles -------------------------------
+    # particles are seeded with bare rand(); fix the seed so runs are comparable
+    Random.seed!(1234)
+    nxcell, max_xcell, min_xcell = 125, 250, 75
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    # temperature
+    pT, pPhases = init_cell_arrays(particles, Val(2))
+    particle_args = (pT, pPhases)
+
+    # Elliptical temperature anomaly
+    A = 5.0e3    # Amplitude of the anomaly
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, particles, A)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
+    # ----------------------------------------------------
+
+    # Initialize marker chain-------------------------------
+    nxcell, max_xcell, min_xcell = 100, 150, 75
+    initial_elevation = -100.0e3
+    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+    # ----------------------------------------------------
+
+    # RockRatios
+    air_phase = 1
+    ϕ = RockRatio(backend, ni)
+    compute_rock_fraction!(ϕ, chain, xvi, di)
+    grid_vxi = velocity_grids(xci, xvi, di)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
+    # ----------------------------------------------------
+
+    # TEMPERATURE PROFILE --------------------------------
+    thermal = ThermalArrays(backend, ni)
+    # ----------------------------------------------------
+
+    # Buoyancy forces & rheology
+    ρg = @zeros(ni...), @zeros(ni...)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+    # @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = false),
+        no_slip = (left = false, right = false, top = false, bot = true),
+        free_surface = false,
+    )
+
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+
+    take(figdir)
+
+    # Time loop
+    t, it = 0.0, 0
+    dt = 10.0e3 * (3600 * 24 * 365.25)
+    dt_max = 50.0e3 * (3600 * 24 * 365.25)
+
+    # dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 50)
+    dyrel = DYREL(
+        backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt;
+        CFL = 0.99, c_fact = 0.9,
+        ϵ = 1.0e-6, γfact = 120,
+    )
+
+    while it < 200#000
+
+        # Stokes solver ----------------
+        # Variational DYREL Stokes solve (ϕ positional, after phase_ratios) --
+        solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            ϕ,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                air_phase = air_phase,
+                total_iterMax = 250.0e3,
+                iterMax_PH = 50.0e3,
+                iterMax_DR = 50.0e3,
+                nout = 100,
+                rel_drop = 0.1,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1,
+                linear_viscosity = true,
+                free_surface = true,
+                verbose_PH = true,
+                verbose_DR = false,
+                viscosity_cutoff = (-Inf, Inf),
+            )
+        )
+        dt = compute_dt(stokes, di, dt_max)
+        # ------------------------------
+
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
+        # advect particles in memory
+        move_particles!(particles, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+
+        # advect marker chain
+        # JustPIC v0.6.7 applies its mean-height correction with the opposite sign. Preserve
+        # the pre-advection mean here and translate every chain representation consistently.
+        chain_mean0 = sum(chain.h_vertices) / length(chain.h_vertices)
+        semilagrangian_advection_markerchain!(
+            chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
+        )
+        chain_shift = chain_mean0 - sum(chain.h_vertices) / length(chain.h_vertices)
+        chain.h_vertices .+= chain_shift
+        chain.h_vertices0 .+= chain_shift
+        chain.coords[2].data .+= chain_shift
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        compute_rock_fraction!(ϕ, chain, xvi, di)
+
+        @show it += 1
+        t += dt
+
+        if it == 1 || rem(it, 5) == 0
+            px, py = particles.coords
+            chain_x, chain_y = chain.coords
+
+            velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            nt = 10
+            nt = 2
+            println("Plotting...")
+            # One marker per particle costs seconds per figure and dominates the time loop once
+            # the solve runs on a GPU. The phase field goes in as a heatmap of the dominant
+            # phase per cell, and only every `nskip`-th particle is drawn over it.
+            nskip = 4
+            # `.data` is laid out as (cells, slots), so the slot axis is the one to stride:
+            # striding the flattened array drops whole columns of cells and stripes the figure.
+            sub_particles(A) = vec(Array(A.data)[:, 1:nskip:end, :])
+            phase_c = Array([argmax(p) for p in Array(phase_ratios.center)])
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
+            # heatmap!(ax, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, phase_c, colormap = :grayC)
+            scatter!(
+                ax, sub_particles(px) .* 1.0e-3, sub_particles(py) .* 1.0e-3,
+                color = sub_particles(pPhases),
+                colormap = :vikO,
+                # colormap = :grayC,
+                markersize = 3,
+            )
+            scatter!(
+                ax, Array(chain_x.data[:]) .* 1.0e-3, Array(chain_y.data[:]) .* 1.0e-3,
+                color = :red,
+                markersize = 5,
+            )
+            arrows2d!(
+                ax,
+                xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
+                lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
+                color = :black,
+            )
+            fig
+            save(joinpath(figdir, "$(it).png"), fig)
+            println("... figure saved.")
+
+        end
+    end
+    return nothing
+end
+
+## END OF MAIN SCRIPT ----------------------------------------------------------------
+# (Path)/folder where output data and figures are stored
+n = 64 * 2
+nx = n
+ny = n
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+main(igg, nx, ny; figdir = "RayleighTaylor2D_DYREL_VS")

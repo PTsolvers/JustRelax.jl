@@ -135,6 +135,23 @@ function find_minmax_cell_indices(chain_yi, origin_y, di)
     return min_cell_j, max_cell_j
 end
 
+# Uniform grid: row spacing is constant, so the row containing `y` is a single division.
+@inline function locate_row_index(y, origin_y, dy::Number)
+    return Int((y - origin_y) ÷ dy) + 1
+end
+
+# Non-uniform grid: `dy` holds the per-row cell heights (row 1 starting at `origin_y`), so no
+# single spacing locates the row — walk the cumulative height. The loop must stay allocation
+# free: this runs inside a `@parallel_indices` kernel and has to compile on CUDA/AMDGPU.
+@inline function locate_row_index(y, origin_y, dy::AbstractVector)
+    acc = origin_y
+    for j in eachindex(dy)
+        acc += dy[j]
+        y <= acc && return j
+    end
+    return lastindex(dy)
+end
+
 @inline function is_above_chain(xq, yq, coords, cell_vertices)
     I = cell_index(xq, cell_vertices)
     x_cell, y_cell = coords[1][I], coords[2][I]

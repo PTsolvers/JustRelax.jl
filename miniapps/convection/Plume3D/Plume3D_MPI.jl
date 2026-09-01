@@ -150,7 +150,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
-    dt₀ = similar(stokes.P)
 
     # Buffers for the MPI gather. Each rank contributes its subdomain minus the halo,
     # so the assembled arrays are (n - 2) * dims cells wide in each direction.
@@ -244,9 +243,8 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+            subgrid_arrays, particles, subgrid_arrays.dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )

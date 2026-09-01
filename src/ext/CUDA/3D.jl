@@ -441,6 +441,7 @@ function JR3D.subgrid_characteristic_time!(
         stokes::JustRelax.StokesArrays,
     )
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -457,6 +458,7 @@ function JR3D.subgrid_characteristic_time!(
         stokes::JustRelax.StokesArrays,
     ) where {N}
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )

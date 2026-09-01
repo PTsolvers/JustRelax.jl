@@ -495,6 +495,9 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
         fig
     end
 
+    # Ghosted grid field used to compute and interpolate the characteristic time.
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     local Vx_v, Vy_v
@@ -613,12 +616,13 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
                 verbose = true,
             )
         )
-        subgrid_characteristic_time!(subgrid_arrays, particles, subgrid_arrays.dt₀, phase_ratios, rheology, thermal, stokes)
-        # Populate the ghost cells after computing the physical characteristic times.
-        @views subgrid_arrays.dt₀[1, :] .= subgrid_arrays.dt₀[2, :]
-        @views subgrid_arrays.dt₀[end, :] .= subgrid_arrays.dt₀[end - 1, :]
-        @views subgrid_arrays.dt₀[:, 1] .= subgrid_arrays.dt₀[:, 2]
-        @views subgrid_arrays.dt₀[:, end] .= subgrid_arrays.dt₀[:, end - 1]
+        subgrid_characteristic_time!(subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes)
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
@@ -978,7 +982,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
 end
 
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 256
+n  = 64
 ar = 1
 nx = n * ar
 ny = n

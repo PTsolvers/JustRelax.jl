@@ -299,6 +299,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     # τxx_v = @zeros(ni .+ 1...)
     # τyy_v = @zeros(ni .+ 1...)
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     interval = 0
@@ -369,8 +371,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         thermal.ΔT .= thermal.T .- thermal.Told
 
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, subgrid_arrays.dt₀, phase_ratios, rheology, thermal, stokes
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )

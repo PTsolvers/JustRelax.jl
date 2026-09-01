@@ -49,14 +49,14 @@ end
     )
     # Temperature carries ghost cells, whereas pressure is physical-sized.
     # Index them explicitly so this remains device-compatible for GPU arrays.
-    argsᵢ = (; T = T[I .+ 1...], P = P[I...])
+    argsᵢ = (; T = T[(I .+ 1)...], P = P[I...])
     phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell
     ρCp = compute_ρCp(rheology, phaseᵢ, argsᵢ)
     K = compute_conductivity(rheology, phaseᵢ, argsᵢ)
     sum_dxi = mapreduce(x -> inv(x)^2, +, @dxi(di, I...))
-    dt₀[I .+ 1...] = ρCp / (2 * K * sum_dxi)
+    dt₀[(I .+ 1)...] = ρCp / (2 * K * sum_dxi)
 
     return nothing
 end

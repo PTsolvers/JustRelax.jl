@@ -1,7 +1,7 @@
 # Load script dependencies
 using GeoParams, CairoMakie
 
-const isCUDA = true
+const isCUDA = false
 
 @static if isCUDA
     using CUDA
@@ -145,7 +145,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Time loop
     t, it = 0.0, 0
     t_max = nondimensionalize(10 * Myr, CharDim)
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 20.0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, CFL = 0.99, γfact = 80.0)
     while t < t_max
 
         # # interpolate fields from particles to centroids
@@ -171,7 +171,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,
-                nout = 100,
+                nout = 10,
                 rel_drop = 1.0e-2,
                 λ_relaxation_PH = 1,
                 λ_relaxation_DR = 1,

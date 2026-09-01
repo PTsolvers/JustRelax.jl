@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
 include("Blankenbach_Rheology.jl")

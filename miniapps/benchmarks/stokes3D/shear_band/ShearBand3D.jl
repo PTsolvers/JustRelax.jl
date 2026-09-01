@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using Printf, GeoParams, CairoMakie, CellArrays
+using Printf, GeoParams, CairoMakie
 
 
 # HELPER FUNCTIONS ---------------------------------------------------------------

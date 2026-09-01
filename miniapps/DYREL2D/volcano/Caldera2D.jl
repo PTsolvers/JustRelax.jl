@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays, Statistics, Dates, JLD2
+using GeoParams, GLMakie, Statistics, Dates, JLD2
 
 # Load file with all the rheology configurations
 include("Caldera_setup.jl")

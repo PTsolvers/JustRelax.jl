@@ -433,8 +433,8 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDABackend},
+        dt₀,
         phases::JustPIC.PhaseRatios,
         rheology,
         thermal::JustRelax.ThermalArrays,
@@ -450,8 +450,8 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDABackend},
+        dt₀,
         phases::AbstractArray{Int, N},
         rheology,
         thermal::JustRelax.ThermalArrays,

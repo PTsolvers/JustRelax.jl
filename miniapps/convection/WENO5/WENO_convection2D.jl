@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions
 
 # Load file with all the rheology configurations
 include("Layered_rheology.jl")

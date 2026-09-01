@@ -298,6 +298,14 @@ solve_VariationalStokes!(
 )
 ```
 
+The same weighted operator is available with dynamic relaxation in 2D. Build
+`DYREL` with the `RockRatio` and call `solve_VariationalDYREL!`; see
+[DYREL](./DYREL.md#2d-variational-dyrel). The variational DYREL path reuses the
+center, vertex, and face weights described here and is currently 2D-only.
+
+Options may be given either as the plain keywords above or bundled as a single
+`kwargs = (; ...)` NamedTuple.
+
 For a marker-chain free surface, `air_phase` must identify the phase removed
 from liquid material averages. Omitting it preserves API compatibility but does
 not produce the intended air/liquid buoyancy or viscosity weighting.

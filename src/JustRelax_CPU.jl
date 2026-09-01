@@ -40,7 +40,8 @@ module JustRelax2D
     export solve!
 
     include("DYREL/solver.jl")
-    export solve_DYREL!, DYREL
+    include("DYREL/solver_VS.jl")
+    export solve_DYREL!, solve_VariationalDYREL!, DYREL
 
     include("variational_stokes/Stokes2D.jl")
     export solve_VariationalStokes!

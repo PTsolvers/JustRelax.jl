@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
     using AMDGPU
 
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor

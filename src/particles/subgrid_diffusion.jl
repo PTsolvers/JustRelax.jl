@@ -6,7 +6,8 @@
 Compute, per cell, the characteristic thermal diffusion timescale `dt₀ = ρCp / (2 K Σ dxi⁻²)`
 used for JustPIC's subgrid-diffusion correction of particle temperature, evaluating
 `rheology`'s density/heat-capacity/conductivity at the local phase (from `phases`, either a
-`JustPIC.PhaseRatios` or an integer phase-id array) and temperature/pressure.
+`JustPIC.PhaseRatios` or an integer phase-id array) and temperature/pressure. `dt₀` must be
+ghosted, with size `size(stokes.P) .+ 2`; values are written to its interior region.
 """
 function subgrid_characteristic_time!(
         subgrid_arrays,
@@ -18,6 +19,7 @@ function subgrid_characteristic_time!(
         stokes::JustRelax.StokesArrays,
     )
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -35,6 +37,7 @@ function subgrid_characteristic_time!(
         di,
     ) where {N}
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.T, stokes.P, di
     )
@@ -44,14 +47,16 @@ end
 @parallel_indices (I...) function subgrid_characteristic_time!(
         dt₀, phase_ratios, rheology, T, P, di
     )
-    argsᵢ = getindex_NamedTuple((; T, P), I...)
+    # Temperature carries ghost cells, whereas pressure is physical-sized.
+    # Index them explicitly so this remains device-compatible for GPU arrays.
+    argsᵢ = (; T = T[(I .+ 1)...], P = P[I...])
     phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell
     ρCp = compute_ρCp(rheology, phaseᵢ, argsᵢ)
     K = compute_conductivity(rheology, phaseᵢ, argsᵢ)
     sum_dxi = mapreduce(x -> inv(x)^2, +, @dxi(di, I...))
-    dt₀[I...] = ρCp / (2 * K * sum_dxi)
+    dt₀[(I .+ 1)...] = ρCp / (2 * K * sum_dxi)
 
     return nothing
 end

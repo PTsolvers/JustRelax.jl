@@ -33,14 +33,74 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
+
+Options may be passed either as plain keywords or bundled as a single
+`kwargs = (; ...)` NamedTuple.
 """
-function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
-    return out
+function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    return solve_DYREL!(backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs))
 end
 
 # entry point for extensions
 solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes, args...; kwargs...)
+
+"""
+    solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+        rheology, args, grid, dt, igg; kwargs...)
+
+Solve the 2D variational Stokes problem with DYREL relaxation and the
+`RockRatio` volume weights. This is a separate entry point from
+`solve_DYREL!`; the latter remains the standard, unweighted DYREL solver.
+
+Center fractions weight pressure and normal stress, vertex fractions weight
+shear stress, and face fractions weight momentum rows. Rows whose volume
+fraction vanishes are eliminated rather than solved with air properties.
+
+# Arguments (in the following order)
+- `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
+- `ρg`: buoyancy forces arrays.
+- `dyrel`: DYREL-specific parameters and fields, built with the same `ϕ`.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
+- `ϕ`: `JustRelax.RockRatio` carrying the cell, vertex and face volume fractions.
+- `rheology`: Material properties and rheological laws.
+- `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
+- `grid`: `Geometry{2}` object carrying grid spacing and staggered-grid coordinates. A legacy
+  2D spacing tuple or named tuple is also accepted and converted to a uniform `Geometry`.
+- `dt`: Time step.
+- `igg`: `IGG` object for global grid information (MPI).
+
+# Keyword Arguments
+- `air_phase`: Phase index excluded from material averages; `0` disables the correction. Default: `0`.
+- `viscosity_cutoff`: Limits for viscosity `(min, max)`. Default: `(-Inf, Inf)`.
+- `viscosity_relaxation`: Relaxation factor for viscosity updates. Default: `1.0e-2`.
+- `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
+- `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
+- `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
+- `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
+- `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
+- `iterMax`: Alias for `iterMax_DR`; used when `iterMax_DR` is not given.
+- `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
+- `nout`: Output frequency for residuals. Default: `100`.
+- `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
+- `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
+- `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
+- `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
+- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
+
+Options may be passed either as plain keywords or bundled as a single
+`kwargs = (; ...)` NamedTuple.
+"""
+function solve_VariationalDYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    return solve_VariationalDYREL!(
+        backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
+    )
+end
+
+solve_VariationalDYREL!(::CPUBackendTrait, stokes, args...; kwargs) =
+    _solve_VariationalDYREL!(stokes, args...; kwargs...)
 
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
@@ -357,6 +417,55 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+# Substitutes a unit scale for a field that is identically zero up to accumulated roundoff, so the
+# relative residual norms it normalizes stay finite: the pressure field of a boundary-driven shear
+# problem and the velocity field of a hydrostatic one are both of this kind.
+#
+# The threshold is absolute while the span is dimensional, so a problem nondimensionalized such
+# that its true span falls below `sqrt(eps)` has its error deflated instead. Replacing it needs an
+# absolute residual scale to fall back on, and no single one covers every problem: the buoyancy
+# norm is exactly zero for boundary-driven flow, the pressure span for pure shear. `errPt` has such
+# a fallback (see `_solve_VariationalDYREL!`); `errV` does not.
+@inline nonzero_span(s) = abs(s) ≤ sqrt(eps(typeof(s))) ? one(s) : s
+@inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
+
+@inline function masked_extrema(mask, A)
+    lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
+    hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    return lo, hi
+end
+
+@inline function masked_value_span(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? hi - lo : zero(eltype(A))
+end
+
+@inline function masked_value_scale(mask, A)
+    lo, hi = masked_extrema(mask, A)
+    return hi > lo ? max(hi - lo, abs(hi), abs(lo)) : zero(eltype(A))
+end
+
+# Total compliance of the valid pressure rows. Zero for an incompressible rheology, where the
+# uniform volumetric mode carries no pressure correction and `relax_volumetric_mode!` is a no-op.
+function volumetric_compliance_total(ηb, mask)
+    return sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
+end
+
+function relax_volumetric_mode!(P, RP, ηb, mask, relaxation = 1, compliance = volumetric_compliance_total(ηb, mask))
+    iszero(compliance) && return nothing
+    δ = sum_mpi((RPᵢ, valid) -> valid ? RPᵢ : zero(RPᵢ), RP, mask) / compliance
+    @. P += ifelse(mask, relaxation * δ, zero(δ))
+    return nothing
+end
+
+@inline rayleigh_quotient(numerator, denominator) = iszero(denominator) ? zero(denominator) : abs(numerator) / denominator
+
+function masked_λminV(dV::NTuple{N}, residuals::NTuple{N}, residuals0::NTuple{N}, masks::NTuple{N}) where {N}
+    numerator = sum(ntuple(d -> sum_mpi((m, dv, r, r0) -> m ? dv * (r - r0) : zero(dv), masks[d], dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(N)))
+    return rayleigh_quotient(numerator, denominator)
+end
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
 

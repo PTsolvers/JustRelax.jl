@@ -71,6 +71,53 @@ $-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
 row bound whenever the pseudo-transient coefficients are refreshed. The same
 term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
 
+## 2D variational DYREL
+
+Free surfaces represented by a `RockRatio` use the dedicated 2D entry point
+`solve_VariationalDYREL!`. It combines DYREL's Powell--Hestenes and dynamic
+relaxation iteration with the volume-weighted operator of Larionov, Batty, and
+Bridson (2017): center fractions weight pressure and normal stress, vertex
+fractions weight shear stress, and face fractions weight momentum rows.
+
+```julia
+ϕ = RockRatio(backend, ni)
+update_rock_ratio!(ϕ, phase_ratios, air_phase)
+dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+
+solve_VariationalDYREL!(
+    stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+    rheology, args, grid, dt, igg;
+    air_phase,
+    linear_viscosity = true,
+    free_surface = true,
+    pressure_relaxation = 0.5,
+    verbose_PH = false,
+    verbose_DR = false,
+)
+```
+
+The constructor and solver must receive the same `RockRatio`. Zero-volume
+pressure and velocity rows are eliminated, positive sliver faces use a bounded
+face mass, and changing the mask between calls resets the dynamic-relaxation
+history. `air_phase` excludes the air phase from material averages, while
+`pressure_relaxation` damps the Powell--Hestenes pressure update; its default is
+`1`. The solver accepts either a `Geometry{2}` or a legacy uniform-spacing tuple,
+and takes its options either as the plain keywords above or bundled as a single
+`kwargs = (; ...)` NamedTuple.
+Standard `solve_DYREL!` remains unchanged for unweighted 2D problems.
+
+A velocity row whose preconditioner diagonal comes out zero is decoupled from
+its neighbours and is preconditioned with the identity. A diagonal that comes
+out negative or non-finite is not: it means the free-surface term is large
+enough to invert the row, or that a degenerate phase sample produced a
+non-finite viscosity, and it is propagated as `NaN` so the solve reports a
+failure rather than continuing with an arbitrary substitute. Reaching it with
+`free_surface = true` indicates the timestep is too large for the density
+contrast at the surface.
+
+See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
+mask construction, and the mathematical reference.
+
 # Examples
 
 Examples of a set of miniapps using this solver can be found in [this folder](https://github.com/PTsolvers/JustRelax.jl/tree/main/miniapps/DYREL2D).

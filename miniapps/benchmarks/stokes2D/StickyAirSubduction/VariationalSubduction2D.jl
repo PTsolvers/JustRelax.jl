@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CellArrays
+using GeoParams
 using CairoMakie
 
 # Load file with all the rheology configurations

@@ -42,18 +42,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 function init_phases!(phases, particles, A)
     ni = size(phases)
 
@@ -116,7 +104,7 @@ function main(igg, nx, ny)
         # Name              = "Air",
         SetMaterialParams(;
             Phase = 1,
-            Density = ConstantDensity(; ρ = 1.0e0),
+            Density = ConstantDensity(; ρ = 0.0e0),
             CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e16),)),
             Gravity = ConstantGravity(; g = 9.81),
         ),
@@ -172,7 +160,6 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -182,9 +169,12 @@ function main(igg, nx, ny)
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
-    compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    # @parallel init_P!(stokes.P, ρg[2], xci[2])
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args; air_phase)
+    ρg_rock = ρg[2] .* ϕ.center
+    compute_lithostatic_pressure!(stokes.P, ρg_rock, di[2], igg)
+    @. stokes.P = ifelse(ϕ.center > 0, stokes.P / ϕ.center, 0)
+    viscosity_cutoff = (-Inf, Inf)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
@@ -196,39 +186,41 @@ function main(igg, nx, ny)
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
 
-    figdir = "RayleighTaylor2D"
+    figdir = "RayleighTaylor2D_VariationalDYREL"
     take(figdir)
 
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
     dt_max = 25.0e3 * (3600 * 24 * 365.25)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
 
-    while it < 500 #00
+    while it < 50#0 #00
 
         # Stokes solver ----------------
-        solve_VariationalStokes!(
+        result = solve_VariationalDYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             ϕ,
             rheology,
             args,
+            grid,
             dt,
             igg;
-            kwargs = (
+            kwargs = (;
                 air_phase = air_phase,
                 iterMax = 150.0e3,
-                iterMin = 1.0e3,
+                total_iterMax = 150.0e3,
                 viscosity_relaxation = 1.0e-2,
                 nout = 2.0e3,
                 free_surface = true,
-                viscosity_cutoff = (-Inf, Inf),
-            )
+                viscosity_cutoff = viscosity_cutoff,
+            ),
         )
+        result.converged || error("Variational DYREL did not converge (err=$(result.err))")
         dt = compute_dt(stokes, di, dt_max)
         println("dt = $(round(dt / (3600 * 24 * 365.25); digits = 3)) yrs")
         # ------------------------------
@@ -260,11 +252,12 @@ function main(igg, nx, ny)
         @show it += 1
         t += dt
 
-        if it == 1 || rem(it, 50) == 0
+        if it == 1 || rem(it, 2) == 0
             px, py = particles.coords
             chain_x, chain_y = chain.coords
 
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+            Vmax = max(maximum(abs, Vx_v), maximum(abs, Vy_v))
             nt = 5
             fig = Figure(size = (900, 900), title = "t = $t")
             ax = Axis(fig[1, 1], aspect = 1, title = " t=$(round.(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs")
@@ -274,7 +267,7 @@ function main(igg, nx, ny)
             arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
-                lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
+                lengthscale = 25 / Vmax,
                 color = :red,
             )
             fig

@@ -42,7 +42,6 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
         _di_vx,
         _di_vy,
     ) where {T}
-    _dx, _dy = @dxi(_di_vertex, i, j)
     _dy_vx = @dy(_di_vx, j)
     _dx_vy = @dx(_di_vy, i)
 
@@ -51,6 +50,7 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
     Vy1 = Vy[i, j]
     Vy2 = Vy[i + 1, j]
     if all((i, j) .≤ size(εxx))
+        _dx, _dy = @dxi(_di_vertex, i, j)
         @inbounds if isvalid_c(ϕ, i, j)
             Vx3 = Vx[i + 1, j + 1]
             Vy3 = Vy[i + 1, j + 1]

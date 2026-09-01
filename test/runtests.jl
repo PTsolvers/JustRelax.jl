@@ -102,7 +102,7 @@ _, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String
 elseif backend_name == "CUDA"
     Pkg.add("CUDA")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
-    using CUDA; CUDA.versioninfo()
+    import CUDA; CUDA.versioninfo()
 elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end

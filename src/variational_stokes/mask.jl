@@ -66,6 +66,8 @@ end
 # keeps partially filled velocity rows finite; fully filled rows remain exact.
 @inline variational_face_mass(x) = max(x, oftype(x, 0.1))
 
+@inline variational_pressure_divergence(∇V, center_fraction) = ∇V * center_fraction
+
 """
     update_rock_ratio!(ϕ::JustRelax.RockRatio, phase_ratios, air_phase)
 
@@ -212,6 +214,11 @@ Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, 
     return v * isvalid(ϕ.center, i, j)
 end
 
+@parallel_indices (i, j) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
+    mask[i, j] = isvalid_c(ϕ, i, j)
+    return nothing
+end
+
 """
     isvalid_v(ϕ::JustRelax.RockRatio, inds...)
 
@@ -291,6 +298,32 @@ Base.@propagate_inbounds @inline function isvalid_vy(
         ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
     ) where {N}
     return isvalid(ϕ.Vy, I...)
+end
+
+@parallel_indices (i, j) function update_valid_v_masks!(maskVx, maskVy, ϕ::JustRelax.RockRatio)
+    if i ≤ size(maskVx, 1) && j ≤ size(maskVx, 2)
+        maskVx[i, j] = isvalid_vx(ϕ, i + 1, j)
+    end
+    if i ≤ size(maskVy, 1) && j ≤ size(maskVy, 2)
+        maskVy[i, j] = isvalid_vy(ϕ, i, j + 1)
+    end
+    return nothing
+end
+
+@parallel_indices (i, j) function project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ::JustRelax.RockRatio)
+    if i ≤ size(P, 1) && j ≤ size(P, 2) && !isvalid_c(ϕ, i, j)
+        P[i, j] = zero(eltype(P))
+        P0[i, j] = zero(eltype(P0))
+        ΔPψ[i, j] = zero(eltype(ΔPψ))
+        λ[i, j] = zero(eltype(λ))
+    end
+    if i ≤ size(Vx, 1) - 2 && j ≤ size(Vx, 2) - 2 && !isvalid_vx(ϕ, i + 1, j)
+        Vx[i + 1, j + 1] = zero(eltype(Vx))
+    end
+    if i ≤ size(Vy, 1) - 2 && j ≤ size(Vy, 2) - 2 && !isvalid_vy(ϕ, i, j + 1)
+        Vy[i + 1, j + 1] = zero(eltype(Vy))
+    end
+    return nothing
 end
 
 """

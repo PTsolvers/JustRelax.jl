@@ -1,7 +1,7 @@
 # Load script dependencies
 using GeoParams, CairoMakie
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -270,7 +270,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-nx,ny,nz = 128*1, 4, 64*1
+nx,ny,nz = 128*1, 8, 64*1
 li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

@@ -6,7 +6,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-using Pkg; Pkg.activate("miniapps")
+using Pkg; Pkg.activate(joinpath(@__DIR__, "..", ".."))
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -346,7 +346,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     end
 
     dt₀ = similar(stokes.P)
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
@@ -382,6 +381,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 150.0e3,
+                total_iterMax = 150.0e3,
                 nout = 1,
                 rel_drop = 1.0e-2,
                 viscosity_relaxation = 1.0e-2,
@@ -438,8 +438,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
@@ -523,7 +522,7 @@ end
 
 figdir = "Thermal_stresses_around_cooling_magma_3D_DYREL"
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 32
+n = 16
 nx = n
 ny = n
 nz = n

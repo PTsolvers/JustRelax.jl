@@ -1,5 +1,8 @@
+checkpoint_name(dst) = "$dst/checkpoint.jld2"
+checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
+
 """
-    checkpointing_jld2(dst, stokes, thermal, time, timestep, igg; kwargs...)
+    checkpointing_jld2(dst, stokes, [thermal,] time, timestep[, igg]; kwargs...)
 
 Save necessary data in `dst` as a jld2 file to restart the model from the state at `time`.
 If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint0000.jld2`
@@ -34,9 +37,6 @@ by providing a dollar sign and the rank number.
 
     ```
 """
-checkpoint_name(dst) = "$dst/checkpoint.jld2"
-checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2"
-
 function checkpointing_jld2(dst, stokes, thermal, time, timestep; kwargs...)
     fname = checkpoint_name(dst)
     checkpointing_jld2(dst, stokes, thermal, time, timestep, fname; kwargs...)

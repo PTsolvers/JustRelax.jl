@@ -211,12 +211,23 @@ end
 
 ## PTStokesCoeffs type
 """
-    PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL, r=0.7)
+    PTStokesCoeffs(li, di; ϵ_rel=1e-6, ϵ_abs=1e-12, Re=3π, CFL=0.9/√2.1, r=0.7)
 
-Scalar coefficients for the accelerated pseudo-transient Stokes solver. `ηdτ / ητ`
-is the local velocity pseudo-time step, while `θ_dτ` controls the stress and pressure
-updates. In the 2D free-surface-stabilized velocity kernel, the vertical pseudo-time
-step also includes the local diagonal `-dt * ∂y(ρg)` introduced by stabilization.
+Pseudo-transient damping coefficients for the Stokes solver, derived from the domain size
+`li`, grid spacing `di`, Reynolds number `Re` and bulk-to-shear damping ratio `r` following
+[Räss et al. (2022)](https://gmd.copernicus.org/articles/15/5757/2022/). Passed as
+`pt_stokes` to `solve!`.
+
+`ηdτ / ητ` is the local velocity pseudo-time step, while `θ_dτ` controls the stress and
+pressure updates. In the 2D free-surface-stabilized velocity kernel, the vertical
+pseudo-time step also includes the local diagonal `-dt * ∂y(ρg)` introduced by
+stabilization.
+
+# Keyword arguments
+- `ϵ_rel`, `ϵ_abs`: relative/absolute convergence tolerances.
+- `Re`: Reynolds number.
+- `CFL`: Courant-Friedrichs-Lewy number bounding the pseudo-time step.
+- `r`: ratio of the damping coefficients for the bulk and shear rheology.
 """
 struct PTStokesCoeffs{T}
     CFL::T

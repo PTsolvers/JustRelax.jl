@@ -59,7 +59,7 @@ Statistics = "1"
 Suppressor = "0.2"
 TOML = "1.0.3"
 WriteVTK = "1.21"
-julia = "1.9, 1.10, 1.11, 1.12"
+julia = "1.10, 1.11, 1.12"
 
 [extras]
 ExactFieldSolutions = "2a6b1ac7-2de5-4354-bffb-bf009f6a4bef"

@@ -200,6 +200,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
@@ -214,12 +215,13 @@ function main(igg, nx, ny)
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
 
-        # advect marker chain
+        # Filter against the new surface before injection.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

@@ -107,19 +107,43 @@ end
 
 ## 2D KERNELS
 
+"""
+    compute_viscosity_τII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **deviatoric
+stress** (`τII`), evaluating `rheology` (a single `GeoParams.MaterialParams`, or one per
+phase when `phase_ratios` is given) at each cell and relaxing towards the new value with
+factor `relaxation` (`1.0` = no damping). `cutoff = (ηmin, ηmax)` clamps the result.
+`air_phase` (multi-phase form only) excludes that phase from the update.
+
+See also [`compute_viscosity_εII!`](@ref) for the strain-rate-invariant convention, and
+[`compute_viscosity!`](@ref) for the rheology-driven default (εII).
+"""
 function compute_viscosity_τII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII)
 end
 
+"""
+    compute_viscosity_εII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **strain rate**
+(`εII`); otherwise identical to [`compute_viscosity_τII!`](@ref).
+"""
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII)
 end
 
-# generic fallback
+"""
+    compute_viscosity!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place by evaluating `rheology` at the strain-rate invariant
+(equivalent to [`compute_viscosity_εII!`](@ref); see there for the arguments, and
+[`compute_viscosity_τII!`](@ref) for the stress-invariant alternative).
+"""
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
@@ -397,12 +421,8 @@ end
         args_ij = fn_args(args, I...)
         # args_ij = local_viscosity_args(args, I...)
 
-        # local phase ratio
-        ratio_ij = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        if air_phase > 0
-            ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
-        end
+        # local phase ratio, with the air dropped if requested
+        ratio_ij = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
@@ -624,10 +644,8 @@ end
         # # argument fields at local index
         args_ijk = fn_args(args, I...)
 
-        # local phase ratio
-        ratio_ijk = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
+        # local phase ratio, with the air dropped if requested
+        ratio_ijk = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
@@ -776,6 +794,20 @@ end
 #     end
 # end
 
+"""
+    viscosity_phase_ratio(air_phase, ratio)
+
+Phase ratio to average viscosity over, with `air_phase` dropped and the remaining
+phases renormalized. A cell holding nothing but air keeps its own ratio: averaging
+over no phase at all would make the harmonic mean `Inf`, which then spreads through
+`ητ` into neighbouring cells that do carry rock.
+"""
+@inline function viscosity_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+    air_phase > 0 || return ratio
+    corrected = correct_phase_ratio(air_phase, ratio)
+    return iszero(sum(corrected)) ? ratio : corrected
+end
+
 function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
@@ -790,6 +822,7 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
         # set air phase ratio to zero
         corrected_ratio = ratio .* mask
         # normalize phase ratios without air
-        return corrected_ratio ./ sum(corrected_ratio)
+        total = sum(corrected_ratio)
+        return iszero(total) ? zeros(SVector{N, T}) : corrected_ratio ./ total
     end
 end

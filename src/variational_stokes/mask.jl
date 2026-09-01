@@ -13,6 +13,12 @@ Create a `RockRatio` object for a 2D grid with dimensions `nx` x `ny` on a stagg
 
 """
 function RockRatio(nx, ny)
+    # The four fields below are liquid-volume fractions, not material
+    # properties. Their staggered locations are:
+    #
+    #                  Vy (nx, ny+1)
+    #         Vx       center       Vx
+    #                  vertex (nx+1, ny+1)
     ni = nx, ny
     center = @zeros(ni...)
     vertex = @zeros(ni .+ 1...)
@@ -49,6 +55,16 @@ end
 @inline size_yz(x::JustRelax.AbstractMask) = size(x.yz)
 @inline size_xz(x::JustRelax.AbstractMask) = size(x.xz)
 @inline size_xy(x::JustRelax.AbstractMask) = size(x.xy)
+
+# A rock-ratio entry is active when it carries any liquid volume.  Keep this
+# policy in one place: all staggered-grid null-space checks below use it, so a
+# positive sub-cell fraction is not silently treated as an inactive DOF by one
+# operator and active by another.
+@inline variational_active(x) = x > zero(x)
+
+# Bounded approximation of the inverse liquid face mass.  The positive floor
+# keeps partially filled velocity rows finite; fully filled rows remain exact.
+@inline variational_face_mass(x) = max(x, oftype(x, 0.1))
 
 """
     update_rock_ratio!(ϕ::JustRelax.RockRatio, phase_ratios, air_phase)
@@ -156,67 +172,44 @@ Inner kernel of `update_rock_ratio` that clamps the computed rock ratio to the r
     return nothing
 end
 
-# The `isvalid_*` family decides which degrees of freedom make up the reduced space the
-# variational solvers iterate on. Each one answers the same question for a different staggered
-# location: does this unknown have an equation that any rock actually constrains?
-#
-# A `RockRatio` stores one fraction per staggered location, all on the same 2D cell:
-#
-#     vertex[i,j+1]      Vy[i,j+1]      vertex[i+1,j+1]
-#              ●─────────────┴─────────────●
-#              │                           │
-#     Vx[i,j] ─┤        center[i,j]        ├─ Vx[i+1,j]
-#              │                           │
-#              ●─────────────┬─────────────●
-#     vertex[i,j]        Vy[i,j]       vertex[i+1,j]
-#
-# A fraction of zero means "no rock here", and every masked stencil multiplies that location's
-# contribution by it. An unknown whose whole equation is built from zero-weight neighbours is
-# therefore a null direction: nothing pushes it to a particular value, and — because the same
-# mask scales its residual — an arbitrary value there still reports as converged. Dropping such
-# unknowns from the reduced space, and holding them at zero, is what keeps the iteration from
-# drifting along those directions.
-
 """
-    isvalid_c(ϕ::JustRelax.RockRatio, i, j)
+    isvalid_c(ϕ::JustRelax.RockRatio, inds...)
 
-Whether the pressure at `ϕ.center[i, j]` belongs to the reduced space in 2D.
+Check whether the 2D pressure degree of freedom is connected to liquid.
 
-The cell belongs to the pressure space when its center and all four velocity rows used by its
-divergence constraint belong to the reduced velocity space. Testing the complete momentum-row
-stencils (rather than only the four face fractions) is important: a face can be eliminated
-because a shear-stress vertex is void while its own face fraction remains positive. Retaining
-the corresponding volume constraint would then ask an eliminated velocity degree of freedom to
-satisfy it.
+The cell-centred pressure row is retained only when `ϕ.center[i,j]` and all
+four adjacent velocity faces are active:
 
-               Vy[i,j+1]
-        ┌──────────┴──────────┐
-        │                     │
-    Vx[i,j]   center[i,j]   Vx[i+1,j]
-        │                     │
-        └──────────┬──────────┘
-               Vy[i,j]
+                 Vy[i, j+1]
+                       o
+                       |
+        Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+                       |
+                       o
+                 Vy[i, j]
+
+This is the local null-space elimination used by the matrix-free reduced
+system. It is intentionally stricter than testing the centre fraction alone.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: rock fractions on the staggered grid.
 - `i`, `j`: cell indices.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-    vx = isvalid_vx_strict(ϕ, i, j) * isvalid_vx_strict(ϕ, i + 1, j)
-    vy = isvalid_vy_strict(ϕ, i, j) * isvalid_vy_strict(ϕ, i, j + 1)
-    return vx * vy * isvalid(ϕ.center, i, j)
-end
-
-"""
-    update_valid_c_mask!(mask, ϕ)
-
-Fill `mask` with the pressure-space validity of every cell in `ϕ`. In 2D this uses the complete
-validity of all four velocity rows read by the cell's divergence constraint; see
-[`isvalid_c`](@ref).
-"""
-@parallel_indices (I...) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
-    mask[I...] = isvalid_c(ϕ, I...)
-    return nothing
+    # A pressure cell is retained only when its centre and all four adjacent
+    # velocity faces are connected to liquid:
+    #
+    #                  Vy[i, j+1]
+    #                        o
+    #                        |
+    #         Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+    #                        |
+    #                        o
+    #                  Vy[i, j]
+    vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
+    vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
+    v = vx * vy
+    return v * isvalid(ϕ.center, i, j)
 end
 
 """
@@ -566,16 +559,8 @@ Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i,
     return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
 end
 
-"""
-    isvalid(ϕ, inds...)
-
-Whether the rock fraction at `inds` is positive.
-
-The primitive the rest of the `isvalid_*` family is built from. The test is "any rock at all":
-a location holding a fraction of `1e-6` counts as valid, because the reduced space is defined by
-the geometry of the rock domain rather than by how much of a cell it fills.
-"""
-Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer, N}) where {N} = ϕ[I...] > 0
+Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer, N}) where {N} =
+    variational_active(ϕ[I...])
 
 ######
 

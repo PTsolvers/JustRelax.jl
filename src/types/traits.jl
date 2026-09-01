@@ -1,7 +1,25 @@
+"""
+    BackendTrait
+
+Supertype for the traits `backend(x)` returns to dispatch solver code on the array type
+backing `x`, independent of `x`'s own type hierarchy.
+"""
 abstract type BackendTrait end
 abstract type GPUBackendTrait <: BackendTrait end
 
+"""
+    CPUBackendTrait
+
+Trait returned by `backend(x)` when `x` is backed by a plain `Array`.
+"""
 struct CPUBackendTrait <: BackendTrait end
+
+"""
+    NonCPUBackendTrait
+
+Trait returned by `backend(x)` for any `AbstractArray` other than `Array` that isn't a
+`CuArray`/`ROCArray` — the generic fallback for GPU array types without a dedicated trait.
+"""
 struct NonCPUBackendTrait <: GPUBackendTrait end
 struct CUDABackendTrait <: GPUBackendTrait end
 struct AMDGPUBackendTrait <: GPUBackendTrait end

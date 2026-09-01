@@ -12,7 +12,7 @@ const backend = CPUBackend
 const backend_JP = JustPIC.CPU
 
 # choose benchmark
-benchmark = :taylorGreen
+benchmark = :Burstedde
 
 # model resolution (number of gridpoints)
 nx, ny, nz = 16, 16, 16

@@ -217,7 +217,7 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
 
     dyrel = DYREL(
         backend, stokes, rheology, phase_ratios, grid.di, dt;
-        ϵ = 1.0e-8, CFL = 0.99, γfact = 20.0,
+        ϵ = 1.0e-8, CFL = 0.99, c_fact=0.5, γfact = 20.0,
     )
 
     # Physical time loop
@@ -239,9 +239,10 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
             kwargs = (;
                 iterMax = 50.0e3,
                 total_iterMax = 50.0e3,
-                nout = 20,
-                rel_drop = 0.1,
+                nout = 1,
+                rel_drop = 5e-3,
                 b_width = (4, 4, 4),
+                linear_viscosity = true,
                 verbose_PH = true,
                 verbose_DR = false,
             )

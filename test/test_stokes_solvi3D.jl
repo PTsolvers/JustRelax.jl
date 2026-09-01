@@ -49,7 +49,9 @@ function check_convergence_case1()
     )
 
     tol = 1.0e-8
-    passed = iters.norm_Rx[end] < tol
+    passed = all(norm -> last(norm) < tol, (
+        iters.norm_Rx, iters.norm_Ry, iters.norm_Rz, iters.norm_∇V,
+    ))
 
     return passed
 end

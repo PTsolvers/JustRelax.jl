@@ -91,6 +91,32 @@ end
             backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
             ϵ = 1.0e-6, CFL = 0.99,
         )
+
+        linear_rheology = (
+            SetMaterialParams(;
+                Phase = 1,
+                CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+            ),
+        )
+        linear_stokes = StokesArrays(backend_JR, ni)
+        linear_stokes.viscosity.η .= PTArray(backend_JR)([
+            j + 2k for _ in 1:nx, j in 1:ny, k in 1:nz
+        ])
+        linear_stokes.ε.yz .= 1.0
+        linear_args = (; T = @zeros(ni .+ 2...), P = linear_stokes.P, dt = dt)
+        linear_dyrel = JustRelax3D.DYREL(
+            backend_JR, linear_stokes, linear_rheology, phase_ratios, grid.di, dt
+        )
+        θc = copy(linear_dyrel.P_num)
+        JustRelax3D.compute_stress_viscosity_DRYEL!(
+            linear_stokes, θc, linear_dyrel.γ_eff, linear_rheology, phase_ratios,
+            1.0, dt, 1.0, linear_args, (-Inf, Inf), true,
+        )
+        η = Array(linear_stokes.viscosity.η)
+        ηyz = η[2, 1, 1], η[2, 2, 1], η[2, 1, 2], η[2, 2, 2]
+        @test Array(linear_stokes.τ.yz)[2, 2, 2] ≈
+            2 * length(ηyz) / sum(inv, ηyz)
+
         @test_throws ErrorException solve_DYREL!(
             stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
             kwargs = (;

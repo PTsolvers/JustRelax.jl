@@ -154,6 +154,7 @@ function solVi3D(;
                 rel_drop = 0.1,
                 verbose_PH = true,
                 verbose_DR = false,
+                linear_viscosity = true,
             ),
         )
         t += Δt

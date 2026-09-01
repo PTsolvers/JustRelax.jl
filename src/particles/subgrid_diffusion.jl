@@ -47,7 +47,9 @@ end
 @parallel_indices (I...) function subgrid_characteristic_time!(
         dt₀, phase_ratios, rheology, T, P, di
     )
-    argsᵢ = getindex_NamedTuple((; T, P), I...)
+    # Temperature carries ghost cells, whereas pressure is physical-sized.
+    # Index them explicitly so this remains device-compatible for GPU arrays.
+    argsᵢ = (; T = T[I .+ 1...], P = P[I...])
     phaseᵢ = @cell phase_ratios[I...]
 
     # Compute the characteristic timescale `dt₀` of the local cell

@@ -287,12 +287,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             args,
             dt,
             igg;
-            kwargs = (;
-                iterMax = 100.0e3,
-                nout = 2.0e3,
-                free_surface = true,
-                viscosity_cutoff = viscosity_cutoff,
-            )
+            air_phase = air_phase,
+            iterMax = 100.0e3,
+            nout = 2.0e3,
+            free_surface = true,
+            viscosity_cutoff = viscosity_cutoff,
         )
 
         # rotate stresses
@@ -338,6 +337,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Apply the new marker-chain surface before particle replenishment.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
@@ -360,10 +364,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particle_args_reduced,
             (thermal.T, τxx_v_ghost, τyy_v_ghost, τxy_ghost, ωxy_ghost)
         )
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
             ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)

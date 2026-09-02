@@ -94,10 +94,12 @@ end
 
 """
     center2vertex!(vertex, center)
+    center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 
-Interpolates the values at the `center` onto `vertex` points.
+Interpolates the values at the cell `center`(s) onto `vertex` points. The 6-argument
+method interpolates the three shear-stress/strain-rate components of a 3D
+`SymmetricTensor` onto their respective face vertices.
 """
-
 function center2vertex!(vertex, center)
     @parallel center2vertex_kernel!(vertex, center)
     @views vertex[1, :] .= vertex[2, :]
@@ -228,12 +230,11 @@ end
 # 2D
 
 """
-    velocity2vertex(Vx, Vy)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid vertices.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated `Vx_v`, `Vy_v` 2D arrays located at the grid vertices.
 """
-
 function velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     @assert size(Vx_v) == size(Vy_v)
     # interpolate to cell vertices
@@ -248,12 +249,12 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 
-Interpolate the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with
+ghost nodes onto the pre-allocated `Vx_c`, `Vy_c`, `Vz_c` 3D arrays located at the cell
+centers.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
     @assert size(Vx_c) == size(Vy_c) == size(Vz_c)
     # interpolate to cell vertices
@@ -269,12 +270,11 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vx, Vy)
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated `Vx_c`, `Vy_c` 2D arrays located at the cell centers.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vx, Vy)
     @assert size(Vx_c) == size(Vy_c)
     # interpolate to cell vertices
@@ -288,6 +288,11 @@ end
     return nothing
 end
 
+"""
+    shear2center!(A::SymmetricTensor)
+
+Interpolate the shear components of `A` onto the cell centers, in place.
+"""
 function shear2center!(A::JustRelax.SymmetricTensor)
     return shear2center!(backend(A), A)
 end

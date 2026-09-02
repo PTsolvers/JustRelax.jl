@@ -346,15 +346,17 @@ function JR3D.compute_ρg!(
         ρg::Union{ROCArray, NTuple{N, ROCArray}},
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
-        args,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 function JR3D.compute_ρg!(
-        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args
+        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction

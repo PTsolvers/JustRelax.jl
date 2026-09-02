@@ -428,6 +428,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         dt,
         igg;
         kwargs = (;
+            air_phase = air_phase,
             iterMax = 100.0e3,
             free_surface = true,
             nout = 2.5e3,
@@ -455,6 +456,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 free_surface = true,
                 nout = 2.5e3,
@@ -507,13 +509,14 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Enforce the new marker-chain surface before replenishing particles.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (), ())
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

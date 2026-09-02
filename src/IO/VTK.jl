@@ -51,6 +51,12 @@ function add_field!(vtk, name, array, npoints, ncells, precision)
     return nothing
 end
 
+"""
+    VTKDataSeries(full_name::String, xi)
+
+A ParaView collection (`.pvd`) accumulating a time series of VTK snapshots on the grid
+`xi`, written under `full_name`. Add each time step with `Base.append!`.
+"""
 struct VTKDataSeries{T, S, G}
     series::T
     path::S
@@ -70,6 +76,12 @@ struct VTKDataSeries{T, S, G}
     end
 end
 
+"""
+    append!(data_series::VTKDataSeries, data::NamedTuple, time_step, seconds)
+
+Write `data` as a new VTK snapshot on `data_series`'s grid and add it to the time series at
+time `seconds`, under the name `time_step`.
+"""
 function append!(data_series, data::NamedTuple, time_step, seconds)
     # unpack data names and arrays
     data_names = string.(keys(data))

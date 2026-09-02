@@ -1,11 +1,35 @@
 using Documenter
 using DocumenterVitepress
+using Literate
 
 using JustRelax
 using GeoParams, JustPIC
 
 # Get JustRelax.jl root directory
 JR_root_dir = dirname(@__DIR__)
+
+# Literate.jl-generated example pages: the miniapp script is the single source,
+# this page is generated from it, so it cannot drift from the runnable script.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "thermal_diffusion", "diffusion", "diffusion2D_periodic.jl"),
+    joinpath(@__DIR__, "src", "man");
+    documenter = true, execute = false,
+)
+
+# This page documents the miniapp source without executing the full simulation.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "stokes2D", "shear_band", "ShearBand2D.jl"),
+    joinpath(@__DIR__, "src", "man");
+    documenter = false, execute = false,
+)
+
+# This page documents the miniapp source without executing the full simulation.
+Literate.markdown(
+    joinpath(JR_root_dir, "miniapps", "benchmarks", "stokes2D", "Blankenbach2D", "Benchmark2D_sgd.jl"),
+    joinpath(@__DIR__, "src", "man");
+    name = "Blankenbach", documenter = false, execute = false,
+    postprocess = text -> rstrip(text) * "\n",
+)
 
 license = read(joinpath(JR_root_dir, "LICENSE.md"), String)
 write(joinpath(@__DIR__, "src", "man", "license.md"), license)
@@ -83,25 +107,34 @@ makedocs(;
         devurl = "dev",
     ),
     modules = [JustRelax],
-    warnonly = Documenter.except(:footnote),
+    checkdocs = :exports,
+    # :missing_docs stays a warning: JustRelax2D.Data/JustRelax3D.Data are
+    # ParallelStencil.@init_parallel_stencil-generated submodules whose docstring
+    # carries @ref links into ParallelStencil, which this build does not document.
+    warnonly = [:missing_docs],
     pages = [
         "Home" => "index.md",
+        "Getting started" => "man/diffusion2D_periodic.md",
+        "Getting help" => "man/getting_help.md",
         "User guide" => Any[
             "Installation" => "man/installation.md",
             "Backend" => "man/backend.md",
             "Grid generation" => "man/grid_generation.md",
+            "Core objects" => "man/core_objects.md",
             "Equations" => Any[
                 "Governing equations" => "man/equations_basic.md",
                 "Constitutive equations" => "man/constitutive_equations.md",
                 "APT equations" => "man/equations_APT.md",
                 "Discretization" => "man/equations_discretization.md",
+                "Material physics" => "man/material_physics.md",
+                "2D variational Stokes" => "man/variational_stokes.md",
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
         ],
         "Examples" => Any[
             "Blankenbach" => "man/Blankenbach.md",
-            "Shear Bands" => "man/ShearBands.md",
+            "Shear Bands" => "man/ShearBand2D.md",
             "Subduction 2D" => Any[
                 "Model setup" => "man/subduction2D/setup.md",
                 "Rheology" => "man/subduction2D/rheology.md",
@@ -117,14 +150,25 @@ makedocs(;
                 "Restart" => "man/restart.md",
             ],
         ],
-        "List of functions" => "man/listfunctions.md",
+        "API reference" => Any[
+            "Stokes" => "man/api/stokes.md",
+            "Thermal" => "man/api/thermal.md",
+            "Boundary conditions" => "man/api/boundary_conditions.md",
+            "Rheology and phases" => "man/api/rheology_phases.md",
+            "I/O and checkpointing" => "man/api/io.md",
+            "Grid" => "man/api/grid.md",
+            "Index" => "man/listfunctions.md",
+        ],
         "Citing JustRelax.jl" => "man/citing.md",
         "References" => Any[
             "JustPIC" => "man/JustPIC.md",
             "GeoParams" => "man/GeoParams.md",
         ],
         "Authors" => "man/authors.md",
-        "Contributing" => "man/contributing.md",
+        "Developer" => Any[
+            "Architecture" => "man/developer.md",
+            "Contributing" => "man/contributing.md",
+        ],
         "Code of Conduct" => "man/code_of_conduct.md",
         "Security" => "man/security.md",
         "License" => "man/license.md",

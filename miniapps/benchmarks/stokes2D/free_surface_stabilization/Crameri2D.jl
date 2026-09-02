@@ -195,6 +195,7 @@ function main(igg, nx, ny)
             Inf,
             igg;
             kwargs = (
+                air_phase = air_phase,
                 iterMax = 50.0e3,
                 iterMin = 1.0e3,
                 viscosity_relaxation = 1.0e-2,

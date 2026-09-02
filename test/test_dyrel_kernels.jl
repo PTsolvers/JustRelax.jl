@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     using CUDA
 end
 
-using Test, Suppressor
+using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -191,6 +191,15 @@ end
             stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
             _di.center, _di.vertex,
+        )
+        @test all(isfinite, Array(stokes.R.Rx))
+        @test all(isfinite, Array(stokes.R.Ry))
+
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))

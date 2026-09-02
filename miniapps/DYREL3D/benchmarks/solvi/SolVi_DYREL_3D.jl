@@ -4,7 +4,18 @@ using ParallelStencil.FiniteDifferences3D
 #   D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #   general shear. Geophysical Journal International, 155(1):269–288, 2003.
 
-include("vizSolVi3D.jl")
+include("viz_SolVi_DYREL_3D.jl")
+
+@parallel_indices (i, j, k) function init_solvi_phase!(ratios)
+    @index ratios[1, i, j, k] = 1.0
+    return nothing
+end
+
+# Keep the smoothed viscosity below, just as the original Stokes benchmark does.
+const SolViArgs = NamedTuple{(:T, :P, :dt, :prescribed_viscosity)}
+JustRelax.JustRelax3D.compute_viscosity!(
+    _stokes::JustRelax.StokesArrays, _phase_ratios, _args::SolViArgs, _rheology, _cutoff; _kwargs...
+) = nothing
 
 @parallel function smooth!(A2::AbstractArray{T, 3}, A::AbstractArray{T, 3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
@@ -75,29 +86,37 @@ function solVi3D(;
     # general stokes arrays
     stokes = StokesArrays(backend, ni)
     (; η) = stokes.viscosity
-    # general numerical coeffs for PT stokes
-    pt_stokes = PTStokesCoeffs(li, di; CFL = 1 / √3)
-
     ## Setup-specific parameters and fields
-    ξ = 1.0 # Maxwell relaxation time
     η0 = 1.0 # matrix viscosity
     ηi = Δη # inclusion viscosity
-    G = 1.0 # elastic shear modulus
-    # dt = η0 / (G * ξ)
     dt = Inf
     η .= viscosity(ni, di, li, rc, η0, ηi)
-    Gc = @fill(G, ni...)
-    Kb = @fill(Inf, ni...)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 0.0),
+            Gravity = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = η0),)),
+        ),
+    )
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    for ratios in (
+            phase_ratios.center, phase_ratios.vertex,
+            phase_ratios.yz, phase_ratios.xz, phase_ratios.xy,
+        )
+        @parallel (@idx size(ratios)) init_solvi_phase!(ratios)
+    end
+    args = (; T = 0.0, P = stokes.P, dt = dt, prescribed_viscosity = true)
 
     ## Boundary conditions
     xv, yv, zv = xvi
     xc, yc, zc = xci
     stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .=
-        PTArray(backend)([εbg * x for x in xv, _ in yc, _ in zc])
+        PTArray(backend)([εbg * x for x in xv, y in yc, z in zc])
     stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .=
-        PTArray(backend)([εbg * y for _ in xc, y in yv, _ in zc])
+        PTArray(backend)([εbg * y for x in xc, y in yv, z in zc])
     stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .=
-        PTArray(backend)([-2 * εbg * z for _ in xc, _ in yc, z in zv])
+        PTArray(backend)([-2 * εbg * z for x in xc, y in yc, z in zv])
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true, back = true, front = true),
         no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
@@ -108,24 +127,34 @@ function solVi3D(;
     ## Body forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
 
+    dyrel = DYREL(
+        backend, stokes, rheology, phase_ratios, grid.di, dt;
+        ϵ = 1.0e-8, CFL = 0.99, γfact = 20.0,
+    )
+
     ## Time loop
     t = 0.0
     local iters
     while t < ttot
-        iters = solve!(
+        iters = solve_DYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
-            Kb,
-            Gc,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
             dt,
             igg;
             kwargs = (;
-                iterMax = 5000,
-                nout = 100,
-                verbose = false,
+                iterMax = 50.0e3,
+                total_iterMax = 50.0e3,
+                nout = 20,
+                rel_drop = 0.1,
+                verbose_PH = true,
+                verbose_DR = false,
+                linear_viscosity = true,
             ),
         )
         t += Δt

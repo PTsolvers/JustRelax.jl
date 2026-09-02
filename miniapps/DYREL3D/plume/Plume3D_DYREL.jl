@@ -1,17 +1,19 @@
+# 3D thermal plume rising through a layered lithosphere.
+# Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
+
 const isCUDA = false
-# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
-using Pkg; Pkg.activate("miniapps")
+# using Pkg; Pkg.activate("miniapps")
 
-const backend = @static if isCUDA
+const backend_JR = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CPUBackend
 end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
@@ -23,20 +25,16 @@ else
 end
 
 using JustPIC
+
 const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+    JustPIC.CPU
 end
-
-# Load script dependencies
-# 3D thermal plume rising through a layered lithosphere.
-# Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
-
 
 using GeoParams, CairoMakie, Printf
 
-include("Plume3D_rheology.jl")
+include("Plume3D_DYREL_rheology.jl")
 
 ## MAIN SCRIPT ----------------------------------------------------------------------
 
@@ -78,12 +76,11 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
-    stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-12, ϵ_rel = 1.0e-4, Re = 3π, r = 1.0e0, CFL = 0.9 / √3.1)
+    stokes = StokesArrays(backend_JR, ni)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend, ni)
+    thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false, front = true, back = true),
     )
@@ -107,7 +104,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √3
     )
 
     # Free slip on every wall
@@ -137,37 +134,45 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
         Vz_v = @zeros(ni .+ 1...)
     end
 
+    # DyRel solver options
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, c_fact = 0.7, γfact = 1.0)
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        particle2centroid!(
+            T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false
+        )
         @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
-            out = solve!(
+            out = solve_DYREL!(
                 stokes,
-                pt_stokes,
-                grid,
-                flow_bcs,
                 ρg,
+                dyrel,
+                flow_bcs,
                 phase_ratios,
                 rheology,
                 args,
+                grid,
                 Inf,
                 igg;
                 kwargs = (;
+                    verbose_PH = true,
+                    verbose_DR = false,
                     iterMax = 100.0e3,
-                    nout = 1.0e2,
+                    total_iterMax = 100.0e3,
+                    nout = 1,
+                    rel_drop = 1.0e-2,
+                    viscosity_relaxation = 1.0e-2,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
         end
-
 
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
@@ -288,5 +293,5 @@ else
     igg
 end
 
-figdir = "Plume3D_$n"
+figdir = "Plume3D_DyRel_$n"
 main3D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nz = nz, do_vtk = do_vtk)

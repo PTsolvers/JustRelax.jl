@@ -94,7 +94,7 @@ function _solve_DYREL!(
 
     # reset plastic multiplier at the beginning of the time step
     stokes.λ .= 0.0
-    stokes.λv .= 0.0
+    reset_dyrel_vertex_λ!(dyrel_vertex_λ(stokes, dim))
 
     # Iteration loop
     err_min = Inf
@@ -118,7 +118,7 @@ function _solve_DYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt; CFL = dyrel.CFL)
     if free_surface
         N == 2 || error("DYREL free-surface stabilization currently supports only 2D")
         apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
@@ -136,6 +136,7 @@ function _solve_DYREL!(
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        update_stress_halo!(stokes, dim, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
@@ -205,6 +206,7 @@ function _solve_DYREL!(
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
             compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            update_stress_halo!(stokes, dim, linear_viscosity)
             # update_halo!(stokes.λv)
             # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
             # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
@@ -267,7 +269,7 @@ function _solve_DYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
                 free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
 
                 # Select dτ
@@ -305,7 +307,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
 
 end
 
@@ -317,7 +319,7 @@ function _solve_DYREL!(
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
         args,
-        di::Union{NTuple{2, <:Real}, NamedTuple},
+        di::Union{NTuple{2, <:Real}, NTuple{3, <:Real}, NamedTuple},
         dt,
         igg::IGG;
         kwargs...,
@@ -357,6 +359,20 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{2}, linear_viscosity)
+    if linear_viscosity
+        update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+    else
+        update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
+    end
+    return nothing
+end
+
+function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{3}, linear_viscosity)
+    update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
+    return nothing
+end
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
 

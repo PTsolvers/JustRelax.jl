@@ -156,30 +156,30 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
-        out = solve_DYREL!(
-            stokes,
-            ρg,
-            dyrel,
-            flow_bcs,
-            phase_ratios,
-            rheology,
-            args,
-            grid,
-            dt,
-            igg;
-            kwargs = (;
-                verbose_PH = true,
-                verbose_DR = false,
-                iterMax = 50.0e3,
-                nout = 10,
-                rel_drop = 1.0e-2,
-                λ_relaxation_PH = 1,
-                λ_relaxation_DR = 1,
-                viscosity_relaxation = 1,
-                linear_viscosity = true,
-                viscosity_cutoff = viscosity_cutoff,
+            out = solve_DYREL!(
+                stokes,
+                ρg,
+                dyrel,
+                flow_bcs,
+                phase_ratios,
+                rheology,
+                args,
+                grid,
+                dt,
+                igg;
+                kwargs = (;
+                    verbose_PH = true,
+                    verbose_DR = false,
+                    iterMax = 50.0e3,
+                    nout = 10,
+                    rel_drop = 1.0e-2,
+                    λ_relaxation_PH = 1,
+                    λ_relaxation_DR = 1,
+                    viscosity_relaxation = 1,
+                    linear_viscosity = true,
+                    viscosity_cutoff = viscosity_cutoff,
+                )
             )
-        )
         end
         niter = isempty(out.err_evo_it) ? 0.0 : last(out.err_evo_it)
         println("Stokes solver time             ")
@@ -270,7 +270,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-nx,ny,nz = 128*1, 8, 64*1
+nx, ny, nz = 128 * 1, 8, 64 * 1
 li, origin, phases_GMG, = GMG_only(nx + 1, ny + 1, nz + 1)
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

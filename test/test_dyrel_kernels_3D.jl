@@ -121,11 +121,13 @@ end
         @test dyrel.γfact === 37.0
         @test all(Array(dyrel.ηb) .≈ 5.0)
         @test all(Array(dyrel.γ_eff) .≈ 5.0 * 37.0 / (5.0 + 37.0))
-        @test all(A -> all(isfinite, Array(A)), (
-            dyrel.Dx, dyrel.Dy, dyrel.Dz,
-            dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
-            dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
-        ))
+        @test all(
+            A -> all(isfinite, Array(A)), (
+                dyrel.Dx, dyrel.Dy, dyrel.Dz,
+                dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
+                dyrel.dτVx, dyrel.dτVy, dyrel.dτVz,
+            )
+        )
         @test all(A -> all(>(0), Array(A)), (dyrel.Dx, dyrel.Dy, dyrel.Dz))
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
@@ -217,9 +219,11 @@ end
 
         foreach(A -> fill!(A, 0.0), (ρg..., stokes.P, stokes.ΔPψ, θc, @stress(stokes)...))
         stokes.V.Vz .= 2.0
-        ρg[3] .= PTArray(backend_JR)([
-            k for _ in 1:nx, _ in 1:ny, k in 1:nz
-        ])
+        ρg[3] .= PTArray(backend_JR)(
+            [
+                k for _ in 1:nx, _ in 1:ny, k in 1:nz
+            ]
+        )
         @parallel (@idx local_ni) JR3K.compute_PH_residual_V!(
             stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
             stokes.P, stokes.ΔPψ, @stress(stokes)..., ρg...,
@@ -368,11 +372,13 @@ end
         nondilatant_rheology = (
             SetMaterialParams(;
                 Phase = 1,
-                CompositeRheology = CompositeRheology((
-                    LinearViscous(; η = 1.0),
-                    incompressible_elasticity,
-                    DruckerPrager_regularised(; C = 0.1, ϕ = 30.0, η_vp = 1.0e-2, Ψ = 0.0),
-                )),
+                CompositeRheology = CompositeRheology(
+                    (
+                        LinearViscous(; η = 1.0),
+                        incompressible_elasticity,
+                        DruckerPrager_regularised(; C = 0.1, ϕ = 30.0, η_vp = 1.0e-2, Ψ = 0.0),
+                    )
+                ),
                 Elasticity = incompressible_elasticity,
             ),
         )

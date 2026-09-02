@@ -277,26 +277,26 @@ end
 
         Dx_ijk = Dx[i, j, k] = @muladd(
             (ηN + ηS) * _dy2 +
-            (ηB + ηF) * _dz2 +
-            (γE + γW + c43 * (ηE + ηW)) * _dx2
+                (ηB + ηF) * _dz2 +
+                (γE + γW + c43 * (ηE + ηW)) * _dx2
         )
 
         Cx = @muladd(
             abs((γE + c43 * ηE) * _dx2) +
-            abs((γW + c43 * ηW) * _dx2) +
-            abs(ηN * _dy2) +
-            abs(ηS * _dy2) +
-            abs(ηB * _dz2) +
-            abs(ηF * _dz2) +
-            abs((γE - (2 / 3) * ηE + ηN) * _dxdy) +
-            abs((γE - (2 / 3) * ηE + ηS) * _dxdy) +
-            abs((γW + ηN - (2 / 3) * ηW) * _dxdy) +
-            abs((γW + ηS - (2 / 3) * ηW) * _dxdy) +
-            abs((γE - (2 / 3) * ηE + ηB) * _dxdz) +
-            abs((γW + ηB - (2 / 3) * ηW) * _dxdz) +
-            abs((γE - (2 / 3) * ηE + ηF) * _dxdz) +
-            abs((γW + ηF - (2 / 3) * ηW) * _dxdz) +
-            abs(Dx_ijk)
+                abs((γW + c43 * ηW) * _dx2) +
+                abs(ηN * _dy2) +
+                abs(ηS * _dy2) +
+                abs(ηB * _dz2) +
+                abs(ηF * _dz2) +
+                abs((γE - (2 / 3) * ηE + ηN) * _dxdy) +
+                abs((γE - (2 / 3) * ηE + ηS) * _dxdy) +
+                abs((γW + ηN - (2 / 3) * ηW) * _dxdy) +
+                abs((γW + ηS - (2 / 3) * ηW) * _dxdy) +
+                abs((γE - (2 / 3) * ηE + ηB) * _dxdz) +
+                abs((γW + ηB - (2 / 3) * ηW) * _dxdz) +
+                abs((γE - (2 / 3) * ηE + ηF) * _dxdz) +
+                abs((γW + ηF - (2 / 3) * ηW) * _dxdz) +
+                abs(Dx_ijk)
         )
 
         λmaxVx[i, j, k] = Cx / Dx_ijk
@@ -323,26 +323,26 @@ end
 
         Dy_ijk = Dy[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
-            (ηB + ηF) * _dz2 +
-            (γN + γS + c43 * (ηN + ηS)) * _dy2
+                (ηB + ηF) * _dz2 +
+                (γN + γS + c43 * (ηN + ηS)) * _dy2
         )
 
         Cy = @muladd(
             abs(ηE * _dx2) +
-            abs(ηW * _dx2) +
-            abs((γN + c43 * ηN) * _dy2) +
-            abs((γS + c43 * ηS) * _dy2) +
-            abs(ηB * _dz2) +
-            abs(ηF * _dz2) +
-            abs((γN + ηE - (2 / 3) * ηN) * _dxdy) +
-            abs((γS + ηE - (2 / 3) * ηS) * _dxdy) +
-            abs((γN - (2 / 3) * ηN + ηW) * _dxdy) +
-            abs((γS - (2 / 3) * ηS + ηW) * _dxdy) +
-            abs((γN - (2 / 3) * ηN + ηB) * _dydz) +
-            abs((γS - (2 / 3) * ηS + ηB) * _dydz) +
-            abs((γN - (2 / 3) * ηN + ηF) * _dydz) +
-            abs((γS - (2 / 3) * ηS + ηF) * _dydz) +
-            abs(Dy_ijk)
+                abs(ηW * _dx2) +
+                abs((γN + c43 * ηN) * _dy2) +
+                abs((γS + c43 * ηS) * _dy2) +
+                abs(ηB * _dz2) +
+                abs(ηF * _dz2) +
+                abs((γN + ηE - (2 / 3) * ηN) * _dxdy) +
+                abs((γS + ηE - (2 / 3) * ηS) * _dxdy) +
+                abs((γN - (2 / 3) * ηN + ηW) * _dxdy) +
+                abs((γS - (2 / 3) * ηS + ηW) * _dxdy) +
+                abs((γN - (2 / 3) * ηN + ηB) * _dydz) +
+                abs((γS - (2 / 3) * ηS + ηB) * _dydz) +
+                abs((γN - (2 / 3) * ηN + ηF) * _dydz) +
+                abs((γS - (2 / 3) * ηS + ηF) * _dydz) +
+                abs(Dy_ijk)
         )
 
         λmaxVy[i, j, k] = Cy / Dy_ijk
@@ -369,26 +369,26 @@ end
 
         Dz_ijk = Dz[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
-            (ηN + ηS) * _dy2 +
-            (γB + γF + c43 * (ηB + ηF)) * _dz2
+                (ηN + ηS) * _dy2 +
+                (γB + γF + c43 * (ηB + ηF)) * _dz2
         )
 
         Cz = @muladd(
             abs(ηE * _dx2) +
-            abs(ηW * _dx2) +
-            abs(ηN * _dy2) +
-            abs(ηS * _dy2) +
-            abs((γB + c43 * ηB) * _dz2) +
-            abs((γF + c43 * ηF) * _dz2) +
-            abs((γB - (2 / 3) * ηB + ηE) * _dxdz) +
-            abs((γB - (2 / 3) * ηB + ηW) * _dxdz) +
-            abs((γF - (2 / 3) * ηF + ηE) * _dxdz) +
-            abs((γF - (2 / 3) * ηF + ηW) * _dxdz) +
-            abs((γB - (2 / 3) * ηB + ηN) * _dydz) +
-            abs((γB - (2 / 3) * ηB + ηS) * _dydz) +
-            abs((γF - (2 / 3) * ηF + ηN) * _dydz) +
-            abs((γF - (2 / 3) * ηF + ηS) * _dydz) +
-            abs(Dz_ijk)
+                abs(ηW * _dx2) +
+                abs(ηN * _dy2) +
+                abs(ηS * _dy2) +
+                abs((γB + c43 * ηB) * _dz2) +
+                abs((γF + c43 * ηF) * _dz2) +
+                abs((γB - (2 / 3) * ηB + ηE) * _dxdz) +
+                abs((γB - (2 / 3) * ηB + ηW) * _dxdz) +
+                abs((γF - (2 / 3) * ηF + ηE) * _dxdz) +
+                abs((γF - (2 / 3) * ηF + ηW) * _dxdz) +
+                abs((γB - (2 / 3) * ηB + ηN) * _dydz) +
+                abs((γB - (2 / 3) * ηB + ηS) * _dydz) +
+                abs((γF - (2 / 3) * ηF + ηN) * _dydz) +
+                abs((γF - (2 / 3) * ηF + ηS) * _dydz) +
+                abs(Dz_ijk)
         )
 
         λmaxVz[i, j, k] = Cz / Dz_ijk

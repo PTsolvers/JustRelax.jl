@@ -31,10 +31,12 @@ else
     JustPIC.CPU
 end
 
-include(joinpath(
-    @__DIR__, "..", "miniapps", "DYREL3D", "benchmarks", "taylor_green",
-    "TaylorGreen_DYREL.jl",
-))
+include(
+    joinpath(
+        @__DIR__, "..", "miniapps", "DYREL3D", "benchmarks", "taylor_green",
+        "TaylorGreen_DYREL.jl",
+    )
+)
 
 function check_taylor_green_mpi()
     geometry, stokes, iters = taylorGreen(;

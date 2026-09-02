@@ -349,8 +349,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     Tsurf, Tbot = extrema(thermal.T)
 
     dyrel = JustRelax3D.DYREL(
-    backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
-    ϵ = 1.0e-4, c_fact = 0.7, CFL = 0.99, γfact = 10.0,
+        backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
+        ϵ = 1.0e-4, c_fact = 0.7, CFL = 0.99, γfact = 10.0,
     )
 
     while it < 25

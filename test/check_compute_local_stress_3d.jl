@@ -19,7 +19,7 @@ using StaticArrays
         ),
     )
 
-    eps_ij = (0.10, -0.03, -0.07, 0.02, 0.03, -0.01) # xx, yy, zz, yz, xz, xy
+    eps_ij = (0.1, -0.03, -0.07, 0.02, 0.03, -0.01) # xx, yy, zz, yz, xz, xy
     tau_old = ntuple(_ -> 0.0, Val(6))
     phase_ratio = SVector(1.0)
 

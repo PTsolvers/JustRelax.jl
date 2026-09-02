@@ -65,18 +65,24 @@ end
 
         stokes = StokesArrays(backend_JR, ni)
         nx, ny, nz = ni
-        stokes.V.Vx .= PTArray(backend_JR)([
-            sinpi((i - 1) / nx) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / (nz + 1))
-                for i in 1:(nx + 1), j in 1:(ny + 2), k in 1:(nz + 2)
-        ])
-        stokes.V.Vy .= PTArray(backend_JR)([
-            -0.7 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / ny) * sinpi((k - 1) / (nz + 1))
-                for i in 1:(nx + 2), j in 1:(ny + 1), k in 1:(nz + 2)
-        ])
-        stokes.V.Vz .= PTArray(backend_JR)([
-            0.4 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / nz)
-                for i in 1:(nx + 2), j in 1:(ny + 2), k in 1:(nz + 1)
-        ])
+        stokes.V.Vx .= PTArray(backend_JR)(
+            [
+                sinpi((i - 1) / nx) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / (nz + 1))
+                    for i in 1:(nx + 1), j in 1:(ny + 2), k in 1:(nz + 2)
+            ]
+        )
+        stokes.V.Vy .= PTArray(backend_JR)(
+            [
+                -0.7 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / ny) * sinpi((k - 1) / (nz + 1))
+                    for i in 1:(nx + 2), j in 1:(ny + 1), k in 1:(nz + 2)
+            ]
+        )
+        stokes.V.Vz .= PTArray(backend_JR)(
+            [
+                0.4 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / nz)
+                    for i in 1:(nx + 2), j in 1:(ny + 2), k in 1:(nz + 1)
+            ]
+        )
 
         flow_bcs = VelocityBoundaryConditions(;
             free_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
@@ -99,9 +105,11 @@ end
             ),
         )
         linear_stokes = StokesArrays(backend_JR, ni)
-        linear_stokes.viscosity.η .= PTArray(backend_JR)([
-            j + 2k for _ in 1:nx, j in 1:ny, k in 1:nz
-        ])
+        linear_stokes.viscosity.η .= PTArray(backend_JR)(
+            [
+                j + 2k for _ in 1:nx, j in 1:ny, k in 1:nz
+            ]
+        )
         linear_stokes.ε.yz .= 1.0
         linear_args = (; T = @zeros(ni .+ 2...), P = linear_stokes.P, dt = dt)
         linear_dyrel = JustRelax3D.DYREL(

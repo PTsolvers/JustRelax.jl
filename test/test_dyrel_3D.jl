@@ -53,11 +53,13 @@ end
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.3
-        @test all(A -> all(iszero, Array(A)), (
-            dyrel.γ_eff, dyrel.ηb, dyrel.P_num,
-            dyrel.Dx, dyrel.Dy, dyrel.Dz,
-            dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
-        ))
+        @test all(
+            A -> all(iszero, Array(A)), (
+                dyrel.γ_eff, dyrel.ηb, dyrel.P_num,
+                dyrel.Dx, dyrel.Dy, dyrel.Dz,
+                dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz,
+            )
+        )
 
         dyrel_forwarded = JustRelax3D.DYREL(backend_JR, nx, ny, nz; CFL = 0.7, γfact = 31.0)
         @test size(dyrel_forwarded.Dz) == velocity_sizes[3]

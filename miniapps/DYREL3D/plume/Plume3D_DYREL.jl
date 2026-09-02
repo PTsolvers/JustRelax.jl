@@ -135,7 +135,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     end
 
     # DyRel solver options
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, c_fact = 0.7, γfact =1.0)
+    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-4, CFL = 0.99, c_fact = 0.7, γfact = 1.0)
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
@@ -150,28 +150,28 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
-        out = solve_DYREL!(
-            stokes,
-            ρg,
-            dyrel,
-            flow_bcs,
-            phase_ratios,
-            rheology,
-            args,
-            grid,
-            Inf,
-            igg;
-            kwargs = (;
-                verbose_PH = true,
-                verbose_DR = false,
-                iterMax = 100.0e3,
-                total_iterMax = 100.0e3,
-                nout = 1,
-                rel_drop = 1.0e-2,
-                viscosity_relaxation = 1e-2,
-                viscosity_cutoff = viscosity_cutoff,
+            out = solve_DYREL!(
+                stokes,
+                ρg,
+                dyrel,
+                flow_bcs,
+                phase_ratios,
+                rheology,
+                args,
+                grid,
+                Inf,
+                igg;
+                kwargs = (;
+                    verbose_PH = true,
+                    verbose_DR = false,
+                    iterMax = 100.0e3,
+                    total_iterMax = 100.0e3,
+                    nout = 1,
+                    rel_drop = 1.0e-2,
+                    viscosity_relaxation = 1.0e-2,
+                    viscosity_cutoff = viscosity_cutoff,
+                )
             )
-        )
         end
 
         println("Stokes solver time             ")

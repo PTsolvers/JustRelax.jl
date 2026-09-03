@@ -1,15 +1,33 @@
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const isCUDA = false
+# const isCUDA = true
 
-const backend_JR = CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
 # Load script dependencies
 using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
@@ -37,22 +55,22 @@ end
 
     # (depth - 15e3) because we have 15km of sticky air
     if depth < 0.0e0
-        T[i + 1, j] = 273.0e0
+        T[i + 1, j + 1] = 273.0e0
 
     elseif 0.0e0 ≤ (depth) < 35.0e3
         dTdZ = (923 - 273) / 35.0e3
         offset = 273.0e0
-        T[i + 1, j] = (depth) * dTdZ + offset
+        T[i + 1, j + 1] = (depth) * dTdZ + offset
 
     elseif 110.0e3 > (depth) ≥ 35.0e3
         dTdZ = (1492 - 923) / 75.0e3
         offset = 923
-        T[i + 1, j] = (depth - 35.0e3) * dTdZ + offset
+        T[i + 1, j + 1] = (depth - 35.0e3) * dTdZ + offset
 
     elseif (depth) ≥ 110.0e3
         dTdZ = (1837 - 1492) / 590.0e3
         offset = 1492.0e0
-        T[i + 1, j] = (depth - 110.0e3) * dTdZ + offset
+        T[i + 1, j + 1] = (depth - 110.0e3) * dTdZ + offset
 
     end
 
@@ -67,12 +85,12 @@ function rectangular_perturbation!(T, xc, yc, r, xvi)
             depth = abs(y[j])
             dTdZ = (2047 - 2017) / 50.0e3
             offset = 2017
-            T[i + 1, j] = (depth - 585.0e3) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - 585.0e3) * dTdZ + offset
         end
         return nothing
     end
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
 
     return nothing
 end
@@ -115,14 +133,12 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(backend_JR, Val(2), ni .+ 1)
+    weno = WENO5(backend, Val(2), ni .+ 1)
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 1
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
@@ -132,37 +148,39 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     yc_anomaly = -610.0e3 # origin of thermal anomaly
     r_anomaly = 25.0e3   # radius of perturbation
     init_phases!(pPhases, particles, lx; d = abs(yc_anomaly), r = r_anomaly)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
+    # initialize thermal profile - Half space cooling
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    Ttop = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
-    # initialize thermal profile - Half space cooling
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2])
     thermal_bcs!(thermal, thermal_bc)
 
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-    temperature2center!(thermal)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
-        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         @parallel init_P!(stokes.P, ρg[2], xci[2])
     end
 
-    args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
+    args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     # Rheology
     viscosity_cutoff = (1.0e16, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
@@ -170,7 +188,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1 / √2.1
     )
 
     # Boundary conditions
@@ -196,7 +214,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv ./ 1.0e3)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y ./ 1.0e3)
         scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y ./ 1.0e3)
         ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
         ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
@@ -206,16 +224,16 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     end
 
     # WENO arrays
-    T_WENO = @zeros(ni .+ 1)
-    Vx_v = @zeros(ni .+ 1...)
-    Vy_v = @zeros(ni .+ 1...)
+    T_WENO = @zeros(ni)
+    Vx_c = @. (stokes.V.Vx[1:(end - 1), 2:(end - 1)] + stokes.V.Vx[2:end, 2:(end - 1)]) / 2
+    Vy_c = @. (stokes.V.Vy[2:(end - 1), 1:(end - 1)] + stokes.V.Vy[2:(end - 1), 2:end]) / 2
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # Update buoyancy and viscosity -
-        args = (; T = thermal.Tc, P = stokes.P, dt = dt, ΔTc = thermal.ΔTc)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+        args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
+        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
         compute_viscosity!(
             stokes, phase_ratios, args, rheology, viscosity_cutoff
         )
@@ -225,7 +243,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -251,7 +269,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -260,23 +278,22 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
                 verbose = true,
             ),
         )
-        T_WENO .= thermal.T[2:(end - 1), :]
-
-        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
-        WENO_advection!(T_WENO, (Vx_v, Vy_v), weno, di, dt)
-
-        thermal.T[2:(end - 1), :] .= T_WENO
+        T_WENO .= @view(thermal.T[2:(end - 1), 2:(end - 1)])
+        @. Vx_c = (stokes.V.Vx[1:(end - 1), 2:(end - 1)] + stokes.V.Vx[2:end, 2:(end - 1)]) / 2
+        @. Vy_c = (stokes.V.Vy[2:(end - 1), 1:(end - 1)] + stokes.V.Vy[2:(end - 1), 2:end]) / 2
+        WENO_advection!(T_WENO, (Vx_c, Vy_c), weno, di, dt)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_WENO
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         @show it += 1
         t += dt
 
@@ -285,7 +302,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
             # Make Makie figure
             fig = Figure(size = (900, 900), title = "t = $t")
             ax1 = Axis(fig[1, 1])
-            h1 = heatmap!(ax1, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(T_WENO), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(T_WENO), colormap = :batlow)
             Colorbar(fig[1, 2], h1)
             save(joinpath(figdir, "$(it).png"), fig)
             fig

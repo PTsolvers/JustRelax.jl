@@ -1,14 +1,40 @@
-using GeoParams, CairoMakie, CellArrays
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using Pkg; Pkg.activate("miniapps")
 
-const backend = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JP = JustPIC.CPUBackend
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams, CairoMakie, CellArrays
+
+
+import JustPIC.GridGeometryUtils as GGU
+
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -108,7 +134,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
 
     # Rheology
     compute_viscosity!(
@@ -143,7 +169,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -196,7 +222,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 256
+n = 64
 nx = n
 ny = n
 figdir = "output/ShearBands2D_StrainIncrement"

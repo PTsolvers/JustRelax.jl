@@ -1,13 +1,26 @@
 ## 3D VISCO-ELASTIC STOKES SOLVER
 
 # backend trait
-function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs)
-    return nothing
+"""
+    solve_VariationalStokes!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ::RockRatio, rheology, args, dt, igg; kwargs...)
+
+Solve the 3D viscoelastoplastic Stokes equations to pseudo-transient convergence using the
+variational (ghost-node-free) formulation, updating `stokes` in place for one physical
+time step `dt`. Cells are weighted by the rock ratio `ϕ` (see [`RockRatio`](@ref)), so
+partially- or fully-air/sticky-air cells contribute less (or not at all) to the momentum
+balance. `grid` may be replaced by the grid spacing `di` alone.
+
+`rheology` is one `GeoParams.MaterialParams` per phase; `args` carries auxiliary fields
+(e.g. temperature `T`, pressure `P`). Keyword tolerances, iteration limits, and relaxation
+factors default as in `_solve_VS!`. Dispatches on the CPU/CUDA/AMDGPU backend selected by
+`stokes`.
+"""
+function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    return solve_VariationalStokes!(backend(stokes), stokes, args...; kwargs...)
 end
 
 # entry point for extensions
-function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs)
+function solve_VariationalStokes!(::CPUBackendTrait, stokes, args...; kwargs...)
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
@@ -15,7 +28,7 @@ end
 function _solve_VS!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
-        di::NTuple{3, T},
+        grid::Geometry{3},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
         phase_ratios::JustPIC.PhaseRatios,
@@ -32,7 +45,7 @@ function _solve_VS!(
         viscosity_relaxation = 1.0e-2,
         viscosity_cutoff = (-Inf, Inf),
         kwargs...,
-    ) where {T, N}
+    ) where {N}
 
     ## UNPACK
 
@@ -40,7 +53,10 @@ function _solve_VS!(
     ϵ_rel = pt_stokes.ϵ_rel
     ϵ_abs = pt_stokes.ϵ_abs
     # geometry
-    _di = @. 1 / di
+    di = grid.di
+    _di = grid._di
+    di = di isa NamedTuple ? di.center : di
+    _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
 
@@ -68,7 +84,7 @@ function _solve_VS!(
     ητ = deepcopy(η)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg, phase_ratios, rheology, args)
+    compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
     compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
 
     # convert displacement to velocity
@@ -80,7 +96,7 @@ function _solve_VS!(
             compute_maxloc!(ητ, η)
             update_halo!(ητ)
 
-            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di...)
+            @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
             compute_P!(
                 θ,
                 stokes.P0,
@@ -97,11 +113,11 @@ function _solve_VS!(
             )
 
             @parallel (@idx ni) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di...
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di
             )
 
             # Update buoyancy
-            update_ρg!(ρg, phase_ratios, rheology, args)
+            update_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 
             # Update viscosity
             update_viscosity_τII!(
@@ -119,6 +135,8 @@ function _solve_VS!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
+                stokes.EVol_pl,
                 @tensor_center(stokes.τ),
                 (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o),
@@ -144,6 +162,7 @@ function _solve_VS!(
             update_halo!(stokes.τ.yz)
             update_halo!(stokes.τ.xz)
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(3))
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -155,12 +174,12 @@ function _solve_VS!(
                     ητ,
                     pt_stokes.ηdτ,
                     ϕ,
-                    _di...,
+                    _di,
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, di)
                 flow_bcs!(stokes, flow_bcs)
+                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(3))
                 update_halo!(@velocity(stokes)...)
             end
         end
@@ -205,7 +224,7 @@ function _solve_VS!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., inv.(di)...
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
     )
 
     # Interpolate shear components to cell center arrays
@@ -215,6 +234,7 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
@@ -230,4 +250,22 @@ function _solve_VS!(
         time = wtime0,
         av_time = av_time,
     )
+end
+
+function _solve_VS!(
+        stokes::JustRelax.StokesArrays,
+        pt_stokes,
+        di::Union{NTuple{3, <:Real}, NamedTuple},
+        flow_bcs::AbstractFlowBoundaryConditions,
+        ρg,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        rheology::NTuple{N, AbstractMaterialParamsStruct},
+        args,
+        dt,
+        igg::IGG;
+        kwargs...,
+    ) where {N}
+    grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
+    return _solve_VS!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ, rheology, args, dt, igg; kwargs...)
 end

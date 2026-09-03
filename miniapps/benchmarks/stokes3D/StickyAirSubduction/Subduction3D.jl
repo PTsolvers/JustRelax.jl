@@ -1,33 +1,39 @@
-const isGPU = true
-@static if isGPU
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
     using CUDA
 end
-using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 
-const backend_JR = @static if isGPU
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
-    CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
-using ParallelStencil
-using ParallelStencil.FiniteDifferences3D
-@static if isGPU
+
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 3)
 else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
-# const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend_JP = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-
-const backend_JP = @static if isGPU
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
+# const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+# const backend_JP = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+
+
 using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
@@ -67,37 +73,35 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     particle_args = pPhases, = init_cell_arrays(particles, Val(1))
 
     # Assign particles phases anomaly
-    phases_device = PTArray(backend_JR)(phases_GMG)
+    phases_device = PTArray(backend)(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-3, ϵ_rel = 1.0e-3, CFL = 0.95 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
-    temperature2center!(thermal)
+    thermal = ThermalArrays(backend, ni)
     # ----------------------------------------------------
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
-    # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e24)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
@@ -134,7 +138,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,
@@ -158,13 +162,13 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
@@ -176,11 +180,11 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    T = zeros(ni .+ 1...),
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)],
                 )
                 data_c = (;
                     P = Array(stokes.P),
+                    T = Array(@view thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     εxx = Array(stokes.ε.xx),

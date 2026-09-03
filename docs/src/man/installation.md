@@ -50,8 +50,6 @@ julia> ]
 (@v1.xx) pkg> activate miniapps
 
 (@v1.xx) pkg> instantiate
-
-(@v1.xx) pkg> activate .
 ```
 After that, you can run any of the miniapps, for example:
 ```julia

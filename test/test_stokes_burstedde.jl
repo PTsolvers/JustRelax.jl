@@ -23,16 +23,20 @@ end
 
 include("../miniapps/benchmarks/stokes3D/burstedde/Burstedde.jl")
 
+# The PT residual reaching its tolerance only says the discrete system was solved, not that
+# the discrete system is the right one, so the errors against the analytical solution are
+# checked at two resolutions and their ratio is required to show the expected order.
 function check_convergence_case1()
-    nx = 16
-    ny = 16
-    nz = 16
-    _, _, iters = burstedde(; nx = nx, ny = ny, nz = nz, init_MPI = true, finalize_MPI = true)
+    errors = map((8, 16)) do n
+        geometry, stokes, iters = burstedde(; nx = n, ny = n, nz = n, init_MPI = n == 8, finalize_MPI = n == 16)
+        iters.err_evo1[end] < 1.0e-8 || error("PT iterations did not converge at nx = $n")
+        error_norms(stokes, geometry)
+    end
 
-    tol = 1.0e-8
-    passed = iters.err_evo1[end] < tol
+    L2_p, L2_vx, L2_vy, L2_vz = last(errors)
+    order = log2.(first(errors) ./ last(errors))
 
-    return passed
+    return all(order[2:end] .> 1.4) && max(L2_vx, L2_vy, L2_vz) < 3.0e-2 && L2_p < 2.0e-1
 end
 
 @testset "Burstedde" begin

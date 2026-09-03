@@ -1,17 +1,41 @@
-using CUDA
-using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+const isCUDA = false
+# const isCUDA = true
 
-const backend_JR = CUDABackend
-# const backend_JR = CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+# const backend = CPUBackend
 
 using Printf, GeoParams, CairoMakie, CellArrays
 
-using JustPIC, JustPIC._3D
-const backend_JP = CUDABackend
-# const backend_JP = JustPIC.CPUBackend
+# const backend_JP = JustPIC.CPU
 
-using ParallelStencil
-@init_parallel_stencil(CUDA, Float64, 3)
 # @init_parallel_stencil(Threads, Float64, 3)
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
@@ -117,11 +141,11 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.75 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = Inf)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     # Rheology
     cutoff_visc = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
@@ -132,8 +156,8 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
         no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
 
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
-    stokes.V.Vz .= PTArray(backend_JR)([-z * εbg for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
+    stokes.V.Vz .= PTArray(backend)([-z * εbg for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -159,7 +183,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -237,7 +261,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     return nothing
 end
 
-n = 100
+n = 32
 nx = ny = nz = n
 figdir = "MultiInclusions_$n"
 igg = if !(JustRelax.MPI.Initialized())

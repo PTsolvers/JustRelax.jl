@@ -43,7 +43,7 @@ function check_convergence_case1()
         εbg = εbg,
         G = G,
         init_MPI = init_mpi,
-        finalize_MPI = false,
+        finalize_MPI = true,
     )
 
     err =
@@ -54,8 +54,8 @@ function check_convergence_case1()
     return err ≤ 5.0e-3
 end
 
-# @testset "Elastic Build-Up" begin
-#     @suppress begin
-#         @test check_convergence_case1()
-#     end
-# end
+@testset "Elastic Build-Up" begin
+    @suppress begin
+        @test check_convergence_case1()
+    end
+end

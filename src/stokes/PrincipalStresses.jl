@@ -1,3 +1,9 @@
+"""
+    compute_principal_stresses(backend, stokes::StokesArrays)
+
+Compute the principal deviatoric stresses (eigenvalues and eigenvectors of the stress
+tensor) at cell centers from `stokes`, returning a new `PrincipalStress`.
+"""
 function compute_principal_stresses(backend, stokes::JustRelax.StokesArrays)
     ni = size(stokes.P)
     σ = PrincipalStress(backend, ni)
@@ -5,6 +11,11 @@ function compute_principal_stresses(backend, stokes::JustRelax.StokesArrays)
     return σ
 end
 
+"""
+    compute_principal_stresses!(stokes, σ::PrincipalStress)
+
+In-place version of [`compute_principal_stresses`](@ref), writing into a pre-allocated `σ`.
+"""
 function compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress)
     ni = size(stokes.P)
     @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
@@ -50,7 +61,7 @@ end
         τ_13 τ_23 τ_zz[I...]
     ]
 
-    σ1, σ2, σ3 = hessenberg_eigen_3x3(A)
+    σ1, σ2, σ3 = hessenberg_eigen_3x3(τ)
 
     Base.@nexprs 3 i -> begin
         @inbounds σ.σ1[i, I...] = σ1[i]

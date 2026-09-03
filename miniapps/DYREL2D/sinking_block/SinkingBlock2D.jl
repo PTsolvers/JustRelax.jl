@@ -1,0 +1,226 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using GeoParams, CairoMakie
+
+## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
+
+# Thermal rectangular perturbation
+
+function init_phases!(phases, particles, xc, yc, r)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, px, py, index, xc, yc, r)
+        @inbounds for ip in cellaxes(phases)
+            # quick escape
+            @index(index[ip, i, j]) == 0 && continue
+
+            x = @index px[ip, i, j]
+            depth = -(@index py[ip, i, j])
+            # plume - rectangular
+            @index phases[ip, i, j] = if ((x - xc)^2 ≤ r^2) && ((depth - yc)^2 ≤ r^2)
+                2.0
+            else
+                1.0
+            end
+        end
+        return nothing
+    end
+
+    return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r)
+end
+
+import ParallelStencil.INDICES
+const idx_j = INDICES[2]
+macro all_j(A)
+    return esc(:($A[$idx_j]))
+end
+
+@parallel function init_P!(P, ρg, z)
+    @all(P) = @all(ρg) * abs(@all_j(z))
+    return nothing
+end
+
+# --------------------------------------------------------------------------------
+# BEGIN MAIN SCRIPT
+# --------------------------------------------------------------------------------
+function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", thermal_perturbation = :circular)
+
+    # Physical domain ------------------------------------
+    ly = 500.0e3
+    lx = ly * ar
+    origin = -lx / 2, -ly                         # origin coordinates
+    ni = nx, ny                           # number of cells
+    li = lx, ly                           # domain length in x- and y-
+    di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    # ----------------------------------------------------
+
+    # Physical properties using GeoParams ----------------
+    δρ = 100
+    rheology = (
+        SetMaterialParams(;
+            Name = "Mantle",
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 3.2e3),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e21),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+        SetMaterialParams(;
+            Name = "Block",
+            Phase = 2,
+            Density = ConstantDensity(; ρ = 3.2e3 + δρ),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0e23),)),
+            Gravity = ConstantGravity(; g = 9.81),
+        ),
+    )
+    # heat diffusivity
+    dt = 1
+    # ----------------------------------------------------
+
+    grid_vxi = velocity_grids(xci, xvi, di)
+
+    # Initialize particles -------------------------------
+    nxcell, max_xcell, min_xcell = 40, 40, 12
+    particles = init_particles(
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    # temperature
+    pPhases, = init_cell_arrays(particles, Val(1))
+    particle_args = (pPhases,)
+    # Rectangular density anomaly
+    xc_anomaly = 0.0    # origin of thermal anomaly
+    yc_anomaly = -(ly - 400.0e3) # origin of thermal anomaly
+    r_anomaly = 50.0e3   # radius of perturbation
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
+
+    # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
+    stokes = StokesArrays(backend, ni)
+    # Buoyancy forces
+    ρg = @zeros(ni...), @zeros(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni .+ 2...), P = stokes.P))
+    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    # ----------------------------------------------------
+
+    # Viscosity
+    args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt)
+    viscosity_cutoff = -Inf, Inf
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    # ----------------------------------------------------
+
+    # Boundary conditions
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+    )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(@velocity(stokes)...)
+
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+
+    it = 0 # iteration counter
+    while it < 1
+        # Stokes solver ----------------
+        args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
+        solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = true,
+                iterMax = 50.0e3,
+                nout = 10,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1,
+                viscosity_cutoff = viscosity_cutoff,
+            )
+        )
+        dt = compute_dt(stokes, di, igg) * 0.8
+        # ------------------------------
+
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+        velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+        velocity = @. √(Vx_v^2 + Vy_v^2)
+
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), dt)
+        # advect particles in memory
+        move_particles!(particles, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+
+
+        # Plotting ---------------------
+        # f, _, h = heatmap(velocity, colormap = :vikO)
+        # f, _, h = heatmap(stokes.∇V, colormap = :vikO)
+        f, _, h = heatmap(log10.(abs.(stokes.∇V)))
+        Colorbar(f[1, 2], h)
+        save(
+            joinpath(@__DIR__, "sinking_DR_$(it).png"),
+            f
+        )
+        display(f)
+        it += 1
+        @show extrema(stokes.∇V)
+        # ------------------------------
+    end
+    return nothing
+end
+
+ar = 1 # aspect ratio
+n = 4
+nx = 32 * n
+ny = 32 * n
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+
+sinking_block2D(igg; ar = ar, nx = nx, ny = ny);

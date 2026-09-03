@@ -16,11 +16,7 @@ using TOML, Crayons
 
 function solve!() end
 #! format: off
-function __init__(io::IO = stdout)
-    if !isa(stdout, Base.TTY)
-        return
-    end
-
+function _print_banner(io::IO)
     j = string(Crayon(foreground = (50,74,201)))
     u = string(Crayon(foreground = (50,74,201)))
     s = string(Crayon(foreground = (50,74,201)))
@@ -46,6 +42,29 @@ Version: $(TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"])
 Latest commit: $(try strip(read(`git log -1 --pretty=%B`, String)) catch _ "N/A" end)
 Commit date: $(try strip(read(`git log -1 --pretty=%cd`, String)) catch _ "N/A" end)
 """, bold=true, color=:default)
+    return nothing
+end
+
+function __init__(io::IO = stdout)
+    isa(stdout, Base.TTY) || return
+    _print_banner(io)
+    return nothing
+end
+
+function _installation_method(pkg_dir::AbstractString, depots = DEPOT_PATH)
+    is_git = isdir(joinpath(pkg_dir, ".git"))
+    is_in_depot = any(d -> startswith(pkg_dir, joinpath(d, "packages")), depots)
+    is_dev = any(d -> startswith(pkg_dir, joinpath(d, "dev")), depots)
+    label = if is_dev
+        "Pkg.develop() or dev mode"
+    elseif is_git
+        "Git clone"
+    elseif is_in_depot
+        "Pkg.add() from registry"
+    else
+        "Custom location"
+    end
+    return (; label, is_git, is_in_depot, is_dev)
 end
 
 """
@@ -78,22 +97,9 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
 
     println(io, "JustRelax Version $version")
 
-    # Installation method detection
-    is_git = isdir(joinpath(pkg_dir, ".git"))
-    is_in_depot = any(depot -> startswith(pkg_dir, joinpath(depot, "packages")), DEPOT_PATH)
-    is_dev = any(depot -> startswith(pkg_dir, joinpath(depot, "dev")), DEPOT_PATH)
+    (; label, is_git, is_dev) = _installation_method(pkg_dir)
 
-    installation = if is_dev
-        "Pkg.develop() or dev mode"
-    elseif is_git
-        "Git clone"
-    elseif is_in_depot
-        "Pkg.add() from registry"
-    else
-        "Custom location"
-    end
-
-    println(io, "Installation: $installation")
+    println(io, "Installation: $label")
 
     # Show git info if available
     if is_git || is_dev
@@ -161,10 +167,45 @@ end
 export versioninfo
 
 #! format: on
+"""
+    AbstractBackend
+
+Supertype for backend tags ([`CPUBackend`](@ref), `CUDABackend`, [`AMDGPUBackend`](@ref))
+selecting which array type and device a model runs on.
+"""
 abstract type AbstractBackend end
+
+"""
+    CPUBackend
+
+Backend tag selecting plain `Array`s, running on the CPU via `ParallelStencil`'s `Threads`
+target. The default backend.
+"""
 struct CPUBackend <: AbstractBackend end
+
+"""
+    CUDABackend
+
+Backend tag selecting `CuArray`s, running on an Nvidia GPU. Only defined once `CUDA.jl` is
+loaded (see [Selecting the backend](@ref)).
+"""
+struct CUDABackend <: AbstractBackend end
+
+"""
+    AMDGPUBackend
+
+Backend tag selecting `ROCArray`s, running on an AMD GPU. Requires `AMDGPU.jl` to be loaded
+(see [Selecting the backend](@ref)).
+"""
 struct AMDGPUBackend <: AbstractBackend end
 
+"""
+    PTArray()
+    PTArray(::Type{<:AbstractBackend})
+
+The array type associated with a backend tag: `Array` for `CPUBackend`, `CuArray` for
+`CUDABackend`, `ROCArray` for `AMDGPUBackend`. `PTArray()` (no argument) is the CPU default.
+"""
 PTArray() = Array
 PTArray(::Type{CPUBackend}) = Array
 PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
@@ -180,6 +221,8 @@ include("types/heat_diffusion.jl")
 
 include("variational_stokes/types.jl")
 
+include("DYREL/types.jl")
+
 include("types/weno.jl")
 
 include("mask/mask.jl")
@@ -193,8 +236,8 @@ export TemperatureBoundaryConditions,
 include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
-include("topology/Topology.jl")
-export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
+include("grid/Grid.jl")
+export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
 
 include("JustRelax_CPU.jl")
 

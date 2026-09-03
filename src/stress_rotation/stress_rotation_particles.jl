@@ -2,18 +2,36 @@ using StaticArrays
 
 # Vorticity tensor
 
-@parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _dx, _dy)
-    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
+function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{2})
+    return @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.xy, @velocity(stokes)..., _di.velocity...
+    )
+end
 
-    @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
+function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{3})
+    return @parallel (@idx ni .+ 1) compute_vorticity!(
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di.velocity...
+    )
+end
+
+@parallel_indices (I...) function compute_vorticity!(ωxy, Vx, Vy, _di_vx, _di_vy)
+
+    i, j = I
+    _dx = @dx(_di_vy, i)
+    _dy = @dy(_di_vx, j)
+
+    Base.@propagate_inbounds @inline dx(A, I::Vararg{Int, 2}) = _d_xa(A, _dx, I...)
+    Base.@propagate_inbounds @inline dy(A, I::Vararg{Int, 2}) = _d_ya(A, _dy, I...)
+
+    @inbounds ωxy[I...] = 0.5 * (dx(Vy, I...) - dy(Vx, I...))
 
     return nothing
 end
 
 @parallel_indices (I...) function compute_vorticity!(
-        ωyz, ωxz, ωxy, Vx, Vy, Vz, _dx, _dy, _dz
+        ωyz, ωxz, ωxy, Vx, Vy, Vz, _di
     )
+    _dx, _dy, _dz = @dxi(_di, I...)
     Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
     Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
     Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
@@ -31,8 +49,46 @@ end
     return nothing
 end
 
+@parallel_indices (I...) function compute_vorticity!(
+        ωyz, ωxz, ωxy, Vx, Vy, Vz, _di_vx, _di_vy, _di_vz
+    )
+    i, j, k = I
+
+    if all(I .≤ size(ωyz))
+        _dy_vz = @dy(_di_vz, j)
+        _dz_vy = @dz(_di_vy, k)
+        ∂Vz∂y = _dy_vz * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+        ∂Vy∂z = _dz_vy * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k])
+        @inbounds ωyz[I...] = 0.5 * (∂Vz∂y - ∂Vy∂z)
+    end
+    if all(I .≤ size(ωxz))
+        _dz_vx = @dz(_di_vx, k)
+        _dx_vz = @dx(_di_vz, i)
+        ∂Vx∂z = _dz_vx * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k])
+        ∂Vz∂x = _dx_vz * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+        @inbounds ωxz[I...] = 0.5 * (∂Vx∂z - ∂Vz∂x)
+    end
+    if all(I .≤ size(ωxy))
+        _dx_vy = @dx(_di_vy, i)
+        _dy_vx = @dy(_di_vx, j)
+        ∂Vy∂x = _dx_vy * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+        ∂Vx∂y = _dy_vx * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1])
+        @inbounds ωxy[I...] = 0.5 * (∂Vy∂x - ∂Vx∂y)
+    end
+
+    return nothing
+end
+
 ## Stress Rotation on the particles
 
+"""
+    rotate_stress_particles!(τ::NTuple, ω::NTuple, particles::Particles, dt; method = :matrix)
+
+Rotate the deviatoric stress carried by each active particle over `dt` with the local
+vorticity, using GeoParams' elastic stress rotation. `τ` holds the stress components and
+`ω` the vorticity components, as particle cell arrays. `method` is accepted for call-site
+compatibility and does not select an algorithm.
+"""
 function rotate_stress_particles!(
         τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix
     )
@@ -74,12 +130,13 @@ end
         ω_xy = @inbounds @index ωxy[ip, I...]
         τ_xx = @inbounds @index xx[ip, I...]
         τ_yy = @inbounds @index yy[ip, I...]
+        τ_zz = @inbounds @index zz[ip, I...]
         τ_yz = @inbounds @index yz[ip, I...]
         τ_xz = @inbounds @index xz[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
         τ_rotated = GeoParams.rotate_elastic_stress3D(
-            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_xy, τ_yz, τ_xz, τ_xy), dt
+            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
         )
 
         components = xx, yy, zz, yz, xz, xy
@@ -101,8 +158,8 @@ end
         τ_xy = @inbounds @index xy[ip, I...]
 
         tmp = τ_xy * ω_xy * 2
-        @inbounds @index xx[ip, I...] = muladd(dt, cte, τ_xx)
-        @inbounds @index yy[ip, I...] = muladd(dt, cte, τ_yy)
+        @inbounds @index xx[ip, I...] = muladd(dt, tmp, τ_xx)
+        @inbounds @index yy[ip, I...] = muladd(dt, tmp, τ_yy)
         @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end
 
@@ -145,56 +202,73 @@ end
 
 # Interpolations between stress on the particles and the grid
 
+"""
+    stress2grid!(stokes, τ_particles::StressParticles, particles)
+
+Interpolate the particle stress in `τ_particles` back onto the old-stress fields
+`stokes.τ_o`, normal components onto the cell centers and shear components onto the
+vertices. Counterpart of [`rotate_stress!`](@ref), and the step that hands the rotated
+stress to the next Stokes solve.
+"""
 function stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{backend}, xvi, xci, particles
+        stokes, τ_particles::JustRelax.StressParticles{backend}, particles
     ) where {backend}
     return stress2grid!(
         stokes,
         normal_stress(τ_particles)...,
         shear_stress(τ_particles)...,
-        xvi,
-        xci,
         particles,
     )
 end
 
-function stress2grid!(stokes, pτxx, pτyy, pτxy, xvi, xci, particles)
+function stress2grid!(stokes, pτxx, pτyy, pτxy, particles)
     # normal components
-    particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
-    particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # shear components
-    particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
+    particle2grid!(stokes.τ_o.xx_v, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.yy_v, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
 
     return nothing
 end
 
-function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, xvi, xci, particles)
+function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particles)
     # normal components
-    particle2centroid!(stokes.τ_o.xx, pτxx, xci, particles)
-    particle2centroid!(stokes.τ_o.yy, pτyy, xci, particles)
-    particle2centroid!(stokes.τ_o.zz, pτzz, xci, particles)
+    particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2centroid!(stokes.τ_o.zz, pτzz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # shear components
-    particle2grid!(stokes.τ_o.yz, pτyz, xvi, particles)
-    particle2grid!(stokes.τ_o.xz, pτxz, xvi, particles)
-    particle2grid!(stokes.τ_o.xy, pτxy, xvi, particles)
+    particle2grid!(stokes.τ_o.yz, pτyz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xz, pτxz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    particle2grid!(stokes.τ_o.xy, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
 
     return nothing
 end
 
+"""
+    rotate_stress!(τ_particles::StressParticles, stokes, particles, dt)
+
+Interpolate the current deviatoric stress `stokes.τ` and vorticity `stokes.ω` onto the
+particles and rotate the particle stress over `dt`. `stokes.ω` must hold the vorticity of
+the current velocity field. Use [`stress2grid!`](@ref) afterwards to map the rotated
+stress back onto `stokes.τ_o`.
+"""
 function rotate_stress!(
-        τ_particles::JustRelax.StressParticles{backend}, stokes, particles, xci, xvi, dt
+        τ_particles::JustRelax.StressParticles{backend}, stokes, particles, dt
     ) where {backend}
-    return rotate_stress!(unwrap(τ_particles)..., stokes, particles, xci, xvi, dt)
+    return rotate_stress!(unwrap(τ_particles)..., stokes, particles, dt)
 end
 
-function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, dt)
+function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, dt)
     # normal components
-    centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
-    centroid2particle!(pτyy, xci, stokes.τ.yy, particles)
+    centroid2particle!(pτxx, stokes.τ.xx, particles)
+    centroid2particle!(pτyy, stokes.τ.yy, particles)
     # shear components
-    grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
+    grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
     # vorticity tensor
-    grid2particle!(pω, xvi, stokes.ω.xy, particles)
+    grid2particle!(pω, stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
     # rotate stress
     rotate_stress_particles!((pτxx, pτyy, pτxy), (pω,), particles, dt)
 
@@ -202,20 +276,20 @@ function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, xci, xvi, d
 end
 
 function rotate_stress!(
-        pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, xci, xvi, dt
+        pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, dt
     )
     # normal components
-    centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
-    centroid2particle!(pτyy, xci, stokes.τ.yy, particles)
-    centroid2particle!(pτzz, xci, stokes.τ.zz, particles)
+    centroid2particle!(pτxx, stokes.τ.xx, particles)
+    centroid2particle!(pτyy, stokes.τ.yy, particles)
+    centroid2particle!(pτzz, stokes.τ.zz, particles)
     # shear components
-    grid2particle!(pτyz, xvi, stokes.τ.yz, particles)
-    grid2particle!(pτxz, xvi, stokes.τ.xz, particles)
-    grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
+    grid2particle!(pτyz, stokes.τ.yz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pτxz, stokes.τ.xz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # vorticity tensor
-    grid2particle!(pωyz, xvi, stokes.ω.yz, particles)
-    grid2particle!(pωxz, xvi, stokes.ω.xz, particles)
-    grid2particle!(pωxy, xvi, stokes.ω.xy, particles)
+    grid2particle!(pωyz, stokes.ω.yz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pωxz, stokes.ω.xz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+    grid2particle!(pωxy, stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     # rotate stress
     rotate_stress_particles!(
         (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt

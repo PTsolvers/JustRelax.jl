@@ -6,6 +6,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -21,18 +22,16 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+using JustPIC
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
+import JustPIC.GridGeometryUtils as GGU
+
 using GeoParams
 using CairoMakie
 
@@ -129,9 +128,8 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # velocity grids
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -140,7 +138,7 @@ function main(igg, nx, ny)
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialize marker chain-------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 75
@@ -167,8 +165,8 @@ function main(igg, nx, ny)
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+    compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
@@ -192,7 +190,7 @@ function main(igg, nx, ny)
         solve_VariationalStokes!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -202,6 +200,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
@@ -213,18 +212,19 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        move_particles!(particles, particle_args)
 
-        # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # Filter against the new surface before injection.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
+
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         compute_rock_fraction!(ϕ, chain, xvi, di)
         # ------------------------------
 
@@ -267,7 +267,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n = 100
+n = 64
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

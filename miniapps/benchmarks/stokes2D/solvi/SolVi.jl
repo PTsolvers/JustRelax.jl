@@ -93,7 +93,7 @@ function solVi(;
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             G,

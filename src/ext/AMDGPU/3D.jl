@@ -2,13 +2,15 @@ module JustRelax3D
 
 using JustRelax: JustRelax
 using AMDGPU
-using JustPIC, JustPIC._3D
+using JustPIC
+using CellArraysIndexing: @index
 using StaticArrays
 using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using MPI
+using Statistics
 
 import JustRelax.JustRelax3D as JR3D
 
@@ -29,11 +31,12 @@ import JustRelax:
     DisplacementBoundaryConditions,
     VelocityBoundaryConditions,
     apply_dirichlet,
-    apply_dirichlet!
+    apply_dirichlet!,
+    isdirichlet
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 
-import JustPIC._3D: numphases, nphases, PhaseRatios, update_phase_ratios!, compute_dx, face_offset
+import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
@@ -44,6 +47,19 @@ include("../../stokes/Stokes3D.jl")
 function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
+    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
 
 function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
@@ -60,6 +76,10 @@ function JR3D.WENO5(
 end
 
 function JR3D.RockRatio(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return RockRatio(ni...)
+end
+
+function JR3D.RockRatio(::Type{AMDGPUBackend}, ni::Vararg{Integer, N}) where {N}
     return RockRatio(ni...)
 end
 
@@ -96,6 +116,24 @@ function JR3D.PTThermalCoeffs(
         CFL = 0.9 / √3,
     )
     return PTThermalCoeffs(rheology, args, dt, ni, di, li; ϵ = ϵ, CFL = CFL)
+end
+
+function JR3D.update_pt_thermal_arrays!(
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:ROCArray},
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args,
+        _dt,
+    ) where {T}
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
+end
+
+function JR3D.update_pt_thermal_arrays!(
+        pt_thermal::JustRelax.PTThermalCoeffs{T, <:ROCArray}, phase_ratios, rheology, args, _dt
+    ) where {T}
+    update_pt_thermal_arrays!(pt_thermal, phase_ratios, rheology, args, _dt)
+    return nothing
 end
 
 function JR3D.update_thermal_coeffs!(
@@ -147,6 +185,23 @@ function JR3D.update_thermal_coeffs!(
     return nothing
 end
 
+function JR3D.PrincipalStress(backend::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return PrincipalStress(ni)
+end
+
+function JR3D.compute_principal_stresses(backend::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays)
+    ni = size(stokes.P)
+    σ = JR3D.PrincipalStress(backend, ni)
+    compute_principal_stresses!(stokes, σ)
+    return σ
+end
+
+function JR3D.compute_principal_stresses!(stokes, σ::JustRelax.PrincipalStress{<:ROCArray})
+    ni = size(stokes.P)
+    @parallel (@idx ni) principal_stresses_eigen!(σ, @stress_center(stokes)...)
+    return nothing
+end
+
 # Boundary conditions
 function JR3D.flow_bcs!(
         ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, bcs::VelocityBoundaryConditions
@@ -182,6 +237,26 @@ end
 
 function thermal_bcs!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays, bcs)
     return thermal_bcs!(thermal.T, bcs)
+end
+
+function JR3D.pureshear_bc!(
+        ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg
+    )
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function pureshear_bc!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, εbg)
+    return _pureshear_bc!(stokes, xci, xvi, εbg)
+end
+
+function JR3D.simpleshear_bc!(
+        ::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg
+    )
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
+end
+
+function simpleshear_bc!(::AMDGPUBackendTrait, stokes::JustRelax.StokesArrays, xci, xvi, γbg)
+    return _simpleshear_bc!(stokes, xci, xvi, γbg)
 end
 
 # Rheology
@@ -235,6 +310,13 @@ function accumulate_tensor!(::AMDGPUBackendTrait, II, A::JustRelax.SymmetricTens
     return _accumulate_tensor!(II, A, dt)
 end
 
+function JR3D.accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::AMDGPUBackendTrait, EVol_pl, ε_vol_pl, dt)
+    return _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
+end
 ## Buoyancy forces
 function JR3D.compute_ρg!(ρg::Union{ROCArray, NTuple{N, ROCArray}}, rheology, args) where {N}
     return compute_ρg!(ρg, rheology, args)
@@ -244,15 +326,17 @@ function JR3D.compute_ρg!(
         ρg::Union{ROCArray, NTuple{N, ROCArray}},
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
-        args,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 function JR3D.compute_ρg!(
-        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args
+        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction
@@ -266,13 +350,27 @@ function JR3D.compute_melt_fraction!(
     return compute_melt_fraction!(ϕ, phase_ratios, rheology, args)
 end
 
-# Interpolations
-function JR3D.temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
+function JR3D.compute_melt_fraction!(
+        ϕ::ROCArray, dϕdT, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction!(ϕ, dϕdT, phase_ratios, rheology, args)
 end
 
-function temperature2center!(::AMDGPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
+function JR3D.compute_melt_fraction_derivative!(dϕdT::ROCArray, rheology, args)
+    return compute_melt_fraction_derivative!(dϕdT, rheology, args)
+end
+
+function JR3D.compute_melt_fraction_derivative!(
+        dϕdT::ROCArray, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_melt_fraction_derivative!(dϕdT, phase_ratios, rheology, args)
+end
+
+## Solubility
+function JR3D.compute_dissolved_volatiles!(
+        mH2O::ROCArray, mCO2, phase_ratios::JustPIC.PhaseRatios, rheology, args
+    )
+    return compute_dissolved_volatiles!(mH2O, mCO2, phase_ratios, rheology, args)
 end
 
 function JR3D.shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
@@ -285,8 +383,10 @@ function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
     return nothing
 end
 
-function JR3D.vertex2center!(center::T, vertex::T) where {T <: ROCArray}
-    return vertex2center!(center, vertex)
+function JR3D.vertex2center!(
+        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+    ) where {T <: ROCArray}
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
 end
 
 function JR3D.center2vertex!(vertex::T, center::T) where {T <: ROCArray}
@@ -358,12 +458,10 @@ function JR3D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
-        di,
     )
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.Tc, stokes.P, di
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -376,12 +474,10 @@ function JR3D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        xci,
-        di,
     ) where {N}
     ni = size(stokes.P)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.Tc, stokes.P, di
+        dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
     return nothing
 end
@@ -440,7 +536,7 @@ end
 function JR3D.rotate_stress_particles!(
         τ::NTuple,
         ω::NTuple,
-        particles::Particles{JustPIC.AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt;
         method::Symbol = :matrix,
     )
@@ -469,34 +565,30 @@ end
 
 function JR3D.stress2grid!(
         stokes,
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
-        xvi,
-        xci,
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         particles,
     )
-    stress2grid!(stokes, τ_particles, xvi, xci, particles)
+    stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{JustPIC.AMDGPUBackend},
+        τ_particles::JustRelax.StressParticles{ROCBackend},
         stokes,
         particles,
-        xci,
-        xvi,
         dt,
     )
-    rotate_stress!(τ_particles, stokes, particles, xci, xvi, dt)
+    rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
 end
 
 # Phase ratios with arrays
 function JR3D.update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{AMDGPUBackend, T},
+        phase_ratios::JustPIC.PhaseRatios{ROCBackend, T},
         phase_arrays::NTuple{N, ROCArray{U, 3}},
         xci,
         xvi
-    ) where {T <: AbstractMatrix, N, U}
+    ) where {T <: AbstractArray, N, U}
 
     phase_ratios_center_from_arrays!(phase_ratios, phase_arrays)
     phase_ratios_vertex_from_arrays!(phase_ratios, phase_arrays, xvi, xci)
@@ -507,9 +599,9 @@ function JR3D.update_phase_ratios_3D!(
     phase_ratios_face_from_arrays!(phase_ratios.Vz, phase_arrays, xci, :z)
 
     # shear stress nodes
-    phase_ratios_midpoint_from_centers!(phase_ratios.xy, phase_arrays, xci, :xy)
-    phase_ratios_midpoint_from_centers!(phase_ratios.yz, phase_arrays, xci, :yz)
-    phase_ratios_midpoint_from_centers!(phase_ratios.xz, phase_arrays, xci, :xz)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xy, phase_arrays, xci, :xy)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.yz, phase_arrays, xci, :yz)
+    phase_ratios_midpoint_from_arrays!(phase_ratios.xz, phase_arrays, xci, :xz)
     return nothing
 end
 

@@ -10,7 +10,24 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "monthly"
+    commit-message:
+      prefix: "[DEPENDABOT]"
     open-pull-requests-limit: 100
     labels:
       - "dependencies"
       - "github-actions"
+
+  - package-ecosystem: "julia"
+    directories:
+      - "/"
+      - "/test"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "[DEPENDABOT]"
+    groups:
+      all-julia-dependencies:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"

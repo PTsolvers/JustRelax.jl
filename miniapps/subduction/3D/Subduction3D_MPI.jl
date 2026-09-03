@@ -1,15 +1,14 @@
-# Load script dependencies
-using GeoParams, CairoMakie
-
 const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -23,15 +22,16 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 
-using JustPIC, JustPIC._3D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+using JustPIC
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+
+# Load script dependencies
+using GeoParams, CairoMakie
+
 
 # Load file with all the rheology configurations
 include("Subduction3D_rheology.jl")
@@ -77,19 +77,18 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 150, 175, 125
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     particle_args = pPhases, = init_cell_arrays(particles, Val(1))
 
     # Assign particles phases anomaly
-    phases_device = PTArray(backend_JR)(phases_GMG)
+    phases_device = PTArray(backend)(phases_GMG)
     init_phases!(pPhases, phases_device, particles, xvi)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     update_cell_halo!(particles.coords..., particle_args...)
     update_cell_halo!(particles.index)
@@ -97,22 +96,21 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li_nd, di; ϵ_abs = 5.0e-3, ϵ_rel = 5.0e-3, CFL = 0.99 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
-    temperature2center!(thermal)
+    thermal = ThermalArrays(backend, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
-    # stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
 
@@ -193,7 +191,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,
@@ -214,26 +212,25 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             println("   Time/iteration:  $(t_stokes / out.iter) s")
         end
         tensor_invariant!(stokes.ε)
-        dt = compute_dt(stokes, di)
+        dt = compute_dt(stokes, di, igg)
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
 
         update_cell_halo!(particles.coords..., particle_args...)
         update_cell_halo!(particles.index)
 
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        if igg.me == 0
-            @show it += 1
-            t += dt
-        end
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        it += 1
+        t += dt
+        igg.me == 0 && @show it
 
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
@@ -261,7 +258,7 @@ function main3D(x_global, y_global, z_global, li, origin, phases_GMG, igg; nx = 
             gather!(Vyv_nohalo, Vyv_v)
             gather!(Vzv_nohalo, Vzv_v)
         end
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------

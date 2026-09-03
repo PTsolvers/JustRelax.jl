@@ -1,5 +1,10 @@
 abstract type AbstractMask end
 
+"""
+    RockRatio{T, N} <: AbstractMask
+
+A struct representing the rock ratio mask used in variational Stokes solvers. It contains arrays for center and vertex values, as well as velocity components and shear components.
+"""
 struct RockRatio{T, N} <: AbstractMask
     center::T
     vertex::T

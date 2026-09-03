@@ -64,70 +64,77 @@ end
     return nothing
 end
 
-# From cell vertices to cell center
-
-temperature2center!(thermal) = temperature2center!(backend(thermal), thermal)
-function temperature2center!(::CPUBackendTrait, thermal::JustRelax.ThermalArrays)
-    return _temperature2center!(thermal)
-end
-
-function _temperature2center!(thermal::JustRelax.ThermalArrays)
-    @parallel (@idx size(thermal.Tc)...) temperature2center_kernel!(thermal.Tc, thermal.T)
-    return nothing
-end
-
-@parallel_indices (i, j) function temperature2center_kernel!(
-        T_center::T, T_vertex::T
-    ) where {T <: AbstractArray{_T, 2} where {_T <: Real}}
-    T_center[i, j] =
-        (
-        T_vertex[i + 1, j] +
-            T_vertex[i + 2, j] +
-            T_vertex[i + 1, j + 1] +
-            T_vertex[i + 2, j + 1]
-    ) * 0.25
-    return nothing
-end
-
-@parallel_indices (i, j, k) function temperature2center_kernel!(
-        T_center::T, T_vertex::T
-    ) where {T <: AbstractArray{_T, 3} where {_T <: Real}}
-    @inline av_T() = _av(T_vertex, i, j, k)
-
-    T_center[i, j, k] = av_T()
-
-    return nothing
-end
-
 """
     vertex2center!(center, vertex)
 
 Interpolates the values at the `vertex` onto `center` points.
 """
-
-function vertex2center!(center, vertex)
-    @parallel vertex2center_kernel!(center, vertex)
+function vertex2center!(center, vertex; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false)
+    ni = size(vertex) .- 1
+    @parallel (@idx ni) vertex2center_kernel!(center, vertex, ghost_x, ghost_y, ghost_z)
     return nothing
 end
 
-@parallel function vertex2center_kernel!(center, vertex)
-    @all(center) = @av(vertex)
+@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2}, ghost_x, ghost_y, ::Bool) where {T}
+    Ic = I .+ (ghost_x, ghost_y)
+    i, j = I
+    center[Ic...] = 0.25 * (vertex[i, j] + vertex[i + 1, j] + vertex[i, j + 1] + vertex[i + 1, j + 1])
+    return nothing
+end
+
+@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 3}, vertex::AbstractArray{T, 3}, ghost_x, ghost_y, ghost_z) where {T}
+    Ic = I .+ (ghost_x, ghost_y, ghost_z)
+    i, j, k = I
+    center[Ic...] = 0.125 * (
+        vertex[i, j, k] + vertex[i + 1, j, k] + vertex[i, j + 1, k] + vertex[i + 1, j + 1, k] +
+            vertex[i, j, k + 1] + vertex[i + 1, j, k + 1] + vertex[i, j + 1, k + 1] + vertex[i + 1, j + 1, k + 1]
+    )
     return nothing
 end
 
 """
     center2vertex!(vertex, center)
+    center2vertex!(vertex_yz, vertex_xz, vertex_xy, center_yz, center_xz, center_xy)
 
-Interpolates the values at the `center` onto `vertex` points.
+Interpolates the values at the cell `center`(s) onto `vertex` points. The 6-argument
+method interpolates the three shear-stress/strain-rate components of a 3D
+`SymmetricTensor` onto their respective face vertices.
 """
-
 function center2vertex!(vertex, center)
     @parallel center2vertex_kernel!(vertex, center)
+    @views vertex[1, :] .= vertex[2, :]
+    @views vertex[end, :] .= vertex[end - 1, :]
+    @views vertex[:, 1] .= vertex[:, 2]
+    @views vertex[:, end] .= vertex[:, end - 1]
+
     return nothing
 end
 
 @parallel function center2vertex_kernel!(vertex, center)
     @inn(vertex) = @av(center)
+    return nothing
+end
+
+function center2vertex_harm!(vertex, center)
+    ni = size(vertex)
+    @parallel (@idx ni) center2vertex_kernel_harm!(vertex, center)
+
+    return nothing
+end
+
+@parallel_indices (i, j) function center2vertex_kernel_harm!(vertex::T, center::T) where {T <: AbstractArray{N, 2}} where {N}
+    nx, ny = size(center)
+    il = max(i - 1, 1)  # left``
+    ir = min(i, nx)   # right
+    jb = max(j - 1, 1)  # bottom
+    jt = min(j, ny)   # top
+
+    vertex[i, j] = 4 / (
+        1 / center[il, jb] +
+            1 / center[ir, jb] +
+            1 / center[il, jt] +
+            1 / center[ir, jt]
+    )
     return nothing
 end
 
@@ -223,12 +230,11 @@ end
 # 2D
 
 """
-    velocity2vertex(Vx, Vy)
+    velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid vertices.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated `Vx_v`, `Vy_v` 2D arrays located at the grid vertices.
 """
-
 function velocity2vertex!(Vx_v, Vy_v, Vx, Vy)
     @assert size(Vx_v) == size(Vy_v)
     # interpolate to cell vertices
@@ -243,12 +249,12 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
+    velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
 
-Interpolate the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy`, `Vz` from a staggered grid with
+ghost nodes onto the pre-allocated `Vx_c`, `Vy_c`, `Vz_c` 3D arrays located at the cell
+centers.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vz_c, Vx, Vy, Vz)
     @assert size(Vx_c) == size(Vy_c) == size(Vz_c)
     # interpolate to cell vertices
@@ -264,12 +270,11 @@ end
 end
 
 """
-    velocity2center(Vx_c, Vy_c, Vx, Vy)
+    velocity2center!(Vx_c, Vy_c, Vx, Vy)
 
-Interpolate the velocity field `Vx`, `Vy` from a staggered grid with ghost nodes
-onto the grid centers.
+In-place interpolation of the velocity field `Vx`, `Vy` from a staggered grid with ghost
+nodes onto the pre-allocated `Vx_c`, `Vy_c` 2D arrays located at the cell centers.
 """
-
 function velocity2center!(Vx_c, Vy_c, Vx, Vy)
     @assert size(Vx_c) == size(Vy_c)
     # interpolate to cell vertices
@@ -283,6 +288,11 @@ end
     return nothing
 end
 
+"""
+    shear2center!(A::SymmetricTensor)
+
+Interpolate the shear components of `A` onto the cell centers, in place.
+"""
 function shear2center!(A::JustRelax.SymmetricTensor)
     return shear2center!(backend(A), A)
 end

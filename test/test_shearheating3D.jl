@@ -24,16 +24,16 @@ else
 end
 
 using JustPIC
-using JustPIC._3D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 
@@ -81,9 +81,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 80
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -96,7 +95,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     r_anomaly = 3.0e3    # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -109,22 +108,22 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = true, bot = true, front = true, back = true),
-        # no_flux     = (left = true , right = true , top = false, bot = false, front = true , back = true),
+        constant_value = (left = true, right = true, top = 273.0 + 400, bot = 273.0 + 400, front = true, back = true),
     )
 
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
-    compute_ρg!(ρg[3], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    T = thermal.T
+    compute_ρg!(ρg[3], phase_ratios, rheology, (T = T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[3], xci[3])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = T, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -145,7 +144,8 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    grid2particle!(pT, xvi, thermal.T, particles)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, thermal.T, particles)
     dt₀ = similar(stokes.P)
 
     # Time loop
@@ -153,15 +153,15 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     local iters, thermal
     while it < 1
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(thermal.T, pT, xvi, particles)
-        temperature2center!(thermal)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
 
         # Stokes solver ----------------
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -196,7 +196,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -206,25 +206,25 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
         advection!(
-            particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy, grid_vz), dt
+            particles, RungeKutta2(), @velocity(stokes), dt
         )
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
@@ -240,27 +240,11 @@ end
         nx = n
         ny = n
         nz = n
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)
-        else
-            igg
-        end
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
 
         # Initialize iters and thermal to ensure they are defined
         iters, thermal = Shearheating3D(igg; nx = nx, ny = ny, nz = nz)
-        # iters = nothing
-        # thermal = nothing
-
-        # try
-        #     iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-        # catch e
-        #     @warn e
-        #     try
-        #         iters, thermal = Shearheating3D(igg; nx=nx, ny=ny, nz=nz)
-        #     catch e2
-        #         @warn e2
-        #     end
-        # end
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4

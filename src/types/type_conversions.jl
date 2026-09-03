@@ -3,6 +3,7 @@ import JustRelax: PTArray, backend
 
 const JR_T = Union{
     StokesArrays,
+    DYREL,
     SymmetricTensor,
     ThermalArrays,
     Velocity,

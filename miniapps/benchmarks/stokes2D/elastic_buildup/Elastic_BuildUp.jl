@@ -76,7 +76,7 @@ function elastic_buildup(;
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             Gc,

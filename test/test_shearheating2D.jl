@@ -23,16 +23,16 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # Load script dependencies
@@ -65,7 +65,7 @@ end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function Shearheating2D(igg; nx = 32, ny = 32)
+function Shearheating2D(; nx = 32, ny = 32)
 
     # Physical domain ------------------------------------
     ly = 40.0e3              # domain length in y
@@ -73,6 +73,8 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     ni = nx, ny            # number of cells
     li = lx, ly            # domain length in x- and y-
     di = @. li / ni        # grid step in x- and -y
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
     origin = 0.0, -ly          # origin coordinates (15km f sticky air layer)
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells
@@ -86,9 +88,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 50, 75, 25
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, xvi...)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
@@ -99,7 +99,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     r_anomaly = 3.0e3    # radius of perturbation
     phase_ratios = PhaseRatios(backend, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
@@ -112,21 +112,20 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     thermal = ThermalArrays(backend_JR, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = true, right = true, top = 273.0 + 400, bot = 273.0 + 400),
     )
-
     # Initialize constant temperature
     @views thermal.T .= 273.0 + 400
     thermal_bcs!(thermal, thermal_bc)
-    temperature2center!(thermal)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
 
     # Rheology
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # PT coefficients for thermal diffusion
@@ -145,12 +144,10 @@ function Shearheating2D(igg; nx = 32, ny = 32)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = @zeros(ni .+ 1)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     Told_buffer = similar(T_buffer)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, thermal.T, particles)
 
     # Time loop
     t, it = 0.0, 0
@@ -161,7 +158,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -195,7 +192,7 @@ function Shearheating2D(igg; nx = 32, ny = 32)
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (;
                 igg = igg,
                 phase = phase_ratios,
@@ -207,32 +204,28 @@ function Shearheating2D(igg; nx = 32, ny = 32)
         # ------------------------------
 
         # Advection --------------------
+        # interpolate fields from centroids to particles
+        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
+        centroid2particle!(pT, thermal.T, particles)
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
-        # interpolate fields from grid vertices to particles
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
-        grid2particle_flip!(pT, xvi, T_buffer, Told_buffer, particles)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= 273.0 + 400
-        @views thermal.T[2:(end - 1), :] .= T_buffer
-        temperature2center!(thermal)
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
 
         @show it += 1
         t += dt
 
     end
 
-    # finalize_global_grid(; finalize_MPI=true)
+    finalize_global_grid(; finalize_MPI = true)
 
     return iters, thermal
 end
@@ -242,14 +235,11 @@ end
         n = 32
         nx = n
         ny = n
-        igg = if !(JustRelax.MPI.Initialized())
-            IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-        else
-            igg
-        end
+
 
         # Initialize iters and thermal to ensure they are defined
-        iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
+        # iters, thermal = Shearheating2D(igg; nx = nx, ny = ny)
+        iters, thermal = Shearheating2D(; nx = nx, ny = ny)
 
         # Ensure iters is defined before running the test
         @test iters != nothing && iters.err_evo1[end] < 1.0e-4

@@ -1,15 +1,33 @@
-using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const isCUDA = false
+# const isCUDA = true
 
-const backend_JR = CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
 # Load script dependencies
 using GeoParams, CairoMakie
@@ -46,23 +64,23 @@ end
 
     # (depth - 15e3) because we have 15km of sticky air
     if depth < nondimensionalize(0.0e0km, CharDim)
-        T[i + 1, j] = nondimensionalize(273.0e0K, CharDim)
+        T[i + 1, j + 1] = nondimensionalize(273.0e0K, CharDim)
 
     elseif nondimensionalize(0.0e0km, CharDim) ≤ (depth) < nondimensionalize(35km, CharDim)
         dTdZ = nondimensionalize((923 - 273) / 35 * K / km, CharDim)
 
         offset = nondimensionalize(273.0e0K, CharDim)
-        T[i + 1, j] = (depth) * dTdZ + offset
+        T[i + 1, j + 1] = (depth) * dTdZ + offset
 
     elseif nondimensionalize(110km, CharDim) > (depth) ≥ nondimensionalize(35km, CharDim)
         dTdZ = nondimensionalize((1492 - 923) / 75 * K / km, CharDim)
         offset = nondimensionalize(923K, CharDim)
-        T[i + 1, j] = (depth - nondimensionalize(35km, CharDim)) * dTdZ + offset
+        T[i + 1, j + 1] = (depth - nondimensionalize(35km, CharDim)) * dTdZ + offset
 
     elseif (depth) ≥ nondimensionalize(110km, CharDim)
         dTdZ = nondimensionalize((1837 - 1492) / 590 * K / km, CharDim)
         offset = nondimensionalize(1492.0e0K, CharDim)
-        T[i + 1, j] = (depth - nondimensionalize(110km, CharDim)) * dTdZ + offset
+        T[i + 1, j + 1] = (depth - nondimensionalize(110km, CharDim)) * dTdZ + offset
 
     end
 
@@ -77,13 +95,13 @@ function rectangular_perturbation!(T, xc, yc, r, xvi, thick_air, CharDim)
             depth = -y[j] - thick_air
             dTdZ = nondimensionalize((2047 - 2017)K / 50km, CharDim)
             offset = nondimensionalize(2017.0e0K, CharDim)
-            T[i + 1, j] = (depth - nondimensionalize(585km, CharDim)) * dTdZ + offset
+            T[i + 1, j + 1] = (depth - nondimensionalize(585km, CharDim)) * dTdZ + offset
         end
         return nothing
     end
 
-    nx, ny = size(T)
-    @parallel (1:(nx - 2), 1:ny) _rectangular_perturbation!(T, xc, yc, r, CharDim, xvi...)
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, CharDim, xvi...)
 
     return nothing
 end
@@ -119,11 +137,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 25, 30, 8
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -132,31 +148,31 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     xc_anomaly = lx / 2    # origin of thermal anomaly
     yc_anomaly = nondimensionalize(-610km, CharDim) # origin of thermal anomaly
     r_anomaly = nondimensionalize(25km, CharDim) # radius of perturbation
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly, thick_air, CharDim)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-7, ϵ_rel = 1.0e-7, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
-    thermal_bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = false, bot = false),
-    )
+    thermal = ThermalArrays(backend, ni)
     # initialize thermal profile - Half space cooling
-    @parallel (@idx ni .+ 1) init_T!(thermal.T, xvi[2], thick_air, CharDim)
-    thermal_bcs!(thermal, thermal_bc)
+    @parallel (@idx ni) init_T!(thermal.T, xci[2], thick_air, CharDim)
     Tbot = thermal.T[1, 1]
     Ttop = thermal.T[1, end]
-    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi, thick_air, CharDim)
-    temperature2center!(thermal)
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+    )
+    thermal_bcs!(thermal, thermal_bc)
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci, thick_air, CharDim)
     # ----------------------------------------------------
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
@@ -170,7 +186,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-6, CFL = 1.0e-3 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-6, CFL = 1.0e-3 / √2.1
     )
 
     # Boundary conditions
@@ -196,7 +212,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig = Figure(size = (1200, 900))
         ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
-        scatter!(ax1, Array(thermal.T[2:(end - 1), :][:]), Yv)
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y)
         scatter!(ax2, Array(log10.(stokes.viscosity.η[:])), Y)
         ylims!(ax1, minimum(xvi[2]), 0)
         ylims!(ax2, minimum(xvi[2]), 0)
@@ -205,13 +221,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    centroid2particle!(pT, T_buffer, particles)
 
     local Vx_v, Vy_v
     if do_vtk
@@ -222,20 +234,17 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     t, it = 0.0, 0
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views thermal.T[2:(end - 1), :] .= T_buffer
-        @views thermal.T[:, end] .= Ttop
-        @views thermal.T[:, 1] .= Tbot
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
         # ------------------------------
 
         # Stokes solver ----------------
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -261,7 +270,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -270,27 +279,24 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
                 verbose = true,
             ),
         )
-        for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-            copyinn_x!(dst, src)
-        end
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, T_buffer, thermal.ΔT[2:(end - 1), :], subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection_MQS!(particles, RungeKutta4(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,), xvi)
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
@@ -302,14 +308,14 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
                 data_v = (;
-                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))),
-                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
+                    τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, MPa, CharDim))),
                     εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                     Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                     Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
                 )
                 data_c = (;
                     P = Array(ustrip.(dimensionalize(stokes.P, MPa, CharDim))),
+                    T = Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))),
                     τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                     τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                     τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
@@ -350,7 +356,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
             # Plot temperature
-            h1 = heatmap!(ax1, xvi[1], xvi[2], Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), :], C, CharDim))), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1], xci[2], Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1)], C, CharDim))), colormap = :batlow)
             # Plot particles phase
             h2 = scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :grayC)
             # Plot 2nd invariant of strain rate
@@ -381,8 +387,8 @@ figdir = "Plume2D"
 do_vtk = false # set to true to generate VTK files for ParaView
 ar = 1 # aspect ratio
 n = 64
-nx = n * ar - 2
-ny = n - 2
+nx = n * ar
+ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else

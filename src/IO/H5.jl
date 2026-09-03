@@ -84,7 +84,7 @@ file_path = "path/to/your/file.h5"
 
 # Use the load_checkpoint function to load the variables from the file
 P, T, Vx, Vy, Vz, η, t, dt = `load_checkpoint(file_path)``
-
+```
 """
 function load_checkpoint_hdf5(file_path)
     h5file = h5open(file_path, "r")  # Open the file in read mode
@@ -143,6 +143,14 @@ function save_hdf5(fname, data::Vararg{Any, N}; precision = Float32) where {N}
     end
 end
 
+"""
+    save_data(file, data, precision)
+    save_data(file, grid::Geometry)
+
+Write `data` (converted to `precision`) into the open HDF5 `file` under its own variable
+name. The `Geometry` method instead writes the cell-center/vertex coordinate vectors
+(`Xc`/`Yc`[/`Zc`], `Xv`/`Yv`[/`Zv`]). Used internally by [`save_hdf5`](@ref).
+"""
 @inline save_data(file, data, precision) = write(file, @namevar(data, precision)...)
 
 function save_data(file, data::Geometry{N}) where {N}
@@ -161,5 +169,18 @@ function save_data(file, data::Geometry{N}) where {N}
     return nothing
 end
 
+"""
+    center_coordinates(grid::Geometry)
+
+The cell-center coordinate vectors of `grid` (`grid.xci`), collected into plain `Vector`s
+for serialization.
+"""
 center_coordinates(data::Geometry{N}) where {N} = ntuple(i -> collect(data.xci[i]), Val(N))
+
+"""
+    vertex_coordinates(grid::Geometry)
+
+The cell-vertex coordinate vectors of `grid` (`grid.xvi`), collected into plain `Vector`s
+for serialization.
+"""
 vertex_coordinates(data::Geometry{N}) where {N} = ntuple(i -> collect(data.xvi[i]), Val(N))

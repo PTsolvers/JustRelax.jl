@@ -1,12 +1,14 @@
 const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -20,19 +22,17 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
-
 # Load script dependencies
+import JustPIC.GridGeometryUtils as GGU
+
+
 using LinearAlgebra, GeoParams, CairoMakie
 
 # Velocity helper grids for the particle advection
@@ -137,34 +137,32 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 30, 40, 15
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
 
     # Elliptical temperature anomaly
     init_phases!(pPhases, particles)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     # ----------------------------------------------------
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
     @parallel init_P!(stokes.P, ρg[2], xci[2])
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
@@ -188,7 +186,7 @@ function main(igg, nx, ny)
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -208,13 +206,13 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
 
         @show it += 1
         t += dt
@@ -241,7 +239,7 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 
 # (Path)/folder where output data and figures are stored
-n = 100
+n = 64
 nx = n
 ny = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid

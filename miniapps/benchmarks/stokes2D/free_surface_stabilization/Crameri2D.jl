@@ -6,6 +6,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -13,7 +14,7 @@ else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-using ParallelStencil
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -21,14 +22,11 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+using JustPIC
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
@@ -125,10 +123,8 @@ function main(igg, nx, ny)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 60, 80, 40
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # velocity grids
-    grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
     particle_args = (pT, pPhases)
@@ -137,7 +133,7 @@ function main(igg, nx, ny)
     A = 5.0e3    # Amplitude of the anomaly
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, A)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # rock ratios for variational stokes
     # RockRatios
@@ -158,9 +154,9 @@ function main(igg, nx, ny)
 
     # Buoyancy forces & rheology
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, args)
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (1.0e18, 1.0e24); air_phase = air_phase)
 
     # Boundary conditions
@@ -189,7 +185,7 @@ function main(igg, nx, ny)
         solve_VariationalStokes!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -199,6 +195,7 @@ function main(igg, nx, ny)
             Inf,
             igg;
             kwargs = (
+                air_phase = air_phase,
                 iterMax = 50.0e3,
                 iterMin = 1.0e3,
                 viscosity_relaxation = 1.0e-2,
@@ -211,13 +208,13 @@ function main(igg, nx, ny)
 
         # Advection --------------------
         # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), (), xvi)
+        inject_particles_phase!(particles, pPhases, (), ())
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
         update_rock_ratio!(ϕ, phase_ratios, air_phase)
 
         @show it += 1
@@ -237,6 +234,7 @@ function main(igg, nx, ny)
                 stress_II = Array(stokes.τ.II),
                 strain_rate_II = Array(stokes.ε.II),
                 P = Array(stokes.P),
+                T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                 visc_eff = Array(η_vep),
             )
             velocity_v = (

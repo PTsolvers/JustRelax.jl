@@ -151,7 +151,8 @@ end
 end
 
 
-@inline function weno_rhs(vx, vy, weno, _dx, _dy, nx, ny, i, j)
+@inline function weno_rhs(vx, vy, weno, _di, nx, ny, i, j)
+    _dx, _dy = @dxi(_di, i, j)
     iS, iN = clamp(i - 1, 1, nx), clamp(i + 1, 1, nx)
     jW, jE = clamp(j - 1, 1, ny), clamp(j + 1, 1, ny)
 
@@ -208,13 +209,13 @@ function WENO_advection!(u, Vxi, weno, di, dt)
 end
 
 @parallel_indices (i, j) function weno_step1!(weno, u, Vxi, _di, ni, dt)
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+    rᵢ = weno_rhs(Vxi..., weno, _di, ni..., i, j)
     @inbounds weno.ut[i, j] = muladd(-dt, rᵢ, u[i, j])
     return nothing
 end
 
 @parallel_indices (i, j) function weno_step2!(weno, u, Vxi, _di, ni, dt)
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+    rᵢ = weno_rhs(Vxi..., weno, _di, ni..., i, j)
     @inbounds weno.ut[i, j] = @muladd 0.75 * u[i, j] + 0.25 * weno.ut[i, j] - 0.25 * dt * rᵢ
     return nothing
 end
@@ -222,7 +223,7 @@ end
 @parallel_indices (i, j) function weno_step3!(
         u, weno, Vxi, _di, ni, dt, one_third, two_thirds
     )
-    rᵢ = weno_rhs(Vxi..., weno, _di..., ni..., i, j)
+    rᵢ = weno_rhs(Vxi..., weno, _di, ni..., i, j)
     @inbounds u[i, j] = @muladd one_third * u[i, j] + two_thirds * weno.ut[i, j] -
         two_thirds * dt * rᵢ
     return nothing

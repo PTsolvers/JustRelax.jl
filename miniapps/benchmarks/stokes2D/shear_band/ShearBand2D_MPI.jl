@@ -1,14 +1,41 @@
+const isCUDA = false
+# const isCUDA = true
+
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
 using GeoParams
-using JustRelax, JustRelax.JustRelax2D, CairoMakie
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+using CairoMakie
 
-const backend_JR = CPUBackend
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+import JustPIC.GridGeometryUtils as GGU
 
-const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))
@@ -101,12 +128,12 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
     compute_viscosity!(
@@ -118,8 +145,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -143,7 +170,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     Vy_nohalo = zeros(nx - 2, ny - 2)
     xci_v = LinRange(0, 1, nx_v), LinRange(0, 1, ny_v)
 
-    local Vx, Vy
     Vx = @zeros(ni...)
     Vy = @zeros(ni...)
 
@@ -160,7 +186,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,
@@ -185,12 +211,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
-        igg.me == 0 && println("it = $it; t = $t \n")
+        igg.me == 0 && println("igg= $(igg.me); it = $it; t = $t \n")
 
-        # visualisation
-        th = 0:(pi / 50):(3 * pi)
-        xunit = @. radius * cos(th) + 0.5
-        yunit = @. radius * sin(th) + 0.5
 
         # Gather MPI arrays
         velocity2center!(Vx, Vy, @velocity(stokes)...)
@@ -207,6 +229,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         gather!(εII_nohalo, εII_v)
 
         if igg.me == 0
+            # visualisation
+            th = 0:(pi / 50):(3 * pi)
+            xunit = @. radius * cos(th) + 0.5
+            yunit = @. radius * sin(th) + 0.5
+
             fig = Figure(size = (1600, 1600), title = "t = $t")
             ax1 = Axis(fig[1, 1], aspect = 1, title = "τII")
             ax2 = Axis(fig[2, 1], aspect = 1, title = "η_vep")
@@ -229,8 +256,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
 end
 
-N = 30
-n = N
+n = 32
 nx = n * 2  # if only 2 CPU/GPU are used nx = 67 - 2 with N =128
 ny = n * 2
 figdir = "ShearBands2D_MPI"

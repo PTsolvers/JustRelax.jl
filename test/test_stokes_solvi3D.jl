@@ -45,7 +45,7 @@ function check_convergence_case1()
         rc = rc,
         εbg = εbg,
         init_MPI = JustRelax.MPI.Initialized() ? false : true,
-        finalize_MPI = false,
+        finalize_MPI = true,
     )
 
     tol = 1.0e-8

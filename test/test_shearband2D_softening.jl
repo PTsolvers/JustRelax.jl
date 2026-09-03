@@ -22,14 +22,14 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
@@ -91,7 +91,6 @@ function ShearBand2D()
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
-    # soft_C  = LinearSoftening((C/2, C), (0e0, 2e0))
     soft_C = NonLinearSoftening(; ξ₀ = C, Δ = C / 2)
     pl = DruckerPrager_regularised(;
         # non-regularized plasticity
@@ -132,7 +131,7 @@ function ShearBand2D()
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, ΔTc = @zeros(ni...))
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
 
     # Rheology
     compute_viscosity!(
@@ -163,7 +162,7 @@ function ShearBand2D()
         iters = solve!(
             stokes,
             pt_stokes,
-            di,
+            grid,
             flow_bcs,
             ρg,
             phase_ratios,

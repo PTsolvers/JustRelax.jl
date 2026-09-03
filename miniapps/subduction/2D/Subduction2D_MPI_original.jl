@@ -1,11 +1,12 @@
-# const isCUDA = false
 const isCUDA = false
+# const isCUDA = true
 
 @static if isCUDA
     using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -21,14 +22,11 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+using JustPIC
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
@@ -84,26 +82,23 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     max_xcell = 60
     min_xcell = 20
     particles = init_particles(
-        backend_JP, nxcell, max_xcell, min_xcell, xvi...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    # velocity grids
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # material phase & temperature
     pPhases, pT = init_cell_arrays(particles, Val(2))
 
     # particle fields for the stress rotation
-    pτ = pτxx, pτyy, pτxy = init_cell_arrays(particles, Val(3)) # stress
-    # pτ_o = pτxx_o, pτyy_o, pτxy_o = init_cell_arrays(particles, Val(3)) # old stress
-    pω = pωxy, = init_cell_arrays(particles, Val(1)) # vorticity
-    particle_args = (pT, pPhases, pτ..., pω...)
-    particle_args_reduced = (pT, pτ..., pω...)
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Assign particles phases anomaly
     phases_device = PTArray(backend)(phases_GMG)
     phase_ratios = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, phases_device, particles, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
 
     update_cell_halo!(particles.coords..., particle_args...)
     update_cell_halo!(particles.index)
@@ -120,23 +115,27 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
     Ttop = 20 + 273
     Tbot = maximum(T_GMG)
     thermal = ThermalArrays(backend, ni)
-    @views thermal.T[2:(end - 1), :] .= PTArray(backend)(T_GMG)
+    vertex2center!(thermal.T, PTArray(backend)(T_GMG); ghost_x = true, ghost_y = true)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
     )
     thermal_bcs!(thermal, thermal_bc)
-    @views thermal.T[:, end] .= Ttop
-    @views thermal.T[:, 1] .= Tbot
-    temperature2center!(thermal)
+    update_halo!(thermal.T)
     # ----------------------------------------------------
 
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.Tc, P = stokes.P))
-    stokes.P .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
+    # The lithostatic profile is integrated down a whole column, which a rank only owns
+    # if the domain is not split in the vertical direction.
+    igg.dims[2] == 1 || error(
+        "the lithostatic pressure initialization requires an undecomposed vertical direction; got dims = $(igg.dims). Pass dimy = 1 to init_global_grid"
+    )
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 
     # Rheology
-    args0 = (T = thermal.Tc, P = stokes.P, dt = Inf)
+    args0 = (T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e18, 1.0e23)
     compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
@@ -199,13 +198,9 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         LinRange(minimum(z_global) .* 1.0e3, maximum(z_global) .* 1.0e3, ny_v)
 
 
-    T_buffer = @zeros(ni .+ 1)
-    Told_buffer = similar(T_buffer)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-        copyinn_x!(dst, src)
-    end
-    grid2particle!(pT, xvi, T_buffer, particles)
+    centroid2particle!(pT, T_buffer, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
@@ -219,26 +214,23 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
     while it < 1000 # run only for 5 Myrs
 
-        # interpolate fields from particle to grid vertices
-        particle2grid!(T_buffer, pT, xvi, particles)
-        @views T_buffer[:, end] .= Ttop
-        @views T_buffer[:, 1] .= Tbot
-        @views thermal.T[2:(end - 1), :] .= T_buffer
+        # interpolate fields from particles to centroids
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         thermal_bcs!(thermal, thermal_bc)
-        temperature2center!(thermal)
+        update_halo!(thermal.T)
 
-        args = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
 
-        particle2centroid!(stokes.τ.xx, pτxx, xci, particles)
-        particle2centroid!(stokes.τ.yy, pτyy, xci, particles)
-        particle2grid!(stokes.τ.xy, pτxy, xvi, particles)
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
             out = solve!(
                 stokes,
                 pt_stokes,
-                di,
+                grid,
                 flow_bcs,
                 ρg,
                 phase_ratios,
@@ -266,10 +258,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
 
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
-        centroid2particle!(pτxx, xci, stokes.τ.xx, particles)
-        centroid2particle!(pτyy, xci, stokes.τ.yy, particles)
-        grid2particle!(pτxy, xvi, stokes.τ.xy, particles)
-        rotate_stress_particles!(pτ, pω, particles, dt)
+        rotate_stress!(pτ, stokes, particles, dt)
 
         if igg.me == 0
             println("Stokes solver time             ")
@@ -278,7 +267,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         end
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
-        dt = compute_dt(stokes, di) * 0.8
+        dt = compute_dt(stokes, di, igg) * 0.8
         # ------------------------------
 
         # Thermal solver ---------------
@@ -289,7 +278,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             rheology,
             args,
             dt,
-            di;
+            grid;
             kwargs = (
                 igg = igg,
                 phase = phase_ratios,
@@ -299,39 +288,37 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             )
         )
         subgrid_characteristic_time!(
-            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
-        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
-        subgrid_diffusion!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi, di, dt
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
 
         update_cell_halo!(particles.coords..., particle_args...)
         update_cell_halo!(particles.index)
 
         # advect particles in memory
-        move_particles!(particles, xvi, particle_args)
+        move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+        # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         inject_particles_phase!(
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy),
-            xvi
+            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        if igg.me == 0
-            @show it += 1
-            t += dt
-        end
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+        it += 1
+        t += dt
+        igg.me == 0 && @show it
 
         #MPI gathering
         phase_center = [argmax(p) for p in Array(phase_ratios.center)]
@@ -356,7 +343,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
             gather!(Vxv_nohalo, Vxv_v)
             gather!(Vyv_nohalo, Vyv_v)
         end
-        @views T_nohalo .= Array(thermal.Tc[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
+        @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2)]) # Copy data to CPU removing the halo
         gather!(T_nohalo, T_v)
 
         # Data I/O and plotting ---------------------
@@ -427,8 +414,10 @@ do_vtk = true # set to true to generate VTK files for ParaView
 nx, ny = 128, 128
 
 
+# `dimy = 1` keeps every rank in charge of a full vertical column, which the
+# lithostatic pressure initialization needs
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true, dimy = 1)...)
 else
     igg
 end
@@ -442,11 +431,14 @@ origin = (x_global[1], z_global[1])
 li = (abs(last(x_global) - first(x_global)), abs(last(z_global) - first(z_global)))
 
 ni = nx, ny           # number of cells
-di = @. li / (nx_g(), ny_g())           # grid steps
 grid_global = Geometry(ni, li; origin = origin)
 
 figdir = "Subduction2D_$(nx_g())x$(ny_g())"
 
-li_GMG, origin_GMG, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi, nx + 1, ny + 1)
+# `grid_global.xvi` spans this rank's subdomain, so every rank builds the phase and
+# temperature fields it owns. `Geometry` and `PTStokesCoeffs` derive the grid spacing
+# from the global cell count, so they need the global domain length and origin, not the
+# per-rank extents that the setup routine reports back.
+_, _, phases_GMG, T_GMG = GMG_subduction_2D(model_depth, grid_global.xvi, nx + 1, ny + 1)
 
-main(x_global, z_global, li_GMG, origin_GMG, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+main(x_global, z_global, li .* 1.0e3, origin .* 1.0e3, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);

@@ -34,11 +34,11 @@ Base.@propagate_inbounds function rotate_stress!(
     ) where {N, T}
     ## 1) Advect stress
     Vᵢⱼ = velocity2center(V..., idx...) # averages @ cell center
-    τij_adv = advect_stress(τ..., Vᵢⱼ..., idx..., _di...)
+    τij_adv = advect_stress(τ..., Vᵢⱼ..., idx..., _di)
 
     ## 2) Rotate stress
     # average ∂Vx/∂y @ cell center
-    ∂V∂x = cross_derivatives(V..., _di..., idx...)
+    ∂V∂x = cross_derivatives(V..., _di, idx...)
     # compute xy component of the vorticity tensor; normal components = 0.0
     ω = compute_vorticity(∂V∂x)
     # stress tensor in Voigt notation
@@ -71,7 +71,8 @@ Base.@propagate_inbounds function rotate_stress!(
 end
 
 # 2D
-Base.@propagate_inbounds function advect_stress(τxx, τyy, τxy, Vx, Vy, i, j, _dx, _dy)
+Base.@propagate_inbounds function advect_stress(τxx, τyy, τxy, Vx, Vy, i, j, _di)
+    _dx, _dy = @dxi(_di, i, j)
     τ = τxx, τyy, τxy
     τ_adv = ntuple(Val(3)) do k
         Base.@_inline_meta
@@ -83,8 +84,9 @@ end
 
 # 3D
 Base.@propagate_inbounds function advect_stress(
-        τxx, τyy, τzz, τyz, τxz, τxy, Vx, Vy, Vz, i, j, k, _dx, _dy, _dz
+        τxx, τyy, τzz, τyz, τxz, τxy, Vx, Vy, Vz, i, j, k, _di
     )
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
     τ = τxx, τyy, τzz, τyz, τxz, τxy
     τ_adv = ntuple(Val(6)) do l
         Base.@_inline_meta
@@ -183,7 +185,8 @@ Base.@propagate_inbounds function velocity2center(Vx, Vy, Vz, i, j, k)
 end
 
 # 2D
-Base.@propagate_inbounds function cross_derivatives(Vx, Vy, _dx, _dy, i, j)
+Base.@propagate_inbounds function cross_derivatives(Vx, Vy, _di, i, j)
+    _dx, _dy = @dxi(_di, i, j)
     i1, j1 = @add 1 i j
     i2, j2 = @add 2 i j
     # average @ cell center
@@ -204,8 +207,9 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, _dx, _dy, i, j)
     return ∂Vx∂y, ∂Vy∂x
 end
 
-Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i, j, k)
-    i1, j1, k2 = @add 1 i j k
+Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _di, i, j, k)
+    _dx, _dy, _dz = @dxi(_di, i, j, k)
+    i1, j1, k1 = @add 1 i j k
     i2, j2, k2 = @add 2 i j k
     # cross derivatives @ cell centers
     ∂Vx∂y =
@@ -226,8 +230,8 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i
         0.25 *
         _dx *
         (
-        Vy[i1, j, ki] - Vy[i, j, ki] + Vy[i2, j, ki] - Vy[i1, j, ki] + Vy[i1, j1, ki] -
-            Vy[i, j1, ki] + Vy[i2, j1, ki] - Vy[i1, j1, ki]
+        Vy[i1, j, k1] - Vy[i, j, k1] + Vy[i2, j, k1] - Vy[i1, j, k1] + Vy[i1, j1, k1] -
+            Vy[i, j1, k1] + Vy[i2, j1, k1] - Vy[i1, j1, k1]
     )
     ∂Vy∂z =
         0.25 *
@@ -241,7 +245,7 @@ Base.@propagate_inbounds function cross_derivatives(Vx, Vy, Vz, _dx, _dy, _dz, i
         _dx *
         (
         Vz[i1, j, k] - Vz[i, j, k] + Vz[i2, j, k] - Vz[i1, j, k] + Vz[i1, j1, k1] -
-            Vz[i, j1, 1k] + Vz[i2, j1, k1] - Vz[i1, j1, 1k]
+            Vz[i, j1, k1] + Vz[i2, j1, k1] - Vz[i1, j1, k1]
     )
     ∂Vz∂y =
         0.25 *

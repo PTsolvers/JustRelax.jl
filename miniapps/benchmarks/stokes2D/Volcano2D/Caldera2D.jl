@@ -416,12 +416,12 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # check if we need to inject particles
         center2vertex!(τxx_v, stokes.τ.xx)
         center2vertex!(τyy_v, stokes.τ.yy)
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
-        )
+        inject_particles_phase!(particles, pPhases, (), ())
+        centroid2particle!(pT, thermal.T, particles)
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
+        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
+        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

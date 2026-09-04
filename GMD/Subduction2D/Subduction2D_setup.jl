@@ -93,7 +93,11 @@ function GMG_subduction_2D(nx, ny; Tlab = 1300.0, v_spread_cm_yr = 2.0, AgeRidge
     origin = (x[1], z[1]) .* 1.0e3
 
     ph = Phases[:, 1, :]
-    T = Temp[:, 1, :]
+    # GMG stores temperature on vertices; JustRelax evolves a cell-centered field.
+    T = @views 0.25 .* (
+        Temp[1:(end - 1), 1, 1:(end - 1)] + Temp[2:end, 1, 1:(end - 1)] +
+        Temp[1:(end - 1), 1, 2:end] + Temp[2:end, 1, 2:end]
+    )
 
     return li, origin, ph, T .+ 273
 end

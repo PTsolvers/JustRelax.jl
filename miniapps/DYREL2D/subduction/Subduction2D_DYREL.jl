@@ -255,13 +255,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (T_buffer, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
-        )
+        inject_particles_phase!(particles, pPhases, (), ())
+        centroid2particle!(pT, thermal.T, particles)
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
+        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
+        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

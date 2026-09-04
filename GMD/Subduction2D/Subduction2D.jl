@@ -1,10 +1,3 @@
-# Load script dependencies
-# new: disl/diff activation volume, plastic parameters
-# using Pkg; Pkg.activate(joinpath(@__DIR__, "JustRelax.jl"))
-using Pkg
-Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
-using GeoParams, CairoMakie, Dates, Statistics
-
 const isCUDA = true
 
 @static if isCUDA
@@ -14,7 +7,7 @@ end
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -27,15 +20,21 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
 const backend_JP = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
-    JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+
+# Load script dependencies
+using Pkg
+Pkg.activate(normpath(joinpath(@__DIR__, "..", "..", "miniapps")))
+using GeoParams, CairoMakie, Dates, Statistics
+
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -81,7 +80,7 @@ function plot_publication_figure(
     # Panel (a): Temperature with velocity arrows
     ax_a = Axis(fig[1, 1]; axis_kwargs..., ylabel = "z [km]", title = "(a) Temperature")
     h_a = heatmap!(
-        ax_a, xvi_dim[1], xvi_dim[2], T_data,
+        ax_a, xci_dim[1], xci_dim[2], T_data,
         colormap = :lajolla, colorrange = (273.0, 1623.0)
     )
     # Velocity is in cm/yr while the axes are in km; preserve magnitude with a
@@ -215,22 +214,18 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     update_phases_given_markerchain!(pPhases, chain, particles, origin_nd, di, air_phase, particle_args_reduced)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
-    # RockRatios: the marker chain defines the free surface for the variational solve
-    ϕ_R = RockRatio(backend, ni)
-    compute_rock_fraction!(ϕ_R, chain, xvi, di)
-
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    # thermal.T is cell-centered with one ghost node per boundary, so the vertex-based
-    # GMG field is averaged down onto it
+    # thermal.T is cell-centered with one ghost node per boundary. The setup returns
+    # the GMG temperature already averaged onto cell centers.
     T_GMG_nd = nondimensionalize(T_GMG * K, CharDim)
     Ttop, Tbot = extrema(T_GMG_nd)
     thermal = ThermalArrays(backend, ni)
-    vertex2center!(thermal.T, PTArray(backend)(T_GMG_nd); ghost_x = true, ghost_y = true)
+    thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(T_GMG_nd)
 
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (; left = true, right = true, top = false, bot = false),
@@ -271,11 +266,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     take(figdir)
     # ----------------------------------------------------
 
-    # centroid temperature buffer, the transfer array between grid and particles
-    T_buffer = @zeros(ni...)
-    @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     # visualization
     xci_dim = ntuple(i -> ustrip(dimensionalize(xci[i], km, CharDim)), Val(2))
@@ -285,9 +277,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     Vy_c = @zeros(ni...)
     vtkc = VTKDataSeries(joinpath(figdir, "vtk_series"), xci_dim)
 
-    # DYREL accelerated variational Stokes solver
-    # dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ_R, grid.di, dt; ϵ = 1e-6, γfact = 500)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ_R, grid.di, dt; ϵ = 1e-3, γfact = 100, c_fact = 0.5)
+    # DYREL Stokes solver.
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-3, γfact = 100, c_fact = 0.5)
 
     # Time loop
     t, it = 0.0, 0
@@ -314,14 +305,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 verbose = true,
             )
         )
-        @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
-        )
+        subgrid_diffusion_centroid!(pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
     end
 
     dgrain = nondimensionalize((1.0e-3)m, CharDim) # grain size parameter
@@ -332,8 +320,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     while it < 5000
         # interpolate temperature from particles to the cell centers
-        particle2centroid!(T_buffer, pT, particles)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles; ghost_1 = false, ghost_2 = false)
         thermal_bcs!(thermal , thermal_bc)
 
         # interpolate stress back to the grid
@@ -347,7 +334,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             dyrel,
             flow_bcs,
             phase_ratios,
-            # ϕ_R,
             it < 3 ? rheology_init : rheology,
             args,
             grid,
@@ -408,15 +394,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 verbose = true,
             )
         )
-        @views T_buffer .= thermal.T[2:(end - 1), 2:(end - 1)]
-
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-        subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
-        )
+        subgrid_diffusion_centroid!(pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt)
         # ------------------------------
 
         # Advection --------------------
@@ -427,23 +409,22 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
         # advect marker chain
         advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
-        # the ridge is reset first so that the marker chain, which also defines ϕ_R for
-        # the variational solve, has the last word on which particles are air
+        # the ridge is reset first so that the marker chain has the last word on which
+        # particles are air
         # reset_ridge!(pPhases, particles, x_ridge, z_crust, z_lith)
         update_phases_given_markerchain!(pPhases, chain, particles, origin_nd, di, air_phase, particle_args_reduced)
 
-        # check if we need to inject particles; τ.xx/τ.yy are centroid fields, τ.xy/ω.xy vertex ones
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (T_buffer, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy),
-        )
+        # Inject phase labels first, then initialize every newly injected particle field
+        # through the regular centroid/vertex interpolation paths.
+        inject_particles_phase!(particles, pPhases, (), ())
+        centroid2particle!(pT, thermal.T, particles)
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
+        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
+        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
-        compute_rock_fraction!(ϕ_R, chain, xvi, di)
-
         @show it += 1
         t += dt
 
@@ -469,7 +450,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             )
             data_c = (;
                 P = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
-                T = ustrip(dimensionalize(Array(T_buffer), K, CharDim)),
+                T = ustrip(dimensionalize(Array(thermal.T[2:(end - 1), 2:(end - 1)]), K, CharDim)),
                 viscosity_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
                 viscosity = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
                 phases = [argmax(p) for p in Array(phase_ratios.center)],
@@ -491,14 +472,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                 data_c,
                 velocity_v;
                 t = t_dim,
-                pvd = joinpath(vtk_dir, "Subduction2D_VS")
+                pvd = joinpath(vtk_dir, "Subduction2D")
                 )
 
             save_marker_chain(
                 joinpath(vtk_dir, "chain_" * lpad("$it", 6, "0")),
                 collect(ustrip(dimensionalize(xvi[1], km, CharDim))),
                 collect(ustrip(dimensionalize(Array(chain.h_vertices), km, CharDim)));
-                pvd = joinpath(vtk_dir, "2DSubduction_Markerchain"),
+                pvd = joinpath(vtk_dir, "Subduction2D_Markerchain"),
                 t = t_dim
             )
 
@@ -525,7 +506,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             # Plot temperature
             T_data = ustrip(dimensionalize(Array(thermal.T[2:(end - 1), 2:(end - 1)]), K, CharDim))
             h1 = heatmap!(
-                ax1, collect(xvi_dim[1]), collect(xvi_dim[2]), T_data, colormap = :batlow
+                ax1, collect(xci_dim[1]), collect(xci_dim[2]), T_data, colormap = :batlow
             )
             contour!(ax1, collect(xci_dim[1]), collect(xci_dim[2]), T_data, levels = 10, color = :white, linewidth = 0.5, alpha = 0.6)
             # Plot particles phase
@@ -613,8 +594,8 @@ end
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
 figdir = "Subduction2D_$(today())"
-nx = 1024#128*4
-ny = 192#64*2
+nx = 1024
+ny = 192
 # Model setup
 li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1; v_spread_cm_yr = 3.0, AgeRidge = 0.0, maxAge = 40.0)
 

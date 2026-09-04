@@ -8,7 +8,7 @@ end
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -32,7 +32,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays, Statistics, Dates, JLD2, Printf
+using GeoParams, CairoMakie, Statistics, Dates, JLD2, Printf
 
 # Load file with all the rheology configurations
 include("SillRheology.jl")

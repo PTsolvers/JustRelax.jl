@@ -256,11 +256,13 @@ end
         d = Inf # distance to the nearest particle
         particle_phase = -1
         for offi in 0:1, offj in 0:1
-            ii = I[1] + offi
-            jj = I[2] + offj
+            # JustPIC particle cells include one periodic ghost cell on each side,
+            # while the GMG phase field contains only the physical vertices.
+            ii = I[1] - 1 + offi
+            jj = I[2] - 1 + offj
 
-            !(ii ≤ ni[1]) && continue
-            !(jj ≤ ni[2]) && continue
+            !(1 ≤ ii ≤ size(phase_grid, 1)) && continue
+            !(1 ≤ jj ≤ size(phase_grid, 2)) && continue
 
             xvᵢ = (
                 xvi[1][ii],

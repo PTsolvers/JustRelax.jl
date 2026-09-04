@@ -32,8 +32,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
-- `use_gershgorin_ad`: Use the AD-based Gershgorin entries from `GershgorinAD.jl`
-  instead of the analytic linear-viscoelastic estimate from `Gershgorin.jl`. Default: `false`.
+- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -66,7 +65,7 @@ function _solve_DYREL!(
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
-        use_gershgorin_ad = false,
+        free_surface = false,
         kwargs...,
     ) where {N}
 
@@ -87,7 +86,7 @@ function _solve_DYREL!(
 
     # solver loop
     @copy stokes.P0 stokes.P
-    residuals0 = map(similar, residuals)
+    residuals0 = fields.R0
 
     for Aij in @tensor_center(stokes.ε_pl)
         Aij .= 0.0
@@ -111,17 +110,19 @@ function _solve_DYREL!(
     err_evo_P = Float64[]
     err_evo_it = Float64[]
     itg = 0
-    P_num = similar(stokes.P)
+    # small pressure correction θc = P_num + ΔPψ = γ_eff·RP + ΔPψ, assembled by the stress kernel and
+    # read (alongside the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num
+    # scratch — P_num is no longer materialized separately.
+    θc = dyrel.P_num
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
-    if use_gershgorin_ad
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
-        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, true)
-        DYREL_AD!(dyrel, stokes, rheology, phase_ratios, grid, dt; CFL = dyrel.CFL)
-    else
-        DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
+    if free_surface
+        N == 2 || error("DYREL free-surface stabilization currently supports only 2D")
+        apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
+        update_dτV_α_β!(dyrel)
     end
 
     # Powell-Hestenes iterations
@@ -129,54 +130,32 @@ function _solve_DYREL!(
         # update buoyancy forces
         update_ρg!(ρg, phase_ratios, rheology, args)
 
-        # compute divergence and deviatoric strain rate in one pass
-        compute_∇V_strain_rate!(stokes, _di, ni, dim)
+        # compute divergence, deviatoric strain rate and pressure residual in one pass
+        # isone(itPH) &&
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
 
-        # compute deviatoric stress
-        do_partials = false
-        compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_PH, dt, do_partials)
+        # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
+        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
         # update_halo!(stokes.τ.yy_v)
         # update_halo!(stokes.τ.xy)
 
-        if !linear_viscosity
-            update_viscosity_τII!(
-                stokes,
-                phase_ratios,
-                args,
-                rheology,
-                viscosity_cutoff;
-                relaxation = viscosity_relaxation,
-                do_partials = do_partials,
-                ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-            )
-        end
-
         # compute velocity residuals
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
+            @velocity(stokes)...,
             stokes.P,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
             _di.center,
             _di.vertex,
+            dt * free_surface,
         )
 
-        # compute pressure residual
-        compute_residual_P!(
-            stokes.R.RP,
-            stokes.P,
-            stokes.P0,
-            stokes.∇V,
-            stokes.Q, # volumetric source/sink term
-            dyrel.ηb,
-            rheology,
-            phase_ratios,
-            dt,
-            args,
-        )
+        # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
         errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
@@ -218,71 +197,47 @@ function _solve_DYREL!(
             itg += 1
             iter += 1
 
-            # Pseudo-old dudes
-            foreach(copyto!, residuals0, residuals)
+            # Pseudo-old dudes (only needed by compute_λminV! on residual-check iterations)
+            iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
-            # compute divergence and deviatoric strain rate in one pass
-            compute_∇V_strain_rate!(stokes, _di, ni, dim)
+            # compute divergence, deviatoric strain rate and pressure residual in one pass
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
 
-            do_partials = use_gershgorin_ad && iszero(iter % nout)
-
-            # Deviatoric stress
-            compute_stress_DRYEL!(stokes, dyrel, rheology, phase_ratios, λ_relaxation_DR, dt, do_partials)
+            # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
+            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             # update_halo!(stokes.λv)
-            # update_halo!(stokes.τ.xx_v)
-            # update_halo!(stokes.τ.yy_v)
-            # update_halo!(stokes.τ.xy)
-
-            compute_residual_P!(
-                stokes.R.RP,
-                stokes.P,
-                stokes.P0,
-                stokes.∇V,
-                stokes.Q, # volumetric source/sink term
-                dyrel.ηb,
-                rheology,
-                phase_ratios,
-                dt,
-                args,
-            )
-
-            if !linear_viscosity
-                update_viscosity_τII!(
-                    stokes,
-                    phase_ratios,
-                    args,
-                    rheology,
-                    viscosity_cutoff;
-                    relaxation = viscosity_relaxation,
-                    do_partials = do_partials,
-                    ∂η_∂ε = (dyrel.∂ηc_∂ε, dyrel.∂ηv_∂ε),
-                )
+            # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
+            # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
+            # stay consistent across ranks — matching the original stress→halo→viscosity ordering.
+            if linear_viscosity
+                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+            else
+                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
             end
+            free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
-            # Residuals
-            @. P_num = dyrel.γ_eff * stokes.R.RP
-            @parallel (@idx ni) compute_DR_residual_V!(
+            # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
+            # correction θc = γ_eff·RP + ΔPψ was assembled by the stress kernel above; P stays separate)
+            @parallel (@idx ni) compute_DR_residual_update_V!(
                 residuals...,
+                @velocity(stokes)...,
+                fields.dVdτ...,
                 stokes.P,
-                P_num,
-                stokes.ΔPψ,
+                θc,
                 @stress(stokes)...,
                 ρg...,
                 fields.D...,
+                fields.αV...,
+                fields.βV...,
+                fields.dτV...,
                 _di.center,
                 _di.vertex,
-            )
-
-            # Damping and pseudo-transient velocity updates
-            @parallel (@idx ni) update_V_damping_DR_V!(
-                @velocity(stokes),
-                fields.dVdτ,
-                residuals,
-                fields.αV,
-                fields.βV,
-                fields.dτV,
+                dt * free_surface,
             )
             flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(
+                stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
+            )
             update_halo!(@velocity(stokes)...)
 
             # Residual check
@@ -291,7 +246,8 @@ function _solve_DYREL!(
                 errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
-                    errV00 = errV
+                    errV_scale = maximum(errV) + eps()
+                    errV00 = ntuple(_ -> errV_scale, dim)
                 end
 
                 errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
@@ -310,12 +266,9 @@ function _solve_DYREL!(
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
-                # Optimal pseudo-time steps
-                if use_gershgorin_ad
-                    Gershgorin_Stokes2D_SchurComplementAD(dyrel, _di.center, _di.vertex, _di.velocity[1], _di.velocity[2])
-                else
-                    Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
-                end
+                # Optimal pseudo-time steps - can be replaced by AD
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
+                free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -323,6 +276,7 @@ function _solve_DYREL!(
         end
 
         # update pressure
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
         @. stokes.P += dyrel.γ_eff .* stokes.R.RP
 
         iter > total_iterMax && break
@@ -330,6 +284,10 @@ function _solve_DYREL!(
 
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
     @. stokes.P += stokes.ΔPψ
+
+    # refresh the ∇V diagnostic from the converged velocity field (it is not stored inside the
+    # DYREL/PH loop — see compute_∇V_strain_rate_RP!)
+    @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), _di.vertex)
 
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)
@@ -380,6 +338,7 @@ end
         βV = (dyrel.βVx, dyrel.βVy),
         cV = (dyrel.cVx, dyrel.cVy),
         αV = (dyrel.αVx, dyrel.αVy),
+        R0 = (dyrel.Rx0, dyrel.Ry0),
     )
 end
 
@@ -393,14 +352,11 @@ end
         βV = (dyrel.βVx, dyrel.βVy, dyrel.βVz),
         cV = (dyrel.cVx, dyrel.cVy, dyrel.cVz),
         αV = (dyrel.αVx, dyrel.αVy, dyrel.αVz),
+        R0 = (dyrel.Rx0, dyrel.Ry0, dyrel.Rz0),
     )
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
-
-@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
-@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
-@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
 

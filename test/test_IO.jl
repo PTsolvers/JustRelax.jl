@@ -6,11 +6,11 @@ const backend_JR = CPUBackend
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
 
-using JustPIC, JustPIC._2D
+using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = JustPIC.CPU # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
@@ -125,22 +125,57 @@ using WriteVTK, JLD2
             t = time,
             pvd = joinpath(dst, "pvd_test"),
         )
-        @test isfile(joinpath(dst, "vtk_000001_1.vti"))
-        @test isfile(joinpath(dst, "vtk_000001_2.vti"))
-        @test isfile(joinpath(dst, "vtk_000001.vtm"))
+        @test isfile(joinpath(dst, "vtk_000001.vti"))
         @test isfile(joinpath(dst, "pvd_test.pvd"))
 
+        # vertex and center fields share one file: point data and cell data
+        vtk_str = String(read(joinpath(dst, "vtk_000001.vti")))
+        for name_i in (keys(data_v)..., keys(data_c)...)
+            @test occursin("Name=\"$name_i\"", vtk_str)
+        end
+        point_data = vtk_str[findfirst("<PointData", vtk_str)[1]:findfirst("</PointData", vtk_str)[1]]
+        cell_data = vtk_str[findfirst("<CellData", vtk_str)[1]:findfirst("</CellData", vtk_str)[1]]
+        @test occursin("Name=\"Velocity\"", point_data)
+        # fields land where their size fits, not in the group they were passed in:
+        # Vx is given on the vertices, τII on the cell centers
+        @test occursin("Name=\"Vx\"", point_data)
+        @test occursin("Name=\"τII\"", cell_data)
+        @test occursin("Name=\"P\"", cell_data)
+        @test_throws DimensionMismatch save_vtk(
+            joinpath(dst, "vtk_bad"), xvi, xci, (; bad = zeros(nx + 2, ny + 2)),
+            data_c, velocity_v
+        )
 
+        # VTK vectors carry three components; the out-of-plane one is zero in 2D
+        @test occursin("Name=\"Velocity\" NumberOfComponents=\"3\"", point_data)
+        Vpacked = DataIO.pack_velocity(velocity_v, Float32)
+        @test size(Vpacked) == (3, size(Vx_v)...)
+        @test Vpacked[1, :, :] == Float32.(Array(Vx_v))
+        @test Vpacked[2, :, :] == Float32.(Array(Vy_v))
+        @test all(iszero, Vpacked[3, :, :])
+        @test_throws DimensionMismatch DataIO.pack_velocity(
+            (Vx_v, view(Vy_v, :, 1:(size(Vy_v, 2) - 1))), Float32
+        )
+
+        # the vertex grid must bound the cell grid, and velocity must live on the nodes
+        @test_throws DimensionMismatch save_vtk(
+            joinpath(dst, "vtk_bad"), xci, xci, data_v, data_c, velocity_v
+        )
+        @test_throws DimensionMismatch save_vtk(
+            joinpath(dst, "vtk_bad"), xci, data_c, velocity_v
+        )
+
+        velocity_c = (Array(stokes.V.Vx[1:nx, 1:ny]), Array(stokes.V.Vy[1:nx, 1:ny]))
         save_vtk(
-            joinpath(dst, "vtk_" * lpad("1", 6, "0")),
+            joinpath(dst, "vtk_center_" * lpad("1", 6, "0")),
             xci,
             data_c,
-            velocity_v,
+            velocity_c,
             t = time,
             pvd = joinpath(dst, "pvd_test1"),
         )
 
-        @test isfile(joinpath(dst, "vtk_000001.vti"))
+        @test isfile(joinpath(dst, "vtk_center_000001.vti"))
         @test isfile(joinpath(dst, "pvd_test1.pvd"))
 
         save_vtk(
@@ -175,6 +210,15 @@ using WriteVTK, JLD2
         )
         @test isfile(joinpath(dst, "MarkerChainPVD.vtp"))
         @test isfile(joinpath(dst, "markerchain_pvd.pvd"))
+
+        save_vtk(joinpath(dst, "vtk_default_t"), xci, data_c, velocity_c)
+        @test isfile(joinpath(dst, "vtk_default_t.vti"))
+
+        # save_particles (2D) with and without phases
+        save_particles(particles, pPhases; fname = joinpath(dst, "particles2D_phases"))
+        @test isfile(joinpath(dst, "particles2D_phases.vtu"))
+        save_particles(particles; fname = joinpath(dst, "particles2D"))
+        @test isfile(joinpath(dst, "particles2D.vtu"))
 
         # 3D case
         ni = nx, ny, nz
@@ -301,5 +345,24 @@ using WriteVTK, JLD2
 
         # Remove the generated directory
         rm(dst, recursive = true)
+    end
+
+    @suppress @testset "save_particles3D phase and no-phase variants" begin
+        dst3 = mktempdir()
+        n = 8
+        particles_mock = (
+            coords = ((data = rand(n),), (data = rand(n),), (data = rand(n),)),
+            index = (data = trues(n),),
+        )
+        JustRelax.DataIO.save_particles3D(
+            particles_mock, Float32; fname = joinpath(dst3, "p3d"),
+        )
+        @test isfile(joinpath(dst3, "p3d.vtu"))
+
+        pPhases_mock = (data = rand(Float32, n),)
+        JustRelax.DataIO.save_particles3D(
+            particles_mock, pPhases_mock, Float32; fname = joinpath(dst3, "p3d_phases"),
+        )
+        @test isfile(joinpath(dst3, "p3d_phases.vtu"))
     end
 end

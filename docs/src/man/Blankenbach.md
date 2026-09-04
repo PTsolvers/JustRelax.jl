@@ -1,392 +1,628 @@
-# Blankenbach benchmark
+# Blankenbach thermal-convection benchmark
 
-Thermal convection benchmark from  [Blankenbach et al., 1989](https://academic.oup.com/gji/article/98/1/23/622167)
+This two-dimensional model reproduces the thermal-convection benchmark of
+[Blankenbach et al. (1989)](https://academic.oup.com/gji/article/98/1/23/622167).
+It couples Stokes flow, pseudo-transient thermal diffusion, and particle-based
+subgrid diffusion to follow a temperature anomaly in a viscous mantle.
 
-## Initialize packages
+Run the miniapp from the repository root with
 
-Load [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) necessary modules and define backend.
-```julia
+```sh
+julia --project=miniapps --startup-file=no miniapps/benchmarks/stokes2D/Blankenbach2D/Benchmark2D_sgd.jl
+```
+
+## Imports and backends
+
+````julia
+const isCUDA = false
+````
+
+const isCUDA = true
+
+````julia
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CPUBackend
-```
+using Pkg; Pkg.activate("miniapps")
 
-For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
-```julia
-using JustPIC, JustPIC._2D
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-```
-
-We will also use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) to write some device-agnostic helper functions:
-```julia
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
-```
-and will use [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main) to define and compute physical properties of the materials:
-```julia
-using GeoParams
-```
-
-## Script
-
-### Model domain
-```julia
-nx = ny      = 51                       # number of cells per dimension
-nit          = 6e3
-igg          = IGG(
-    init_global_grid(nx, ny, 1; init_MPI= true)...
-)                                       # initialize MPI grid
-ly           = 1.0                      # domain length in y
-lx           = ly * ar                  # domain length in x
-ni           = nx, ny                   # number of cells
-li           = lx, ly                   # domain length in x- and y-
-di           = @. li / ni               # grid step in x- and -y
-origin       = 0.0, 0.0                 # origin coordinates
-grid         = Geometry(ni, li; origin = origin)
-(; xci, xvi) = grid                     # nodes at the center and vertices of the cells
-dt = dt_diff = 0.9 * min(di...)^2 / 4.0 # diffusive CFL timestep limiter
-```
-
-### Rheology
-```julia
-rheology = (
-    SetMaterialParams(;
-        Phase             = 1,
-        Density           = PT_Density(; ρ0 = 1, α = 1, β = 0.0),
-        HeatCapacity      = ConstantHeatCapacity(; Cp = 1.0),
-        Conductivity      = ConstantConductivity(;  k = 1.0),
-        CompositeRheology = CompositeRheology((LinearViscous(; η = 1),)),
-        RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
-        Gravity           = ConstantGravity(; g = 1e4),
-    ),
-)
-```
-
-### Initialize particles
-```julia
-nxcell              = 24 # initial number of perticles per cell
-max_xcell           = 35 # maximum number of perticles per cell
-min_xcell           = 12 # minimum number of perticles per cell
-particles           = init_particles(
-    backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
-) # particles object
-subgrid_arrays      = SubgridDiffusionCellArrays(particles) # arrays needed for subgrid diffusion
-```
-
-and we want to keep track of the temperature `pT`, temperature of the previous time step `pT0`, and material phase `pPhase`:
-
-```julia
-pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
-particle_args    = (pT, pT0, pPhases)
-```
-
-### Temperature anomaly
-```julia
-xc_anomaly = 0.0     # origin of thermal anomaly
-yc_anomaly = 1 / 3   # origin of thermal anomaly
-r_anomaly  = 0.1 / 2 # radius of perturbation
-```
-
-Helper function to initialize material phases with [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl)
-```julia
-function init_phases!(phases, particles)
-    ni = size(phases)
-
-    @parallel_indices (i, j) function init_phases!(phases, index)
-        @inbounds for ip in cellaxes(phases)
-            # quick escape if the ip-th element of the [i,j]-th cell is empty
-            @index(index[ip, i, j]) == 0 && continue
-            # all particles have phase number = 1.0
-            @index phases[ip, i, j] = 1.0
-        end
-        return nothing
-    end
-
-    @parallel (@idx ni) init_phases!(phases, particles.index)
+const backend_JR = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
 
-init_phases!(pPhases, particles)
-```
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-or we can use the alternative one-liners
-```julia
-@views pPhases.data[!isnan.(particles.index.data)] .= 1.0
-```
-or
-```julia
-map!(x -> isnan(x) ? NaN : 1.0, pPhases.data, particles.index.data)
-```
-
-and finally we need the phase ratios at the cell centers:
-```julia
-phase_ratios = PhaseRatios(backend, length(rheology), ni)
-update_phase_ratios!(phase_ratios, particles, pPhases)
-```
-
-### Stokes and heat diffusion arrays
-
-Stokes arrays object
-```julia
-stokes = StokesArrays(backend_JR, ni)
-```
-
-and the correspondent heat diffusion one
-```julia
-thermal = ThermalArrays(backend_JR, ni)
-```
-
-### Initialize thermal profile and viscosity fields
-
-To initialize the thermal profile we use [ParallelStencil.jl](https://github.com/omlins/ParallelStencil.jl) again
-```julia
-@parallel_indices (i, j) function init_T!(T, y)
-    T[i, j] = 1 - y[j]
-    return nothing
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
 end
 
-@parallel (@idx ni) init_T!((thermal.T[2:end-1, 2:end-1]), xci[2]) # physical cell centers
-```
+using JustPIC
+````
 
-and we define a rectangular thermal anomaly at $x \in [0, 0.05]$, $y \in [\frac{1}{3} - 0.05, \frac{1}{3} + 0.05]$
-```julia
-function rectangular_perturbation!(T, xc, yc, r, xvi)
-    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
-        if ((x[i]-xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
-            T[i+1, j] += .2
-        end
-        return nothing
-    end
-    nx, ny = size(T)
-    @parallel (1:nx-2, 1:ny) _rectangular_perturbation!(T, xc, yc, r, xvi...)
-    return nothing
+Threads is the default backend,
+to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
+and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
+
+````julia
+const backend = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+````
 
-xc_anomaly  = 0.0    # center of the thermal anomaly
-yc_anomaly  = 1/3    # center of the thermal anomaly
-r_anomaly   = 0.1/2  # half-width of the thermal anomaly
-rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)
-```
+Load script dependencies
 
-We initialize the buoyancy forces and viscosity
-```julia
-ρg               = @zeros(ni...), @zeros(ni...)
-η                = @ones(ni...)
-args             = (; T = thermal.T, P = stokes.P, dt = Inf)
-compute_ρg!(ρg[2], phase_ratios, rheology, args)
-compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-```
-where `(-Inf, Inf)` is the viscosity cutoff.
+````julia
+using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+````
 
-### Boundary conditions
-```julia
-flow_bcs      = VelocityBoundaryConditions(;
-    free_slip = (left = true, right=true, top=true, bot=true),
-)
-thermal_bc    = TemperatureBoundaryConditions(;
-    no_flux   = (left = true, right = true, top = false, bot = false),
-)
-thermal_bcs!(thermal, thermal_bc)
-thermal.Told .= thermal.T
-```
+The material parameters are defined in
+[`Blankenbach_Rheology.jl`](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl).
 
-### Pseuo-transient coefficients
-```julia
-pt_stokes   = PTStokesCoeffs(li, di; ϵ_rel=1e-4,  CFL = 1 / √2.1)
-pt_thermal  = PTThermalCoeffs(
-    backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
-)
-```
+````julia
+include("Blankenbach_Rheology.jl")
+````
 
-### Just before solving the problem...
-We need to allocate some arrays to be able to do the subgrid diffusion of the temperature field at the particles level:
-```julia
-T_buffer    = @zeros(ni.+1)     # without the ghost nodes at the x-direction
-Told_buffer = similar(T_buffer) # without the ghost nodes at the x-direction
-dt₀         = similar(stokes.P) # subgrid diffusion time scale
-# copy temperature to buffer arrays
-for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    copyinn_x!(dst, src)
-end
-# interpolate temperatyre on the particles
-grid2particle!(pT, T_buffer, particles)
-pT0.data    .= pT.data
-```
-where
-```julia
+## Helper functions
+
+Copy the interior `x` values of an array into a halo field.
+
+````julia
 function copyinn_x!(A, B)
+
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
         return nothing
     end
-    @parallel f_x(A, B)
+
+    return @parallel f_x(A, B)
 end
-```
+````
 
-In this benchmark we want to keep track of the time `trms`, the rms-velocity `Urms`
+Initialize the conductive thermal profile between the 273 K surface and the
+1273 K basal temperature.
 
-$U_{rms} = \sqrt{\int_{\Omega} (V_x^2 + V_y^2 ) d\Omega}$
+````julia
+@parallel_indices (i, j) function init_T!(T, y)
+    depth = -y[j]
 
-and the Nusselt number at the top of the model `Nu_top`
+    dTdZ = (1273 - 273) / 1000.0e3
+    offset = 273.0e0
+    T[i + 1, j + 1] = (depth) * dTdZ + offset
+    return nothing
+end
+````
 
-$Nu_{top} = \int \frac{\partial T}{\partial x} dx$
+Add the rectangular thermal perturbation that drives the convection.
 
-And we will store their time history in the vectors:
-```julia
-Urms   = Float64[]
-Nu_top = Float64[]
-trms   = Float64[]
-```
+````julia
+function rectangular_perturbation!(T, xc, yc, r, xvi)
+    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
+        if ((x[i] - xc)^2 ≤ r^2) && ((y[j] - yc)^2 ≤ r^2)
+            T[i + 1, j + 1] += 20.0
+        end
+        return nothing
+    end
+    ni = size(T) .- 2
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    return nothing
+end
+````
 
-We further need two buffer arrays where to interpolate the velocity field at the vertices of the grid cells
-```julia
-# Buffer arrays to compute velocity rms
-Vx_v = @zeros(ni.+1...)
-Vy_v = @zeros(ni.+1...)
-```
+## Model setup and solution
+
+````julia
+function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", do_vtk = false, finalize_MPI = true)
+````
+
+### Model domain
+
+The domain is `1000 km` high and has aspect ratio `ar`. `Geometry`
+provides the staggered cell-center and vertex coordinates.
+
+````julia
+    ly = 1000.0e3               # domain length in y
+    lx = ly                   # domain length in x
+    ni = nx, ny               # number of cells
+    li = lx, ly               # domain length in x- and y-
+    di = @. li / ni           # grid step in x- and -y
+    origin = 0.0, -ly             # origin coordinates
+    grid = Geometry(ni, li; origin = origin)
+    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+````
+
+----------------------------------------------------
+
+### Material properties
+
+The benchmark uses the single-phase material configuration from
+`Blankenbach_Rheology.jl`. Its thermal diffusivity sets the diffusive
+time-step limit.
+
+````julia
+    rheology = init_rheologies()
+    κ = (rheology[1].Conductivity[1].k / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
+    dt = dt_diff = 0.9 * min(di...)^2 / κ / 4.0 # diffusive CFL timestep limiter
+````
+
+----------------------------------------------------
+
+### Particles and phase ratios
+
+Particles carry temperature and phase information. `SubgridDiffusionCellArrays`
+supplies the particle-scale diffusion state, and `PhaseRatios` transfers
+particle phases to the staggered grid.
+
+````julia
+    nxcell, max_xcell, min_xcell = 24, 36, 12
+    particles = init_particles(
+        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+    )
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
+````
+
+temperature
+
+````julia
+    pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
+    particle_args = (pT, pT0, pPhases)
+    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    init_phases!(pPhases, particles)
+    update_phase_ratios!(phase_ratios, particles, pPhases)
+````
+
+----------------------------------------------------
+
+### Stokes and thermal state
+
+Allocate the Stokes and thermal fields together with their
+pseudo-transient coefficients.
+
+````julia
+    stokes = StokesArrays(backend_JR, ni)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
+````
+
+----------------------------------------------------
+
+````julia
+    thermal = ThermalArrays(backend_JR, ni)
+````
+
+Initialize the conductive profile and impose fixed temperatures at the
+top and bottom, with insulating sidewalls.
+
+````julia
+    @parallel (@idx ni) init_T!(thermal.T, xci[2])
+    Ttop = thermal.T[1, end]
+    Tbot = thermal.T[1, 1]
+    thermal_bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = false, bot = false),
+        constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
+    )
+````
+
+The perturbation is centered at 600 km depth and spans 200 km in each
+direction despite the helper's historical `rectangular` name.
+
+````julia
+    xc_anomaly = 0.0    # origin of thermal anomaly
+    yc_anomaly = -600.0e3  # origin of thermal anomaly
+    r_anomaly = 100.0e3    # radius of perturbation
+    rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xci)
+    thermal_bcs!(thermal, thermal_bc)
+    thermal.Told .= thermal.T
+````
+
+----------------------------------------------------
+
+The printed Rayleigh number characterizes the relative importance of
+buoyancy and viscous resistance for this setup.
+
+````julia
+    ΔT = thermal.T[1, 1] - thermal.T[1, end]
+    Ra = (rheology[1].Density[1].ρ0 * rheology[1].Gravity[1].g * rheology[1].Density[1].α * ΔT * ly^3.0) /
+        (κ * rheology[1].CompositeRheology[1].elements[1].η)
+    @show Ra
+
+    args = (; T = thermal.T, P = stokes.P, dt = Inf)
+````
+
+Initialize buoyancy and viscosity from the thermal field.
+
+````julia
+    ρg = @zeros(ni...), @zeros(ni...)
+    η = @ones(ni...)
+    compute_ρg!(ρg[2], phase_ratios, rheology, args)
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+    )
+````
+
+Allocate pseudo-transient coefficients for thermal diffusion.
+
+````julia
+    pt_thermal = PTThermalCoeffs(
+        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+    )
+````
+
+Use free-slip velocity boundaries and synchronize the velocity halos.
+
+````julia
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+    )
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(@velocity(stokes)...)
+````
+
+### Output
+
+Create the figure directory and, optionally, a VTK directory for
+ParaView output.
+
+````julia
+    if do_vtk
+        vtk_dir = joinpath(figdir, "vtk")
+        take(vtk_dir)
+    end
+    take(figdir)
+````
+
+----------------------------------------------------
+
+Plot the initial temperature and viscosity depth profiles.
+
+````julia
+    fig = let
+        Yv = [y for x in xvi[1], y in xvi[2]][:]
+        Y = [y for x in xci[1], y in xci[2]][:]
+        fig = Figure(size = (1200, 900))
+        ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "T")
+        ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "log10(η)")
+        scatter!(ax1, Array(thermal.T[2:(end - 1), 2:(end - 1)][:]), Y ./ 1.0e3)
+        scatter!(ax2, Array(log10.(η[:])), Y ./ 1.0e3)
+        ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
+        ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
+        hideydecorations!(ax2)
+        save(joinpath(figdir, "initial_profile.png"), fig)
+        fig
+    end
+
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
+    dt₀ = similar(stokes.P)
+    centroid2particle!(pT, T_buffer, particles)
+    pT0.data .= pT.data
+
+    local Vx_v, Vy_v
+    if do_vtk
+        Vx_v = @zeros(ni .+ 1...)
+        Vy_v = @zeros(ni .+ 1...)
+    end
+````
 
 ### Advancing one time step
 
-1. Solve stokes
-```julia
-solve!(
-    stokes,
-    pt_stokes,
-    di,
-    flow_bcs,
-    ρg,
-    phase_ratios,
-    rheology,
-    args,
-    Inf,
-    igg;
-    kwargs = (;
-        iterMax          = 150e3,
-        nout             = 200,
-        viscosity_cutoff = (-Inf, Inf),
-        verbose          = true
-    )
-)
-# calculate adaptive time step
-dt = compute_dt(stokes, di, dt_diff)
-```
-2. Heat diffusion solver
-```julia
-heatdiffusion_PT!(
-    thermal,
-    pt_thermal,
-    thermal_bc,
-    rheology,
-    args,
-    dt,
-    di;
-    kwargs = (;
-        igg     = igg,
-        phase   = phase_ratios,
-        iterMax = 10e3,
-        nout    = 1e2,
-        verbose = true,
-    )
-)
-```
-3. Subgrid diffusion at the particle level
-```julia
-for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
-    copyinn_x!(dst, src)
+Each iteration updates buoyancy and viscosity, solves Stokes, advances
+thermal and subgrid diffusion, advects particles, and records the Nusselt
+number and root-mean-square velocity.
+
+````julia
+    t, it = 0.0, 1
+    Urms = Float64[]
+    Nu_top = Float64[]
+    trms = Float64[]
+````
+
+Buffer arrays to compute velocity rms
+
+````julia
+    Vx_v = @zeros(ni .+ 1...)
+    Vy_v = @zeros(ni .+ 1...)
+
+    while it ≤ nit
+        @show it
+````
+
+1. Update buoyancy and viscosity.
+
+````julia
+        args = (; T = thermal.T, P = stokes.P, dt = Inf)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
+````
+
+------------------------------
+
+2. Solve Stokes and select an adaptive time step.
+
+````julia
+        solve!(
+            stokes,
+            pt_stokes,
+            grid,
+            flow_bcs,
+            ρg,
+            phase_ratios,
+            rheology,
+            args,
+            Inf,
+            igg;
+            kwargs = (;
+                iterMax = 150.0e3,
+                nout = 200,
+                viscosity_cutoff = (-Inf, Inf),
+                verbose = true,
+            )
+        )
+        dt = compute_dt(stokes, di, dt_diff)
+````
+
+------------------------------
+
+3. Advance grid- and particle-scale thermal diffusion.
+
+````julia
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology,
+            args,
+            dt,
+            grid;
+            kwargs = (;
+                igg = igg,
+                phase = phase_ratios,
+                iterMax = 10.0e3,
+                nout = 1.0e2,
+                verbose = true,
+            )
+        )
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
+        )
+        centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
+        subgrid_diffusion_centroid!(
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+        )
+````
+
+------------------------------
+
+4. Advect particles and update the phase ratios.
+
+````julia
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
+````
+
+advect particles in memory
+
+````julia
+        move_particles!(particles, particle_args)
+````
+
+check if we need to inject particles
+
+````julia
+        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+````
+
+update phase ratios
+
+````julia
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+````
+
+5. Record the Nusselt number and root-mean-square velocity.
+
+````julia
+        Nu_it = (ly / (1000.0 * lx)) *
+            sum(((abs.(thermal.T[2:(end - 1), end] - thermal.T[2:(end - 1), end - 1])) ./ di[2]) .* di[1])
+        push!(Nu_top, Nu_it)
+````
+
+-------------------------------------------
+
+Compute the dimensionless root-mean-square velocity:
+
+$$
+U_{\mathrm{rms}} = \frac{H \rho_0 c_p}{k}
+\sqrt{\frac{1}{LH} \int_\Omega (v_x^2 + v_y^2)\,\mathrm{d}\Omega}.
+$$
+
+````julia
+        Urms_it = let
+            velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
+            @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
+            sqrt(sum(Vx_v .^ 2 .* prod(di)) / lx / ly) *
+                ((ly * rheology[1].Density[1].ρ0 * rheology[1].HeatCapacity[1].Cp) / rheology[1].Conductivity[1].k)
+        end
+        push!(Urms, Urms_it)
+        push!(trms, t)
+````
+
+-------------------------------------------
+
+6. Interpolate particle temperature back to the thermal grid.
+
+````julia
+        particle2centroid!(T_buffer, pT, particles)
+        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+````
+
+7. Write snapshots and time-series figures at the requested interval.
+
+````julia
+        if it == 1 || rem(it, 200) == 0 || it == nit
+
+            if do_vtk
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    τxy = Array(stokes.τ.xy),
+                    εxy = Array(stokes.ε.xy),
+                    Vx = Array(Vx_v),
+                    Vy = Array(Vy_v),
+                )
+                data_c = (;
+                    P = Array(stokes.P),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εxx = Array(stokes.ε.xx),
+                    εyy = Array(stokes.ε.yy),
+                    η = Array(stokes.viscosity.η),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c,
+                    velocity_v,
+                    t = t
+                )
+            end
+````
+
+Make particles plottable
+
+````julia
+            p = particles.coords
+            ppx, ppy = p
+            pxv = ppx.data[:] ./ 1.0e3
+            pyv = ppy.data[:] ./ 1.0e3
+            clr = pT.data[:] #pPhases.data[:]
+            idxv = particles.index.data[:]
+````
+
+Make Makie figure
+
+````julia
+            fig = Figure(size = (900, 900), title = "t = $t")
+            ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "Vy [m/s]")
+            ax3 = Axis(fig[1, 3], aspect = ar, title = "Vx [m/s]")
+            ax4 = Axis(fig[2, 3], aspect = ar, title = "T [K]")
+````
+
+````julia
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[2] .* 1.0e-3, Array(thermal.T[2:(end - 1), 2:(end - 1)]), colormap = :lajolla, colorrange = (273, 1273))
+````
+
+````julia
+            h2 = heatmap!(ax2, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(stokes.V.Vy), colormap = :batlow)
+````
+
+````julia
+            h3 = heatmap!(ax3, xvi[1] .* 1.0e-3, xvi[2] .* 1.0e-3, Array(stokes.V.Vx), colormap = :batlow)
+````
+
+````julia
+            h4 = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), colormap = :lajolla, colorrange = (273, 1273), markersize = 3)
+            #h4  = heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η)) , colormap=:batlow)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            Colorbar(fig[1, 2], h1)
+            Colorbar(fig[2, 2], h2)
+            Colorbar(fig[1, 4], h3)
+            Colorbar(fig[2, 4], h4)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            save(joinpath(figdir, "$(it).png"), fig)
+            fig
+
+            fig2 = Figure(size = (900, 1200), title = "Time Series")
+            ax21 = Axis(fig2[1, 1], aspect = 3, title = L"V_{RMS}")
+            ax22 = Axis(fig2[2, 1], aspect = 3, title = L"Nu_{top}")
+            l1 = lines!(ax21, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Urms)
+            l2 = lines!(ax22, trms ./ (1.0e6 * (365.25 * 24 * 60 * 60)), Nu_top)
+            save(joinpath(figdir, "Time_Series_V_Nu.png"), fig2)
+        end
+        it += 1
+        t += dt
+````
+
+------------------------------
+
+````julia
+    end
+````
+
+Plot horizontally averaged temperature and viscosity profiles.
+
+````julia
+    Tmean = @zeros(ny + 1)
+    Emean = @zeros(ny)
+
+    let
+        for j in 1:(ny + 1)
+            Tmean[j] = sum(thermal.T[2:(end - 1), j]) / (nx + 1)
+        end
+        for j in 1:ny
+            Emean[j] = sum(η[:, j]) / nx
+        end
+        Y = [y for x in xci[1], y in xci[2]][:]
+        fig = Figure(size = (1200, 900))
+        ax1 = Axis(fig[1, 1], aspect = 2 / 3, title = "⟨T⟩")
+        ax2 = Axis(fig[1, 2], aspect = 2 / 3, title = "⟨log10(η)⟩")
+        lines!(ax1, Tmean, xvi[2] ./ 1.0e3)
+        lines!(ax2, log10.(Emean), xci[2] ./ 1.0e3)
+        ylims!(ax1, minimum(xvi[2]) ./ 1.0e3, 0)
+        ylims!(ax2, minimum(xvi[2]) ./ 1.0e3, 0)
+        hideydecorations!(ax2)
+        save(joinpath(figdir, "Mean_profiles_$(it).png"), fig)
+        fig
+    end
+
+    @show Urms[Int64(nit)] Nu_top[Int64(nit)]
+
+    finalize_global_grid(; finalize_MPI = finalize_MPI)
+
+    return Urms, Nu_top, trms, thermal.T, xvi
 end
-subgrid_characteristic_time!(
-    subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
-)
-centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
-subgrid_diffusion!(
-    pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, dt
-)
-```
-4. Advect particles
-```julia
-# advect particles in space
-advection!(particles, RungeKutta2(), @velocity(stokes), dt)
-# advect particles in memory
-move_particles!(particles, particle_args)
-# check if we need to inject particles
-inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
-# update phase ratios
-update_phase_ratios!(phase_ratios, particles, pPhases)
-```
-5.  Interpolate `T` back to the grid
-```julia
-# interpolate fields from particle to grid vertices
-particle2grid!(T_buffer, pT, particles)
-@views T_buffer[:, end]      .= 0.0
-@views T_buffer[:, 1]        .= 1.0
-@views thermal.T[2:end-1, :] .= T_buffer
-flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-```
-6. Update buoyancy forces and viscosity
-```julia
-args = (; T = thermal.T, P = stokes.P,  dt=Inf)
-compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
-compute_ρg!(ρg[2], phase_ratios, rheology, args)
-```
-7. Compute Nusselt number and rms-velocity
-```julia
-# Nusselt number, Nu = ∫ ∂T/∂z dx
-Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])
-push!(Nu_top, Nu_it)
-# Compute U rms
-# U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
-Urms_it = let
-    velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy)
-    @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
-    sqrt(sum( Vx_v.^2 .* prod(di)) )
+````
+
+## Run configuration
+
+Configure the output directory, optional VTK output, domain aspect ratio,
+resolution, and number of time steps for a standalone benchmark run.
+
+````julia
+figdir = "Blankenbach_subgrid"
+do_vtk = false # set to true to generate VTK files for ParaView
+ar = 1 # aspect ratio
+n = 64
+nx = n
+ny = n
+nit = 6.0e3
+igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
 end
-push!(Urms, Urms_it)
-push!(trms, t)
-```
 
-### Visualization
-We will use [Makie.jl](https://github.com/MakieOrg/Makie.jl) to visualize the results
-```julia
-using CairoMakie
-```
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, nit = nit, do_vtk = do_vtk);
+````
 
-### Fields
-```julia
-# Make particles plottable
-p        = particles.coords
-ppx, ppy = p
-pxv      = ppx.data[:]
-pyv      = ppy.data[:]
-clr      = pT.data[:]
-idxv     = particles.index.data[:];
+## Reference results
 
-# Make Makie figure
-fig = Figure(size = (900, 900), title = "t = $t")
-ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-ax2 = Axis(fig[2,1], aspect = ar, title = "Vy [m/s]")
-ax3 = Axis(fig[1,3], aspect = ar, title = "Vx [m/s]")
-ax4 = Axis(fig[2,3], aspect = ar, title = "T [K]")
-# grid temperature
-h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(0, 1) )
-# y-velocity
-h2  = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
-# x-velocity
-h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vx) , colormap=:batlow)
-# particles temperature
-h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)
-hidexdecorations!(ax1)
-hidexdecorations!(ax2)
-hidexdecorations!(ax3)
-Colorbar(fig[1,2], h1)
-Colorbar(fig[2,2], h2)
-Colorbar(fig[1,4], h3)
-Colorbar(fig[2,4], h4)
-linkaxes!(ax1, ax2, ax3, ax4)
-save(joinpath(figdir, "$(it).png"), fig)
-fig
-```
+This resolution study compares the benchmark diagnostics across grid sizes.
 
-### Final model
-Temperature field
-![Temperature](../assets/Blankenbach_Temp.png)
+![Blankenbach resolution study](../assets/Blankenbach_resolution_study.png)
 
-And time history of the rms-velocity and Nusselt number
-![time series](../assets/Blankenbach_Time_Series_V_Nu.png)
+---
+
+*This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*

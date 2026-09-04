@@ -1,17 +1,35 @@
-using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+const isCUDA = false
+# const isCUDA = true
 
-const backend_JR = CPUBackend
+@static if isCUDA
+    using CUDA
+end
+
+using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
+using Pkg; Pkg.activate("miniapps")
+
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
 
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
-@init_parallel_stencil(Threads, Float64, 3) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 3)
+else
+    @init_parallel_stencil(Threads, Float64, 3)
+end
 
 using JustPIC
-using JustPIC._3D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
+# Load script dependencies
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
 using StaticArrays
 using ImplicitGlobalGrid
@@ -224,7 +242,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     nxcell = 20
     max_xcell = 40
     min_xcell = 15
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     subgrid_arrays = SubgridDiffusionCellArrays(particles)
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
@@ -237,12 +255,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     z_anomaly = nondimensionalize(-5km, CharDim)  # origin of the small thermal anomaly
     r_anomaly = nondimensionalize(1.5km, CharDim)             # radius of perturbation
     anomaly = nondimensionalize((750 + 273)K, CharDim)               # thermal perturbation (in K)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, x_anomaly, y_anomaly, z_anomaly, r_anomaly, sticky_air, nondimensionalize(0.0km, CharDim), nondimensionalize(20km, CharDim))
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # Initialisation of thermal profile
-    thermal = ThermalArrays(backend_JR, ni) # initialise thermal arrays and boundary conditions
+    thermal = ThermalArrays(backend, ni) # initialise thermal arrays and boundary conditions
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
     )
@@ -262,13 +280,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni) # initialise stokes arrays with the defined regime
+    stokes = StokesArrays(backend, ni) # initialise stokes arrays with the defined regime
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √3.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.8 / √3.1
     )
 
     flow_bcs = VelocityBoundaryConditions(;
@@ -412,11 +430,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)
@@ -435,8 +454,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 if do_vtk
                     velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                     data_v = (;
-                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy, s^-1, CharDim))),
-                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy, s^-1, CharDim))),
                         Vx = Array(ustrip.(dimensionalize(Vx_v, cm / yr, CharDim))),
                         Vy = Array(ustrip.(dimensionalize(Vy_v, cm / yr, CharDim))),
                         Vz = Array(ustrip.(dimensionalize(Vz_v, cm / yr, CharDim))),
@@ -447,10 +464,12 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                         τxx = Array(ustrip.(dimensionalize(stokes.τ.xx, MPa, CharDim))),
                         τyy = Array(ustrip.(dimensionalize(stokes.τ.yy, MPa, CharDim))),
                         τzz = Array(ustrip.(dimensionalize(stokes.τ.zz, MPa, CharDim))),
+                        τxy = Array(ustrip.(dimensionalize(stokes.τ.xy_c, MPa, CharDim))),
                         τII = Array(ustrip.(dimensionalize(stokes.τ.II, MPa, CharDim))),
                         εxx = Array(ustrip.(dimensionalize(stokes.ε.xx, s^-1, CharDim))),
                         εyy = Array(ustrip.(dimensionalize(stokes.ε.yy, s^-1, CharDim))),
                         εzz = Array(ustrip.(dimensionalize(stokes.ε.zz, s^-1, CharDim))),
+                        εxy = Array(ustrip.(dimensionalize(stokes.ε.xy_c, s^-1, CharDim))),
                         εII = Array(ustrip.(dimensionalize(stokes.ε.II, s^-1, CharDim))),
                         η = Array(ustrip.(dimensionalize(stokes.viscosity.η_vep, Pa * s, CharDim))),
                     )

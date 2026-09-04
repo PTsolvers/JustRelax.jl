@@ -26,10 +26,10 @@ diff_wet_olivine  = SetDiffusionCreep(Diffusion.wet_olivine_Hirth_2003)
 
 and where plastic failure is given by the formulation from [Duretz et al, 2021](https://doi.org/10.1029/2021GC009675)
 ```julia
-# non-regularized plasticity
 ϕ               = asind(0.1)
 C               = 1e6        # Pa
-plastic_model   = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp=η_reg, Ψ=0.0)
+η_reg           = 1e20       # Pa s, viscosity of the regularisation dashpot
+plastic_model   = DruckerPrager_regularised(; C = C, ϕ = ϕ, η_vp = η_reg, Ψ = 0.0)
 ```
 
 Finally we define the rheology objects of [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl)

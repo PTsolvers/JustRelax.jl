@@ -7,7 +7,7 @@ The recommended workflow is now:
 
 ```julia
 using JustRelax
-using JustPIC, JustPIC._2D
+using JustPIC
 
 grid = Geometry(ni, li; origin = origin)
 
@@ -23,19 +23,27 @@ phase_ratios = PhaseRatios(backend, nphases, ni)
 
 `grid.xi_vel` stores the staggered velocity coordinates used to initialize particles. In most cases you should pass `grid.xi_vel...` directly to `init_particles` instead of rebuilding the velocity grids manually from `xci`, `xvi`, and `di`.
 
+JustPIC 0.7.3 uses ghosted particle grids by default for particle-to-grid and
+particle-to-centroid interpolation. When exchanging data with a ghost-free
+buffer such as `T_buffer`, disable the corresponding ghost dimensions
+explicitly. For example, in 2D use `ghost_1 = false, ghost_2 = false` (and add
+`ghost_3 = false` in 3D).
+
 ## Typical particle operations
 
 Common particle operations now follow the compact API used in the tests and examples:
 
 ```julia
 grid2particle!(pT, T_buffer, particles)
-particle2grid!(T_buffer, pT, particles)
+particle2grid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false)
 
 advection!(particles, RungeKutta2(), @velocity(stokes), dt)
 move_particles!(particles, particle_args)
 inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
 update_phase_ratios!(phase_ratios, particles, pPhases)
 ```
+
+Particle fields (`pT`, `pPhases`, ...) are cell arrays: individual particle entries are read and written with `@index`, as described in [Indexing cell arrays](@ref).
 
 If you use subgrid diffusion, the matching workflow is:
 
@@ -53,3 +61,29 @@ subgrid_diffusion!(pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, partic
 ## Velocity grids
 
 `velocity_grids(xci, xvi, di)` is still available when you need the staggered coordinates explicitly, for example for analysis or custom utilities. When you already have a [`Geometry`](@ref), prefer `grid.xi_vel`.
+
+## Marker-chain free surfaces
+
+For a 2D free surface represented by a `JustPIC.MarkerChain`, the chain must be
+advanced with the same velocity field and timestep as the material particles.
+The recommended robust update is semi-Lagrangian:
+
+```julia
+semilagrangian_advection_markerchain!(
+    chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
+)
+```
+
+This updates fixed surface vertices by backtracking, limits steep slopes,
+conserves the mean height, and reconstructs a regular marker chain. The direct
+Lagrangian alternative is:
+
+```julia
+advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+```
+
+The direct form does not take `xvi`; it moves and resamples the chain markers,
+then reconstructs its topography internally. After either update, invalidate
+particles on the wrong side of the chain, replenish particle slots, update
+particle phase ratios, and finally recompute any `RockRatio` field derived from
+the chain.

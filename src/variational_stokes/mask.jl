@@ -13,6 +13,12 @@ Create a `RockRatio` object for a 2D grid with dimensions `nx` x `ny` on a stagg
 
 """
 function RockRatio(nx, ny)
+    # The four fields below are liquid-volume fractions, not material
+    # properties. Their staggered locations are:
+    #
+    #                  Vy (nx, ny+1)
+    #         Vx       center       Vx
+    #                  vertex (nx+1, ny+1)
     ni = nx, ny
     center = @zeros(ni...)
     vertex = @zeros(ni .+ 1...)
@@ -49,6 +55,16 @@ end
 @inline size_yz(x::JustRelax.AbstractMask) = size(x.yz)
 @inline size_xz(x::JustRelax.AbstractMask) = size(x.xz)
 @inline size_xy(x::JustRelax.AbstractMask) = size(x.xy)
+
+# A rock-ratio entry is active when it carries any liquid volume.  Keep this
+# policy in one place: all staggered-grid null-space checks below use it, so a
+# positive sub-cell fraction is not silently treated as an inactive DOF by one
+# operator and active by another.
+@inline variational_active(x) = x > zero(x)
+
+# Bounded approximation of the inverse liquid face mass.  The positive floor
+# keeps partially filled velocity rows finite; fully filled rows remain exact.
+@inline variational_face_mass(x) = max(x, oftype(x, 0.1))
 
 """
     update_rock_ratio!(ϕ::JustRelax.RockRatio, phase_ratios, air_phase)
@@ -159,13 +175,37 @@ end
 """
     isvalid_c(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.center[inds...]` is a not a nullspace in 2D.
+Check whether the 2D pressure degree of freedom is connected to liquid.
+
+The cell-centred pressure row is retained only when `ϕ.center[i,j]` and all
+four adjacent velocity faces are active:
+
+                 Vy[i, j+1]
+                       o
+                       |
+        Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+                       |
+                       o
+                 Vy[i, j]
+
+This is the local null-space elimination used by the matrix-free reduced
+system. It is intentionally stricter than testing the centre fraction alone.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
+    # A pressure cell is retained only when its centre and all four adjacent
+    # velocity faces are connected to liquid:
+    #
+    #                  Vy[i, j+1]
+    #                        o
+    #                        |
+    #         Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
+    #                        |
+    #                        o
+    #                  Vy[i, j]
     vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
     vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
     v = vx * vy
@@ -308,7 +348,7 @@ Base.@propagate_inbounds @inline function isvalid_v(ϕ::JustRelax.RockRatio, i, 
     nx, ny, nz = size(ϕ.xy)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    xy = isvalid(ϕ.xy, i, j, k_top) * isvalid(ϕ.xy, i, j, k_back)
+    xy = isvalid(ϕ.xy, i, j, k_top) * isvalid(ϕ.xy, i, j, k_bot)
 
     # V
     v = yz * xz * xy
@@ -327,16 +367,16 @@ Base.@propagate_inbounds @inline function isvalid_xz(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j + 1, k)
 
     # check vz
-    nx, ny, nz = size(ϕ.vz)
+    nx, ny, nz = size(ϕ.Vz)
     i_left = max(i - 1, 1)
     i_right = min(i, nx)
-    vz = isvalid(ϕ.vz, i_left, j, k) * isvalid(ϕ.vz, i_right, j, k)
+    vz = isvalid(ϕ.Vz, i_left, j, k) * isvalid(ϕ.Vz, i_right, j, k)
 
     # check vx
-    nx, ny, nz = size(ϕ.vx)
+    nx, ny, nz = size(ϕ.Vx)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    vx = isvalid(ϕ.vx, i, j, k_top) * isvalid(ϕ.vx, i, j, k_back)
+    vx = isvalid(ϕ.Vx, i, j, k_top) * isvalid(ϕ.Vx, i, j, k_bot)
 
     return v * vx * vz * isvalid(ϕ.vertex, i, j, k)
 end
@@ -352,18 +392,18 @@ Base.@propagate_inbounds @inline function isvalid_xy(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i, j, k + 1)
 
     # check vx
-    nx, ny, nz = size(ϕ.vx)
+    nx, ny, nz = size(ϕ.Vx)
     j_front = max(j - 1, 1)
     j_back = min(j, ny)
-    vx = isvalid(ϕ.vx, i, j_front, k) * isvalid(ϕ.vx, i, j_back, k)
+    vx = isvalid(ϕ.Vx, i, j_front, k) * isvalid(ϕ.Vx, i, j_back, k)
 
     # check vy
-    nx, ny, nz = size(ϕ.vy)
+    nx, ny, nz = size(ϕ.Vy)
     i_left = max(i - 1, 1)
     i_right = min(i, nx)
-    vy = isvalid(ϕ.vy, i_left, j, k) * isvalid(ϕ.vy, i_right, j, k)
+    vy = isvalid(ϕ.Vy, i_left, j, k) * isvalid(ϕ.Vy, i_right, j, k)
 
-    return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
+    return v * vx * vy * isvalid(ϕ.vertex, i, j, k)
 end
 
 """
@@ -377,21 +417,22 @@ Base.@propagate_inbounds @inline function isvalid_yz(ϕ::JustRelax.RockRatio, i,
     v = isvalid(ϕ.vertex, i, j, k) * isvalid(ϕ.vertex, i + 1, j, k)
 
     # check vz
-    nx, ny, nz = size(ϕ.vz)
+    nx, ny, nz = size(ϕ.Vz)
     j_front = max(j - 1, 1)
     j_back = min(j, ny)
-    vz = isvalid(ϕ.vz, i, j_front, k) * isvalid(ϕ.vz, i, j_back, k)
+    vz = isvalid(ϕ.Vz, i, j_front, k) * isvalid(ϕ.Vz, i, j_back, k)
 
     # check vy
-    nx, ny, nz = size(ϕ.vy)
+    nx, ny, nz = size(ϕ.Vy)
     k_top = max(k - 1, 1)
     k_bot = min(k, nz)
-    vy = isvalid(ϕ.vy, i, j, k_top) * isvalid(ϕ.vy, i, j, k_back)
+    vy = isvalid(ϕ.Vy, i, j, k_top) * isvalid(ϕ.Vy, i, j, k_bot)
 
     return v * vy * vz * isvalid(ϕ.vertex, i, j, k)
 end
 
-Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer, N}) where {N} = ϕ[I...] > 0
+Base.@propagate_inbounds @inline isvalid(ϕ, I::Vararg{Integer, N}) where {N} =
+    variational_active(ϕ[I...])
 
 ######
 

@@ -8,7 +8,45 @@ end
 
 ## 2D VISCO-ELASTIC STOKES SOLVER
 
-# backend trait
+"""
+    solve!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg; kwargs...)
+
+Solve the 2D viscoelastoplastic Stokes equations to pseudo-transient convergence, updating
+`stokes` (velocity, pressure, stress, viscosity) in place for one physical time step `dt`.
+This is the general, multi-phase call form used by most models; dispatch on the type of
+the sixth argument also accepts, for simpler/benchmark setups:
+- a single-phase `rheology::GeoParams.MaterialParams` in place of `phase_ratios`/`rheology`
+  (drop the `phase_ratios` argument), or
+- constant `K` (bulk modulus) or `K, G` (bulk and shear modulus) fields in place of
+  `phase_ratios`/`rheology`/`args`, for linear (visco)elastic problems with no material
+  rheology.
+`grid` may also be replaced by the grid spacing `di` alone (a `NTuple`/`NamedTuple`).
+
+# Arguments
+- `stokes`: solver state allocated with `StokesArrays`.
+- `pt_stokes`: pseudo-transient coefficients, e.g. from `PTStokesCoeffs`.
+- `grid`: the model `Geometry`.
+- `flow_bcs`: velocity/displacement boundary conditions.
+- `ρg`: buoyancy forcing `(ρgx, ρgy)`.
+- `phase_ratios`: per-cell/per-node phase fractions (a `JustPIC.PhaseRatios`).
+- `rheology`: one `GeoParams.MaterialParams` per phase.
+- `args`: auxiliary fields (e.g. temperature `T`, pressure `P`) used by the constitutive updates.
+- `dt`: physical time step.
+- `igg`: the distributed-grid context (`IGG`).
+
+# Keyword arguments
+- `iterMax = 50e3`, `iterMin = 100`: min/max pseudo-transient iterations.
+- `nout = 500`: check convergence every `nout` iterations.
+- `viscosity_cutoff = (-Inf, Inf)`: clamp bounds for the effective viscosity.
+- `viscosity_relaxation = 1e-2`: relaxation factor for nonlinear viscosity updates.
+- `λ_relaxation = 0.2`: relaxation factor for the plastic multiplier.
+- `strain_increment = false`: accumulate strain increments instead of overwriting.
+- `free_surface = false`: enable free-surface stabilization.
+- `b_width = (4, 4, 0)`: halo width used when overlapping communication and computation.
+- `verbose = true`: print convergence progress.
+
+Dispatches on the CPU/CUDA/AMDGPU backend selected by `stokes`.
+"""
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
@@ -77,7 +115,7 @@ function _solve!(
             @parallel compute_P!(
                 stokes.P, stokes.P0, stokes.RP, stokes.∇V, stokes.Q, η, K, dt, r, θ_dτ
             )
-            @parallel (@idx ni) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
+            @parallel (@idx ni .+ 1) compute_τ!(@stress(stokes)..., @strain(stokes)..., η, θ_dτ)
             @hide_communication b_width begin
                 @parallel compute_V!(
                     @velocity(stokes)...,
@@ -241,7 +279,7 @@ function _solve!(
                 _di.velocity[2],
             )
 
-            @parallel (@idx ni) compute_τ!(
+            @parallel (@idx ni .+ 1) compute_τ!(
                 @stress(stokes)...,
                 @tensor(stokes.τ_o)...,
                 @strain(stokes)...,
@@ -458,6 +496,7 @@ function _solve!(
             )
             center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -474,6 +513,7 @@ function _solve!(
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
                 flow_bcs!(stokes, flow_bcs)
+                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
                 update_halo!(@velocity(stokes)...)
             end
         end
@@ -600,6 +640,7 @@ function _solve!(
 
     # unpack
 
+    di = grid.di
     _di = grid._di
     _dt = inv(dt)
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
@@ -755,6 +796,7 @@ function _solve!(
                 )
             end
             update_halo!(stokes.τ.xy)
+            free_surface_stress_bcs!(stokes, flow_bcs, Val(2))
 
             update_viscosity_τII!(
                 stokes,
@@ -779,8 +821,8 @@ function _solve!(
                 )
                 # apply boundary conditions
                 velocity2displacement!(stokes, dt)
-                # free_surface_bcs!(stokes, flow_bcs, η, rheology, phase_ratios, dt, _di.velocity[1], _di.velocity[2])
                 flow_bcs!(stokes, flow_bcs)
+                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(2))
                 update_halo!(@velocity(stokes)...)
             end
         end

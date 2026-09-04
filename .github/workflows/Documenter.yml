@@ -30,10 +30,10 @@ jobs:
       statuses: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
-          version: '1.11'
+          version: '1'
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@latest
       - name: Install dependencies

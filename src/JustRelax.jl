@@ -167,10 +167,45 @@ end
 export versioninfo
 
 #! format: on
+"""
+    AbstractBackend
+
+Supertype for backend tags ([`CPUBackend`](@ref), `CUDABackend`, [`AMDGPUBackend`](@ref))
+selecting which array type and device a model runs on.
+"""
 abstract type AbstractBackend end
+
+"""
+    CPUBackend
+
+Backend tag selecting plain `Array`s, running on the CPU via `ParallelStencil`'s `Threads`
+target. The default backend.
+"""
 struct CPUBackend <: AbstractBackend end
+
+"""
+    CUDABackend
+
+Backend tag selecting `CuArray`s, running on an Nvidia GPU. Only defined once `CUDA.jl` is
+loaded (see [Selecting the backend](@ref)).
+"""
+struct CUDABackend <: AbstractBackend end
+
+"""
+    AMDGPUBackend
+
+Backend tag selecting `ROCArray`s, running on an AMD GPU. Requires `AMDGPU.jl` to be loaded
+(see [Selecting the backend](@ref)).
+"""
 struct AMDGPUBackend <: AbstractBackend end
 
+"""
+    PTArray()
+    PTArray(::Type{<:AbstractBackend})
+
+The array type associated with a backend tag: `Array` for `CPUBackend`, `CuArray` for
+`CUDABackend`, `ROCArray` for `AMDGPUBackend`. `PTArray()` (no argument) is the CPU default.
+"""
 PTArray() = Array
 PTArray(::Type{CPUBackend}) = Array
 PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
@@ -202,7 +237,7 @@ include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("grid/Grid.jl")
-export IGG, lazy_grid, Geometry, velocity_grids, x_g, y_g, z_g
+export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
 
 include("JustRelax_CPU.jl")
 

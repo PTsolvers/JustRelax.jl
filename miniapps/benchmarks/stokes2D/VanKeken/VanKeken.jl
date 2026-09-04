@@ -1,18 +1,40 @@
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
+const isCUDA = false
+# const isCUDA = true
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+@static if isCUDA
+    using CUDA
+end
+
 using JustRelax, JustRelax.JustRelax2D
+using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+
+# Load script dependencies
+using Printf, LinearAlgebra, GeoParams, CellArrays
+
 
 using CairoMakie
 
-using JustPIC, JustPIC._2D
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # x-length of the domain
 const λ = 0.9142
@@ -79,18 +101,18 @@ function main2D(igg; ny = 64, nx = 64, figdir = "model_figs")
     # Initialize particles -------------------------------
     nxcell, max_p, min_p = 20, 30, 10
     particles = init_particles(
-        backend, nxcell, max_p, min_p, grid.xi_vel...
+        backend_JP, nxcell, max_p, min_p, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     particle_args = (pPhases,)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; r = 1.0e0, ϵ_abs = 1.0e-8, CFL = 1 / √2.1)
 
     # Buoyancy forces

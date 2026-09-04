@@ -3,8 +3,10 @@ As described in the original [paper](https://doi.org/10.5194/se-15-567-2024), th
 
 We will use [GeophysicalModelGenerator.jl](https://github.com/JuliaGeodynamics/GeophysicalModelGenerator.jl) to generate the initial geometry, material phases, and thermal field of our models. We will start by defining the dimensions and resolution of our model, as well as initializing the `Grid2D` object and two arrays `Phases` and `Temp` that host the material phase (given by an integer) and the thermal field, respectively.
 
+The `Grid2D` object holds the field values at the *vertices* of the computational grid, so it needs one more point per direction than the number of cells of the model.
+
 ```julia
-nx, nz        = 512, 218 # number of cells per dimension
+nx, nz        = 257, 129 # number of grid vertices per dimension
 Tbot          = 1474.0   # [Celsius]
 model_depth   = 660      # [km]
 air_thickness = 10       # [km]

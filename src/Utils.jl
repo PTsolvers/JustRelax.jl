@@ -13,12 +13,25 @@ end
 @inline _idx(args::NTuple{N, Int}) where {N} = ntuple(i -> 1:args[i], Val(N))
 @inline _idx(args::Vararg{Int, N}) where {N} = ntuple(i -> 1:args[i], Val(N))
 
-# broadcast getindex() to NamedTuples
+"""
+    getindex_NamedTuple(args::NamedTuple, [sz_min::NTuple], I...)
+
+Sample every array in `args` at `I`, offsetting entries larger than `sz_min` by one to
+skip their ghost nodes. `sz_min` is the size of the grid `I` indexes over; pass it
+whenever it is known, as inferring it from `args` reads the ghost node as a cell center
+when `args` carries no cell-sized entry.
+"""
 @inline function getindex_NamedTuple(args::NamedTuple, I::Vararg{Integer, N}) where {N}
+    sz_min = reduce((a, b) -> min.(a, b), filter(!isempty, size.(values(args))))
+    return getindex_NamedTuple(args, sz_min, I...)
+end
+
+@inline function getindex_NamedTuple(
+        args::NamedTuple, sz_min::NTuple{N, Int}, I::Vararg{Integer, N}
+    ) where {N}
     k = keys(args)
     v = values(args)
     sz = size.(v)
-    sz_min = reduce(min, filter(!isempty, sz))
 
     vᵢⱼₖ = ntuple(Val(length(v))) do i
         if v[i] isa AbstractArray
@@ -518,6 +531,104 @@ end
     return min(dt_diff, dt_adv)
 end
 
+"""
+    compute_lithostatic_pressure!(P, ρg, dz)
+    compute_lithostatic_pressure!(P, ρg, dz, igg::IGG)
+
+Integrate the vertical component of the buoyancy force `ρg` down the columns of the
+cell-centered pressure `P`. The vertical direction is the last dimension of `P` and points
+upwards, so the last entry of a column is the shallowest cell.
+
+`dz` is either a constant cell height or a vector holding the height of every cell along the
+vertical direction. Since `P` is cell-centered, cell `j` carries the weight of all the cells
+above it plus half of its own,
+
+    P[j] = Σ_{k>j} ρg[k] * dz[k] + ρg[j] * dz[j] / 2
+
+The three-argument method integrates each column within the local subdomain, and throws if
+the vertical direction is split across MPI ranks. Pass the MPI topology `igg` to also
+collect the weight of the cells held by the ranks stacked above the local subdomain; `ρg`
+must then be up to date on the halo cells, and the resulting `P` agrees on the cells that
+neighboring ranks share.
+"""
+function compute_lithostatic_pressure!(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    if _vertical_ranks(Val(N)) > 1
+        throw(
+            ArgumentError(
+                "the vertical direction is split across MPI ranks; pass the `IGG` topology as fourth argument to integrate the columns across ranks"
+            )
+        )
+    end
+    return _integrate_column!(P, _cell_weights(P, ρg, dz))
+end
+
+function compute_lithostatic_pressure!(
+        P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz, igg::IGG
+    ) where {N}
+    w = _cell_weights(P, ρg, dz)
+    _integrate_column!(P, w)
+    P .+= _weight_above(w, igg) # weight of the cells held by the ranks above
+    return P
+end
+
+@inline function _cell_weights(P::AbstractArray{<:Any, N}, ρg::AbstractArray, dz) where {N}
+    axes(P) == axes(ρg) || throw(
+        DimensionMismatch(
+            "`P` and `ρg` must span the same cells, got axes $(axes(P)) and $(axes(ρg))"
+        )
+    )
+    return ρg .* _cell_heights(dz, size(P, N), Val(N))
+end
+
+@inline function _integrate_column!(P::AbstractArray{<:Any, N}, w) where {N}
+    P .= reverse(cumsum(reverse(w, dims = N), dims = N), dims = N) .- w ./ 2
+    return P
+end
+
+# number of MPI ranks stacked along the vertical direction of an `N`-dimensional grid
+@inline function _vertical_ranks(::Val{N}) where {N}
+    ImplicitGlobalGrid.grid_is_initialized() || return 1
+    return ImplicitGlobalGrid.global_grid().dims[N]
+end
+
+# total weight of the cells sitting above the local subdomain, one value per column
+function _weight_above(w::AbstractArray{T, N}, igg::IGG) where {T, N}
+    nranks = igg.dims[N]
+    nranks == 1 && return zero(T)
+
+    grid = ImplicitGlobalGrid.global_grid()
+    iszero(grid.periods[N]) || error(
+        "the lithostatic pressure of a column that is periodic along the vertical direction is undefined"
+    )
+    # cells at the bottom of the local column that the rank below also holds
+    nshared = size(w, N) - grid.nxyz[N] + grid.overlaps[N]
+    0 ≤ nshared < size(w, N) || error(
+        "a local column of $(size(w, N)) cells cannot share $nshared cells with the rank below; `P` must be a field of the global grid"
+    )
+    # the ranks above hold the cells the rank below them does not, so their contributions
+    # tile the column above the local subdomain exactly once
+    contribution = sum(selectdim(w, N, (nshared + 1):size(w, N)), dims = N)
+
+    comm = MPI.Cart_sub(igg.comm_cart, ntuple(i -> i == N, length(igg.dims)))
+    # ranks of a Cartesian sub-communicator are ordered by their vertical coordinate
+    columns = reshape(MPI.Allgather(vec(Array(contribution)), comm), :, nranks)
+    above = sum(view(columns, :, (igg.coords[N] + 2):nranks), dims = 2)
+
+    offset = similar(w, ntuple(i -> i == N ? 1 : size(w, i), Val(N)))
+    return copyto!(offset, reshape(above, size(offset)))
+end
+
+@inline _cell_heights(dz::Number, ::Int, ::Val) = dz
+
+@inline function _cell_heights(dz::AbstractVector, nz::Int, ::Val{N}) where {N}
+    length(dz) == nz || throw(
+        DimensionMismatch(
+            "`dz` must hold one height per cell, got $(length(dz)) heights for $nz cells"
+        )
+    )
+    return reshape(dz, ntuple(i -> i == N ? nz : 1, Val(N)))
+end
+
 @inline tupleize(v) = (v,)
 @inline tupleize(v::Tuple) = v
 
@@ -630,6 +741,10 @@ function maximum_mpi(A)
     max_l = _maximum(A)
     return MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD)
 end
+
+@inline global_grid_size(::Val{2}) = nx_g(), ny_g()
+@inline global_grid_size(::Val{3}) = nx_g(), ny_g(), nz_g()
+@inline global_grid_size(::Val{N}) where {N} = error("Unsupported dimension $N")
 
 for (f1, f2) in zip(
         (:_mean, :_norm, :_minimum, :_maximum, :_sum), (:mean, :norm, :minimum, :maximum, :sum)

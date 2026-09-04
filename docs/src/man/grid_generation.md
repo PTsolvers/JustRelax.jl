@@ -41,7 +41,7 @@ using JustRelax
 xv = [0.0, 0.1, 0.2, 0.4, 0.7, 1.0]
 yv = [-1.0, -0.7, -0.45, -0.2, 0.0]
 
-grid = Geometry(xv, yv)
+grid = Geometry((xv, yv))
 
 xci = grid.xci
 xvi = grid.xvi
@@ -57,7 +57,7 @@ This constructor derives:
 - nonuniform spacings with `diff.(xvi)`
 - staggered velocity grids with the required ghost points
 
-If you want the coordinate arrays stored in a specific array type, pass an array constructor as the first argument:
+The vertex coordinates are passed as a tuple. If you want the coordinate arrays stored in a specific array type, pass an array constructor as the first argument, in which case the coordinates are given as separate arguments:
 
 ```julia
 grid = Geometry(Array, xv, yv)
@@ -83,7 +83,7 @@ Here `grid.xci`, `grid.xvi`, and `grid.xi_vel` correspond to the local rank, whi
 Recent particle-related updates use the staggered velocity grids stored in `Geometry` directly:
 
 ```julia
-using JustPIC, JustPIC._2D
+using JustPIC
 
 nxcell = 24
 max_xcell = 36

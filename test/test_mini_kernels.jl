@@ -53,10 +53,13 @@ using JustRelax, JustRelax.JustRelax2D
     @test JustRelax2D._av_xi(A2, i, j) == 10.5
     @test JustRelax2D._av_yi(A2, i, j) == 9.0
 
-    @test JustRelax2D._harm(A2, i, j) == 1.2136363636363636
-    @test JustRelax2D._harm_a(A2, i, j) == 2.001731601731602
-    @test JustRelax2D._harm_xa(A2, i, j) == 0.6190476190476191
-    @test JustRelax2D._harm_ya(A2, i, j) == 0.5333333333333333
+    # harmonic mean of the cells each stencil gathers
+    harmonic(x...) = length(x) / sum(inv, x)
+
+    @test JustRelax2D._harm(A2, i, j) ≈ harmonic(11.0, 12.0, 15.0, 16.0)
+    @test JustRelax2D._harm_a(A2, i, j) ≈ harmonic(6.0, 7.0, 10.0, 11.0)
+    @test JustRelax2D._harm_xa(A2, i, j) ≈ harmonic(6.0, 7.0)
+    @test JustRelax2D._harm_ya(A2, i, j) ≈ harmonic(6.0, 10.0)
 
     @test JustRelax2D._gather(A2, i, j) == (6.0, 7.0, 10.0, 11.0)
 
@@ -71,21 +74,46 @@ using JustRelax, JustRelax.JustRelax2D
     @test JustRelax2D._av_xzi(A3, i, j, k) == 13.5
     @test JustRelax2D._av_yzi(A3, i, j, k) == 12.0
 
-    @test JustRelax2D._harm_x(A3, i, j, k) == 22.488888888888887
-    @test JustRelax2D._harm_y(A3, i, j, k) == 23.833333333333332
-    @test JustRelax2D._harm_z(A3, i, j, k) == 27.866666666666667
-    @test JustRelax2D._harm_xy(A3, i, j, k) == 0.04081632653061224
-    @test JustRelax2D._harm_xz(A3, i, j, k) == 0.03278688524590164
-    @test JustRelax2D._harm_yz(A3, i, j, k) == 0.03125
-    @test JustRelax2D._harm_xyi(A3, i, j, k) == 0.05128205128205128
-    @test JustRelax2D._harm_xzi(A3, i, j, k) == 0.07407407407407407
-    @test JustRelax2D._harm_yzi(A3, i, j, k) == 0.08333333333333333
+    @test JustRelax2D._harm_x(A3, i, j, k) ≈ harmonic(22.0, 23.0)
+    @test JustRelax2D._harm_y(A3, i, j, k) ≈ harmonic(22.0, 26.0)
+    @test JustRelax2D._harm_z(A3, i, j, k) ≈ harmonic(22.0, 38.0)
+    @test JustRelax2D._harm_xy(A3, i, j, k) ≈ harmonic(22.0, 23.0, 26.0, 27.0)
+    @test JustRelax2D._harm_xz(A3, i, j, k) ≈ harmonic(22.0, 23.0, 38.0, 39.0)
+    @test JustRelax2D._harm_yz(A3, i, j, k) ≈ harmonic(22.0, 26.0, 38.0, 42.0)
+    @test JustRelax2D._harm_xyi(A3, i, j, k) ≈ harmonic(17.0, 18.0, 21.0, 22.0)
+    @test JustRelax2D._harm_xzi(A3, i, j, k) ≈ harmonic(5.0, 6.0, 21.0, 22.0)
+    @test JustRelax2D._harm_yzi(A3, i, j, k) ≈ harmonic(2.0, 6.0, 18.0, 22.0)
+
+    # Away from the boundary the clamped stencils gather the same cells as their plain
+    # counterparts; on it they fold onto the cells that exist.
+    @test JustRelax2D._av_ai_clamped(A2, i, j) == JustRelax2D._av_a(A2, i - 1, j - 1)
+    @test JustRelax2D._av_ai_clamped(A2, 1, 1) == A2[1, 1]
+
+    @test JustRelax2D._av_xyi_clamped(A3, i, j, k) == JustRelax2D._av_xyi(A3, i, j, k)
+    @test JustRelax2D._av_xzi_clamped(A3, i, j, k) == JustRelax2D._av_xzi(A3, i, j, k)
+    @test JustRelax2D._av_yzi_clamped(A3, i, j, k) == JustRelax2D._av_yzi(A3, i, j, k)
+    @test JustRelax2D._harm_xyi_clamped(A3, i, j, k) ≈ JustRelax2D._harm_xyi(A3, i, j, k)
+    @test JustRelax2D._harm_xzi_clamped(A3, i, j, k) ≈ JustRelax2D._harm_xzi(A3, i, j, k)
+    @test JustRelax2D._harm_yzi_clamped(A3, i, j, k) ≈ JustRelax2D._harm_yzi(A3, i, j, k)
+
+    @test JustRelax2D._av_xyi_clamped(A3, 1, j, k) == 0.5 * (A3[1, 1, k] + A3[1, 2, k])
+    @test JustRelax2D._harm_xyi_clamped(A3, 1, j, k) ≈ harmonic(A3[1, 1, k], A3[1, 2, k])
+    @test JustRelax2D._av_xzi_clamped(A3, i, j, 1) == 0.5 * (A3[1, j, 1] + A3[2, j, 1])
+    @test JustRelax2D._harm_yzi_clamped(A3, i, 1, 1) ≈ A3[i, 1, 1]
 
     @test JustRelax2D._gather_yz(A3, i, j, k) == (22.0, 26.0, 38.0, 42.0)
     @test JustRelax2D._gather_xz(A3, i, j, k) == (22.0, 23.0, 38.0, 39.0)
     @test JustRelax2D._gather_xy(A3, i, j, k) == (22.0, 23.0, 26.0, 27.0)
 
     @test JustRelax2D._current(A3, i, j, k) == 22.0
+
+    @test JustRelax2D.free_surface_diagonal(3.0, 1.0, 2.0, 0.5) == 2.0
+    @test iszero(JustRelax2D.free_surface_diagonal(3.0, 1.0, 2.0, 0.0))
+    @test JustRelax2D.free_surface_pseudotime(0.5, 2.0, 3.0) ≈ 0.5 / 3.5
+    @test JustRelax2D.free_surface_pseudotime(0.5, 2.0, 0.0) ≈ 0.25
+    @test isnan(JustRelax2D.free_surface_pseudotime(1.0, 1.0, -1.0))
+    @test JustRelax2D.effective_viscosity(0.0, 0.0, 5.0) == 5.0
+    @test JustRelax2D.effective_viscosity(12.0, 2.0, 5.0) == 3.0
 
     v = collect(1.0:5.0)
     @test JustRelax2D.mysum(v, 2:4) == 9.0

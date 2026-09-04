@@ -72,6 +72,33 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         finalize_global_grid(; finalize_MPI = false)
     end
 
+    @testset "GeometryAnnulus (θ, r)" begin
+        nθ, nr = 8, 4
+        lθ, lr = 2π, 2.0
+        θ₀, r₀ = -π, 1.0
+        grid = JustRelax.GeometryAnnulus((nθ, nr), (lθ, lr); origin = (θ₀, r₀))
+
+        @test grid isa JustRelax.GeometryAnnulus
+        @test grid.ni == (nθ, nr)
+        @test grid.origin == (θ₀, r₀)
+        @test grid.max_li == lθ
+        @test grid.xvi[1][1] == θ₀
+        @test grid.xvi[2][1] == r₀
+        @test grid.xci[1][1] == θ₀ + lθ / (2nθ)
+        @test grid.xci[2][1] == r₀ + lr / (2nr)
+
+        θv = [-π, -π / 2, 0.0, π]
+        rv = [1.0, 1.2, 1.8, 3.0]
+        grid_nu = JustRelax.GeometryAnnulus(Array, θv, rv)
+        grid_tuple = JustRelax.GeometryAnnulus((θv, rv))
+
+        @test grid_nu isa JustRelax.GeometryAnnulus
+        @test grid_nu.xvi == (θv, rv)
+        @test grid_nu.xci[1] == (θv[1:(end - 1)] .+ θv[2:end]) ./ 2
+        @test grid_nu.xci[2] == (rv[1:(end - 1)] .+ rv[2:end]) ./ 2
+        @test grid_tuple.xvi == grid_nu.xvi
+    end
+
     @suppress @testset "periodic x_g / y_g" begin
         n = 4
         igg = IGG(
@@ -90,6 +117,26 @@ using Test, Suppressor, JustRelax, JustRelax.JustRelax2D
         v_first_y = y_g(1, dx, n)
         v_last_y = y_g(n + 2, dx, n)
         @test isfinite(v_first_y) && isfinite(v_last_y)
+        finalize_global_grid(; finalize_MPI = false)
+    end
+
+    @suppress @testset "x_g / y_g / z_g array overloads" begin
+        nx, ny = 5, 3
+        igg = IGG(
+            init_global_grid(
+                nx, ny, 1;
+                init_MPI = JustRelax.MPI.Initialized() ? false : true,
+            )...,
+        )
+        dx = 1.0 / nx
+        A = zeros(nx, ny)
+        for idx in 1:3
+            @test x_g(idx, dx, A) == x_g(idx, dx, size(A, 1))
+            @test y_g(idx, dx, A) == y_g(idx, dx, size(A, 2))
+        end
+        # 3D array path for z_g
+        A3 = zeros(nx, ny, 2)
+        @test z_g(1, dx, A3) == z_g(1, dx, size(A3, 3))
         finalize_global_grid(; finalize_MPI = false)
     end
 end

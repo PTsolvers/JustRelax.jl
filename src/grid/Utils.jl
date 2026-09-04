@@ -20,6 +20,13 @@ import ImplicitGlobalGrid:
 
 # Functions modified from ImplicitGlobalGrid.jl
 
+"""
+    x_g(idx, dxi, nxi_or_A)
+
+Global x coordinate of local index `idx` on a grid with spacing `dxi`, given either the
+local axis length `nxi` or an array `A` sized along that axis. Accounts for the MPI
+domain decomposition and periodicity set up by `init_global_grid` (see [`IGG`](@ref)).
+"""
 x_g(idx::Integer, dxi::GGNumber, nxi::GGNumber) = _x_g(idx, dxi, nxi)
 x_g(idx::Integer, dxi::GGNumber, A::GGArray) = _x_g(idx, dxi, size(A, 1))
 
@@ -38,8 +45,13 @@ function _x_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
     return xi
 end
 
+"""
+    y_g(idx, dxi, nxi_or_A)
+
+Global y coordinate of local index `idx`, analogous to [`x_g`](@ref).
+"""
 y_g(idx::Integer, dxi::GGNumber, nxi::GGNumber) = _y_g(idx, dxi, nxi)
-y_g(idx::Integer, dxi::GGNumber, A::GGArray) = _z_g(idx, dxi, size(A, 2))
+y_g(idx::Integer, dxi::GGNumber, A::GGArray) = _y_g(idx, dxi, size(A, 2))
 
 function _y_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
     x0i = 0.5 * (@ny() - nxi) * dxi
@@ -56,6 +68,11 @@ function _y_g(idx::Integer, dxi::GGNumber, nxi::GGNumber)
     return xi
 end
 
+"""
+    z_g(idx, dxi, nxi_or_A)
+
+Global z coordinate of local index `idx`, analogous to [`x_g`](@ref).
+"""
 z_g(idx::Integer, dxi::GGNumber, nxi::GGNumber) = _z_g(idx, dxi, nxi)
 z_g(idx::Integer, dxi::GGNumber, A::GGArray) = _z_g(idx, dxi, size(A, 3))
 
@@ -78,6 +95,13 @@ end
 # MACROS TO INDEX GRID ARRAYS #
 ###############################
 
+"""
+    @dxi(dxi, I, J[, K])
+
+Cell spacing `(dx, dy[, dz])` at grid index `(I, J[, K])`, reading from `dxi` — a tuple of
+per-axis spacing that may be a constant `Number` (uniform grid) or an `AbstractVector`
+(non-uniform grid, indexed at `I`/`J`/`K`).
+"""
 macro dxi(args...)
     return :(get_dxi($(esc.(args)...)))
 end
@@ -85,18 +109,33 @@ end
 Base.@propagate_inbounds @inline get_dxi(dxi::NTuple{2, Union{Number, AbstractVector}}, I::Integer, J::Integer) = get_dx(dxi, I), get_dy(dxi, J)
 Base.@propagate_inbounds @inline get_dxi(dxi::NTuple{3, Union{Number, AbstractVector}}, I::Integer, J::Integer, K::Integer) = get_dx(dxi, I), get_dy(dxi, J), get_dz(dxi, K)
 
+"""
+    @dx(dx, I)
+
+x spacing at grid index `I`, reading from `dx` — see [`@dxi`](@ref).
+"""
 macro dx(args...)
     return :(get_dx($(esc.(args)...)))
 end
 
 Base.@propagate_inbounds @inline get_dx(dx::NTuple{N, Union{Number, AbstractVector}}, I::Integer) where {N} = getindex_dxi(dx[1], I)
 
+"""
+    @dy(dy, J)
+
+y spacing at grid index `J`, reading from `dy` — see [`@dxi`](@ref).
+"""
 macro dy(args...)
     return :(get_dy($(esc.(args)...)))
 end
 
 Base.@propagate_inbounds @inline get_dy(dy::NTuple{N, Union{Number, AbstractVector}}, I::Integer) where {N} = getindex_dxi(dy[2], I)
 
+"""
+    @dz(dz, K)
+
+z spacing at grid index `K`, reading from `dz` — see [`@dxi`](@ref).
+"""
 macro dz(args...)
     return :(get_dz($(esc.(args)...)))
 end

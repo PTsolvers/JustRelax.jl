@@ -22,13 +22,13 @@ else
     CPUBackend
 end
 
-using JustPIC, JustPIC._2D
+using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    JustPIC.AMDGPUBackend
+    AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDABackend
 else
-    JustPIC.CPUBackend
+    JustPIC.CPU
 end
 
 @testset "RockRatio" begin
@@ -113,7 +113,7 @@ end
         # We can populate it via update_phase_ratios_2D! with synthetic phase arrays
         # so that compute_rock_ratio = 1 - air_phase_fraction (with threshold).
         nx, ny = 4, 4
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, (nx, ny))
+        pr = JustPIC.PhaseRatios(backend_JP, 2, (nx, ny))
         xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
         xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
 
@@ -231,7 +231,7 @@ end
         # End-to-end: PhaseRatios → update_rock_ratio! → ϕ.center matches the
         # expected formula `clamp(1 - air_fraction, 0, 1)`.
         nx, ny = 4, 4
-        pr = JustPIC._2D.PhaseRatios(backend_JP, 2, (nx, ny))
+        pr = JustPIC.PhaseRatios(backend_JP, 2, (nx, ny))
         xvi = (range(0.0, 1.0; length = nx + 1), range(0.0, 1.0; length = ny + 1))
         xci = (range(0.125, 0.875; length = nx), range(0.125, 0.875; length = ny))
         p_rock = @zeros(nx, ny); p_rock[1:2, :] .= 1.0

@@ -46,27 +46,16 @@ end
         @test size(dyrel.dVydτ) == (nx, ny - 1)
         @test size(dyrel.βVx) == (nx - 1, ny)
         @test size(dyrel.αVy) == (nx, ny - 1)
-        @test length(dyrel.∂τc_∂ε) == 9
-        @test length(dyrel.∂τv_∂ε) == 9
-        @test length(dyrel.∂ΔPψc_∂ε) == 3
-        @test length(dyrel.∂ΔPψc_∂η) == 3
-        @test length(dyrel.∂τc_∂η) == 3
-        @test length(dyrel.∂τv_∂η) == 3
-        @test length(dyrel.∂ηc_∂ε) == 3
-        @test length(dyrel.∂ηv_∂ε) == 3
-        @test size(dyrel.∂τc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂τv_∂ε[1]) == (nx + 1, ny + 1)
-        @test size(dyrel.∂ΔPψc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂ΔPψc_∂η[1]) == (nx, ny)
-        @test size(dyrel.∂τc_∂η[1]) == (nx, ny)
-        @test size(dyrel.∂τv_∂η[1]) == (nx + 1, ny + 1)
-        @test size(dyrel.∂ηc_∂ε[1]) == (nx, ny)
-        @test size(dyrel.∂ηv_∂ε[1]) == (nx + 1, ny + 1)
+        @test size(dyrel.P_num) == (nx, ny)
+        @test size(dyrel.Rx0) == (nx - 1, ny)
+        @test size(dyrel.Ry0) == (nx, ny - 1)
+        @test size(dyrel.Rz0) == (1, 1)
         @test dyrel.CFL === 0.5
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.25
         @test all(iszero.(dyrel.γ_eff))
+        @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
     end
@@ -89,19 +78,16 @@ end
         @test size(dyrel.βVx) == (nx - 1, ny, nz)
         @test size(dyrel.αVy) == (nx, ny - 1, nz)
         @test size(dyrel.cVz) == (nx, ny, nz - 1)
-        @test length(dyrel.∂τc_∂ε) == 1
-        @test length(dyrel.∂τv_∂ε) == 1
-        @test length(dyrel.∂ΔPψc_∂ε) == 1
-        @test length(dyrel.∂ΔPψc_∂η) == 1
-        @test length(dyrel.∂τc_∂η) == 1
-        @test length(dyrel.∂τv_∂η) == 1
-        @test length(dyrel.∂ηc_∂ε) == 1
-        @test length(dyrel.∂ηv_∂ε) == 1
+        @test size(dyrel.P_num) == (nx, ny, nz)
+        @test size(dyrel.Rx0) == (nx - 1, ny, nz)
+        @test size(dyrel.Ry0) == (nx, ny - 1, nz)
+        @test size(dyrel.Rz0) == (nx, ny, nz - 1)
         @test dyrel.CFL === 0.6
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.3
         @test all(iszero.(dyrel.γ_eff))
+        @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
 
         # 3-int forwarder
@@ -161,6 +147,24 @@ end
         @test all(αVx .≈ expected_α)
         @test all(βVy .≈ expected_β)
         @test all(αVy .≈ expected_α)
+    end
+
+    @testset "free-surface diagonal 2D" begin
+        nx, ny = 5, 4
+        grid = Geometry((nx, ny), (1.0, 1.0))
+        Dy = @ones(nx, ny - 1) .* 4.0
+        λmaxVy = @ones(nx, ny - 1) .* 3.0
+        ρgy = @zeros(nx, ny)
+        ρgy[:, 1:2] .= 3.0
+        ρgy[:, 3:end] .= 1.0
+
+        JustRelax2D.apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, grid.di.center, 0.5)
+
+        c_fs = -0.5 * (1.0 - 3.0) / grid.di.center[2]
+        @test all(Array(Dy[:, 2]) .≈ 4.0 + c_fs)
+        @test all(Array(λmaxVy[:, 2]) .≈ (12.0 + c_fs) / (4.0 + c_fs))
+        @test all(Array(Dy[:, 1]) .≈ 4.0)
+        @test all(Array(Dy[:, 3]) .≈ 4.0)
     end
 
     @testset "DYREL struct wrappers" begin

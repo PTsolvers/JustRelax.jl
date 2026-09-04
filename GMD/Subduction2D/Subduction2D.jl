@@ -612,7 +612,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_VS_DYREL_$(today())"
+figdir = "Subduction2D_$(today())"
 nx = 1024#128*4
 ny = 192#64*2
 # Model setup

@@ -79,7 +79,7 @@ end
 Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
 `adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs; pressure and
 stress sensitivities accumulate in `adjoint.P`, `adjoint.θ`, and
-`adjoint.dτ`. Buoyancy is constant in this pass.
+`adjoint.τ`. Buoyancy is constant in this pass.
 """
 function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
@@ -100,9 +100,9 @@ function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
         Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
         Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
         Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.dτ.xx),
-        Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.dτ.yy),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.dτ.xy),
+        Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
+        Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
+        Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
         Enzyme.Const(ρg[1]),
         Enzyme.Const(ρg[2]),
         Enzyme.Const(_di.center),
@@ -114,9 +114,9 @@ end
 """
     enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
 
-Differentiate the momentum residual only with respect to the two buoyancy-force
-arrays. The residual seeds are read from `adjoint.R`; sensitivities accumulate
-in the matching arrays of `dρg`.
+Differentiate the momentum residual with respect to pressure, stress, and the
+two buoyancy-force arrays. The residual seeds are read from `adjoint.R`;
+sensitivities accumulate in `adjoint.P`, `adjoint.τ`, and `dρg`.
 """
 function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
@@ -135,11 +135,11 @@ function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _
         compute_PH_residual_V!,
         Enzyme.DuplicatedNoNeed(stokes.R.Rx, adjoint.R.Rx),
         Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
-        Enzyme.Const(stokes.P),
-        Enzyme.Const(stokes.ΔPψ),
-        Enzyme.Const(stokes.τ.xx),
-        Enzyme.Const(stokes.τ.yy),
-        Enzyme.Const(stokes.τ.xy),
+        Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
+        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
+        Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
+        Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
+        Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
         Enzyme.DuplicatedNoNeed(ρg[1], dρg[1]),
         Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
         Enzyme.Const(_di.center),
@@ -154,7 +154,7 @@ end
     )
 
 Differentiate the two-dimensional DYREL constitutive kernel. Stress adjoints in
-`adjoint.dτ` are propagated to strain rate and pressure in `adjoint.ε` and
+`adjoint.τ` are propagated to strain rate and pressure in `adjoint.ε` and
 `adjoint.P`. This is the production equivalent of `diff_calc_stress!` in the
 toy example.
 """
@@ -189,15 +189,15 @@ function enzyme_compute_stress_DRYEL!(
         compute_stress_DRYEL!,
         Enzyme.DuplicatedNoNeed(
             (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-            (adjoint.dτ.xx, adjoint.dτ.yy, adjoint.dτ.xy_c),
+            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
         ),
         Enzyme.DuplicatedNoNeed(
             (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-            (adjoint.dτ.xx_v, adjoint.dτ.yy_v, adjoint.dτ.xy),
+            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
         ),
         Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
         Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
-        Enzyme.DuplicatedNoNeed(stokes.τ.II, adjoint.dτ.II),
+        Enzyme.DuplicatedNoNeed(stokes.τ.II, adjoint.τ.II),
         Enzyme.DuplicatedNoNeed(
             (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
             (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
@@ -227,7 +227,7 @@ end
     )
 
 Differentiate the constitutive kernel only with respect to center and vertex
-viscosity. Stress seeds come from `adjoint.dτ`; viscosity sensitivities
+viscosity. Stress seeds come from `adjoint.τ`; viscosity sensitivities
 accumulate in `adjoint.viscosity.η` and `adjoint.viscosity.ηv`.
 """
 function enzyme_compute_stress_DRYEL_sensitivity!(
@@ -261,11 +261,11 @@ function enzyme_compute_stress_DRYEL_sensitivity!(
         compute_stress_DRYEL!,
         Enzyme.DuplicatedNoNeed(
             (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-            (adjoint.dτ.xx, adjoint.dτ.yy, adjoint.dτ.xy_c),
+            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
         ),
         Enzyme.DuplicatedNoNeed(
             (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-            (adjoint.dτ.xx_v, adjoint.dτ.yy_v, adjoint.dτ.xy),
+            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
         ),
         Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
         Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),

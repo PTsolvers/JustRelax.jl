@@ -249,7 +249,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         panel!(2, 1, "λVx", xv_km, λVx_v; colormap = :vik, diverging = true)
         panel!(2, 2, "λVy", xv_km, λVy_v; colormap = :vik, diverging = true)
         panel!(2, 3, "ρ (adjoint)", xc_km, stokes_ad.ρ; colormap = :roma)
-        panel!(2, 4, "η (adjoint)", xc_km, stokes_ad.η; colormap = :batlow)
+        panel!(2, 4, "η (adjoint)", xc_km, stokes_ad.viscosity.η; colormap = :batlow)
 
         save(
             joinpath(@__DIR__, "sinking_DR_$(it).png"),

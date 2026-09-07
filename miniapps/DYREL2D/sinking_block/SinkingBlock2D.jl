@@ -167,7 +167,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
             igg;
             kwargs = (;
                 verbose_PH = true,
-                verbose_DR = true,
+                verbose_DR = false,
                 iterMax = 50.0e3,
                 nout = 10,
                 rel_drop = 1.0e-2,

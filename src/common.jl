@@ -123,6 +123,9 @@ export rotate_stress!, stress2grid!
 
 ## DYREL solver
 
+include("DYREL/adjoint/constructors_adjoint.jl")
+export AdjointStokesArrays
+
 include("DYREL/constructors.jl")
 include("DYREL/pressure_kernels.jl")
 include("DYREL/stress_kernels.jl")

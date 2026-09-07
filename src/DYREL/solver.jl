@@ -33,6 +33,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
+  history-dependent state. Default: `false`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -66,6 +68,7 @@ function _solve_DYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         free_surface = false,
+        adjoint = false,
         kwargs...,
     ) where {N}
 
@@ -282,6 +285,36 @@ function _solve_DYREL!(
         iter > total_iterMax && break
     end
 
+    adjoint_out = if adjoint
+        solve_DYREL_adjoint!(
+            backend(stokes),
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            viscosity_cutoff,
+            viscosity_relaxation,
+            λ_relaxation_DR,
+            λ_relaxation_PH,
+            iterMax,
+            total_iterMax,
+            nout,
+            rel_drop,
+            b_width,
+            verbose_PH,
+            verbose_DR,
+            linear_viscosity,
+            free_surface,
+            kwargs...,
+        )
+    end
+
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
     @. stokes.P += stokes.ΔPψ
 
@@ -305,7 +338,8 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    out = (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return adjoint ? (; out..., adjoint = adjoint_out) : out
 
 end
 

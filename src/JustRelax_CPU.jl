@@ -42,6 +42,9 @@ module JustRelax2D
     include("DYREL/solver.jl")
     export solve_DYREL!, DYREL
 
+    include("DYREL/adjoint/Enzyme_kernels.jl")
+    include("DYREL/adjoint/solver_adjoint.jl")
+
     include("variational_stokes/Stokes2D.jl")
     export solve_VariationalStokes!
 

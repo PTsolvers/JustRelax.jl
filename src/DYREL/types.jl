@@ -57,3 +57,32 @@ struct DYREL{T, F}
     ϵ_vel::F  # convergence criterion
     c_fact::F # damping factor
 end
+
+"""
+    AdjointStokesArrays
+
+State arrays used by the adjoint Stokes solver.
+"""
+struct AdjointStokesArrays{A, B, RType, D, E, F, T}
+    P::T
+    θ::T
+    PA::T
+    P0::T
+    V::A
+    VA::A
+    ∇V::T
+    τ::B
+    dτ::B
+    ε::B
+    ε_pl::B
+    EII_pl::T
+    viscosity::D
+    τ_o::Union{B, Nothing}
+    R::RType
+    U::E
+    ω::F
+    η::T
+    ρ::T
+end
+
+Adapt.@adapt_structure AdjointStokesArrays

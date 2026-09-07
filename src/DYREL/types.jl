@@ -66,10 +66,10 @@ State arrays used by the adjoint Stokes solver.
 struct AdjointStokesArrays{A, B, RType, D, E, F, T}
     P::T
     θ::T
-    PA::T
+    λP::T
     P0::T
     V::A
-    VA::A
+    λV::A
     ∇V::T
     τ::B
     dτ::B

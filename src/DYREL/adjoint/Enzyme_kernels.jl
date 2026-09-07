@@ -9,9 +9,9 @@ using Enzyme
 Example reverse-mode differentiation of the two-dimensional
 `compute_∇V_strain_rate_RP!` ParallelStencil kernel.
 
-`adjoint.ε` and `adjoint.PA` are the reverse seeds for the strain-rate and
+`adjoint.ε` and `adjoint.R.RP` are the reverse seeds for the strain-rate and
 pressure-residual outputs. The resulting velocity and pressure sensitivities
-accumulate in `adjoint.VA` and `adjoint.P`; all remaining inputs are constant.
+accumulate in `adjoint.V` and `adjoint.P`; all remaining inputs are constant.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
         stokes,
@@ -53,9 +53,9 @@ function enzyme_compute_∇V_strain_rate_RP!(
         Enzyme.DuplicatedNoNeed(stokes.ε.xx, adjoint.ε.xx),
         Enzyme.DuplicatedNoNeed(stokes.ε.yy, adjoint.ε.yy),
         Enzyme.DuplicatedNoNeed(stokes.ε.xy, adjoint.ε.xy),
-        Enzyme.DuplicatedNoNeed(stokes.V.Vx, adjoint.VA.Vx),
-        Enzyme.DuplicatedNoNeed(stokes.V.Vy, adjoint.VA.Vy),
-        Enzyme.DuplicatedNoNeed(stokes.R.RP, adjoint.PA),
+        Enzyme.DuplicatedNoNeed(stokes.V.Vx, adjoint.V.Vx),
+        Enzyme.DuplicatedNoNeed(stokes.V.Vy, adjoint.V.Vy),
+        Enzyme.DuplicatedNoNeed(stokes.R.RP, adjoint.R.RP),
         Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
         Enzyme.Const(stokes.P0),
         Enzyme.Const(stokes.Q),
@@ -294,11 +294,11 @@ end
     enzyme_flow_bcs!(stokes, adjoint, bcs)
 
 Reverse the two-dimensional velocity boundary kernels. Velocity sensitivities
-are accumulated in `adjoint.VA`.
+are accumulated in `adjoint.V`.
 """
 function enzyme_flow_bcs!(stokes, adjoint, bcs)
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    dVx, dVy = adjoint.VA.Vx, adjoint.VA.Vy
+    dVx, dVy = adjoint.V.Vx, adjoint.V.Vy
     n = bc_index((Vx, Vy))
 
     # Reverse the order used by `_flow_bcs!`.

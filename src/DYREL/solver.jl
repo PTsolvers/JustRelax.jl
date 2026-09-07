@@ -36,16 +36,17 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
   history-dependent state. Default: `false`.
 """
-function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
+function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    out = solve_DYREL!(backend(stokes), stokes, args...; kwargs...)
     return out
 end
 
 # entry point for extensions
-solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes, args...; kwargs...)
+solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs...) = _solve_DYREL!(stokes, args...; kwargs...)
 
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
+        stokes_ad::JustRelax.AdjointStokesArrays,
         ρg,
         dyrel,
         flow_bcs::AbstractFlowBoundaryConditions,
@@ -69,6 +70,7 @@ function _solve_DYREL!(
         linear_viscosity = false,
         free_surface = false,
         adjoint = false,
+        observation = nothing,
         kwargs...,
     ) where {N}
 
@@ -287,8 +289,8 @@ function _solve_DYREL!(
 
     adjoint_out = if adjoint
         solve_DYREL_adjoint!(
-            backend(stokes),
             stokes,
+            stokes_ad,
             ρg,
             dyrel,
             flow_bcs,
@@ -311,6 +313,7 @@ function _solve_DYREL!(
             verbose_DR,
             linear_viscosity,
             free_surface,
+            observation,
             kwargs...,
         )
     end

@@ -25,7 +25,7 @@ end
         @test adjoint2D isa JustRelax.AdjointStokesArrays
         @test size(adjoint2D.P) == (3, 2)
         @test size(adjoint2D.V.Vx) == (4, 4)
-        @test size(adjoint2D.VA.Vy) == (5, 3)
+        @test size(adjoint2D.λV.Vy) == (5, 3)
         @test size(adjoint2D.τ.xy) == (4, 3)
 
         adjoint3D = JR3.AdjointStokesArrays(CPUBackend, (3, 2, 4))

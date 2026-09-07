@@ -38,7 +38,7 @@ end
     adjoint.ε.xx .= 1.0
     adjoint.ε.yy .= 1.0
     adjoint.ε.xy .= 1.0
-    adjoint.PA .= 1.0
+    adjoint.R.RP .= 1.0
 
     JustRelax2D.enzyme_compute_∇V_strain_rate_RP!(
         stokes,
@@ -74,8 +74,8 @@ end
         end
     end
 
-    @test adjoint.VA.Vx ≈ Vx̄
-    @test adjoint.VA.Vy ≈ Vȳ
+    @test adjoint.V.Vx ≈ Vx̄
+    @test adjoint.V.Vy ≈ Vȳ
 end
 
 @testset "Enzyme DYREL kernel wrappers" begin
@@ -140,21 +140,21 @@ end
     @test any(!iszero, adjoint.viscosity.ηv)
 
     bcs = VelocityBoundaryConditions()
-    adjoint.VA.Vx .= 1.0
-    adjoint.VA.Vy .= 1.0
+    adjoint.V.Vx .= 1.0
+    adjoint.V.Vy .= 1.0
     JustRelax2D.enzyme_flow_bcs!(stokes, adjoint, bcs)
-    @test all(iszero, adjoint.VA.Vx[:, 1])
-    @test all(iszero, adjoint.VA.Vx[:, end])
-    @test all(iszero, adjoint.VA.Vy[1, :])
-    @test all(iszero, adjoint.VA.Vy[end, :])
+    @test all(iszero, adjoint.V.Vx[:, 1])
+    @test all(iszero, adjoint.V.Vx[:, end])
+    @test all(iszero, adjoint.V.Vy[1, :])
+    @test all(iszero, adjoint.V.Vy[end, :])
 
     no_slip = (left = true, right = true, top = true, bot = true)
     bcs = VelocityBoundaryConditions(; no_slip, free_slip = map(!, no_slip))
-    adjoint.VA.Vx .= 1.0
-    adjoint.VA.Vy .= 1.0
+    adjoint.V.Vx .= 1.0
+    adjoint.V.Vy .= 1.0
     JustRelax2D.enzyme_no_slip!(
-        stokes.V.Vx, adjoint.VA.Vx, stokes.V.Vy, adjoint.VA.Vy, bcs.no_slip
+        stokes.V.Vx, adjoint.V.Vx, stokes.V.Vy, adjoint.V.Vy, bcs.no_slip
     )
-    @test all(isfinite, adjoint.VA.Vx)
-    @test all(isfinite, adjoint.VA.Vy)
+    @test all(isfinite, adjoint.V.Vx)
+    @test all(isfinite, adjoint.V.Vy)
 end

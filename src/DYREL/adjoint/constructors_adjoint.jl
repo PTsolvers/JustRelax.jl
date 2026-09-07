@@ -11,10 +11,10 @@ AdjointStokesArrays(ni::Vararg{Integer, N}) where {N} = AdjointStokesArrays(tupl
 function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
     P = @zeros(ni...)
     θ = @zeros(ni...)
-    PA = @zeros(ni...)
+    λP = @zeros(ni...)
     P0 = @zeros(ni...)
     V = Velocity(ni...)
-    VA = Velocity(ni...)
+    λV = Velocity(ni...)
     ∇V = @zeros(ni...)
     τ = SymmetricTensor(ni...)
     dτ = SymmetricTensor(ni...)
@@ -32,10 +32,10 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
     return JustRelax.AdjointStokesArrays(
         P,
         θ,
-        PA,
+        λP,
         P0,
         V,
-        VA,
+        λV,
         ∇V,
         τ,
         dτ,

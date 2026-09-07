@@ -452,7 +452,7 @@ function JR2D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kw
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
-function JR2D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+function JR2D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs...)
     return _solve_DYREL!(stokes, args...; kwargs...)
 end
 

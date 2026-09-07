@@ -89,14 +89,18 @@ end
     adjoint.R.Ry .= 1.0
     JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
     @test any(!iszero, adjoint.P)
-    @test any(!iszero, adjoint.dτ.xy)
+    @test any(!iszero, adjoint.τ.xy)
 
     adjoint.R.Rx .= 1.0
     adjoint.R.Ry .= 1.0
+    adjoint.P .= 0.0
+    adjoint.τ.xy .= 0.0
     dρg = (@zeros(ni...), @zeros(ni...))
     JustRelax2D.enzyme_compute_PH_residual_V_sensitivity!(
         stokes, adjoint, ρg, dρg, grid._di, ni
     )
+    @test any(!iszero, adjoint.P)
+    @test any(!iszero, adjoint.τ.xy)
     @test any(!iszero, dρg[1])
     @test any(!iszero, dρg[2])
 
@@ -121,18 +125,18 @@ end
     stokes.ε.xy .= 0.3
     JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1.0, 1.0)
 
-    adjoint.dτ.xx .= 1.0
-    adjoint.dτ.yy .= 1.0
-    adjoint.dτ.xy .= 1.0
+    adjoint.τ.xx .= 1.0
+    adjoint.τ.yy .= 1.0
+    adjoint.τ.xy .= 1.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
         stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
 
-    adjoint.dτ.xx .= 1.0
-    adjoint.dτ.yy .= 1.0
-    adjoint.dτ.xy .= 1.0
+    adjoint.τ.xx .= 1.0
+    adjoint.τ.yy .= 1.0
+    adjoint.τ.xy .= 1.0
     JustRelax2D.enzyme_compute_stress_DRYEL_sensitivity!(
         stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
     )

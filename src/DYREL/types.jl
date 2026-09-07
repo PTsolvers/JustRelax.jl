@@ -72,7 +72,6 @@ struct AdjointStokesArrays{A, B, RType, D, E, F, T}
     λV::A
     ∇V::T
     τ::B
-    dτ::B
     ε::B
     ε_pl::B
     EII_pl::T

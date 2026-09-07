@@ -17,7 +17,6 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
     λV = Velocity(ni...)
     ∇V = @zeros(ni...)
     τ = SymmetricTensor(ni...)
-    dτ = SymmetricTensor(ni...)
     ε = SymmetricTensor(ni...)
     ε_pl = SymmetricTensor(ni...)
     EII_pl = @zeros(ni...)
@@ -38,7 +37,6 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
         λV,
         ∇V,
         τ,
-        dτ,
         ε,
         ε_pl,
         EII_pl,

@@ -65,9 +65,13 @@ end
 end
 
 """
-    vertex2center!(center, vertex)
+    vertex2center!(center, vertex; ghost_x = false, ghost_y = false, ghost_z = false)
 
 Interpolates the values at the `vertex` onto `center` points.
+
+`center` may carry a ring of ghost nodes that `vertex` does not; each `ghost_*` keyword
+shifts the write index by one along that dimension, so the interpolated block lands in the
+interior of `center` instead of overwriting its ghost nodes. `ghost_z` is ignored in 2D.
 """
 function vertex2center!(center, vertex; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false)
     ni = size(vertex) .- 1

@@ -1,3 +1,15 @@
+"""
+    JustRelax.DataIO
+
+Checkpointing and output writing.
+
+`checkpointing_hdf5`/`load_checkpoint_hdf5` and `checkpointing_jld2`/`load_checkpoint_jld2`
+save and restore the model state, while `save_vtk`, `save_particles`, and
+`save_marker_chain` write fields, particles, and marker chains for ParaView. Every routine
+moves the data to the CPU before writing, whatever backend the fields live on. The
+submodule is loaded together with JustRelax; its names are reached as `JustRelax.DataIO.f`
+or by `using JustRelax.DataIO`.
+"""
 module DataIO
 
 using WriteVTK

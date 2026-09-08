@@ -5,10 +5,12 @@ Creates a new `DYREL` struct with fields initialized to zero.
 
 # Arguments
 - `ni`: Tuple containing the grid dimensions `(nx, ny)` for 2D or `(nx, ny, nz)` for 3D.
-- `ϵ`: General convergence tolerance.
-- `ϵ_vel`: Velocity convergence tolerance.
-- `CFL`: Courant-Friedrichs-Lewy number.
-- `c_fact`: Damping scaling factor.
+
+# Keyword arguments
+- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
+- `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
+- `c_fact`: Damping scaling factor. Default: `0.5`.
 """
 function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
     nx, ny = ni
@@ -136,7 +138,13 @@ This function:
 - `phase_ratios`: Phase fraction information.
 - `di`: Grid spacing tuple.
 - `dt`: Time step.
-- `γfact`: Factor for penalty parameter calculation (default: 20.0).
+
+# Keyword arguments
+- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
+- `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
+- `c_fact`: Damping scaling factor. Default: `0.5`.
+- `γfact`: Factor for the penalty parameter calculation. Default: `20.0`.
 """
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
 

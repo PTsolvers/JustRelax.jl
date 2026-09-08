@@ -1,3 +1,15 @@
+"""
+    RockRatio(backend, ni)
+    RockRatio(backend, ni...)
+
+Allocate a `RockRatio` on `backend` for a staggered grid of `ni` cells, with every volume
+fraction initialized to zero.
+
+`backend` is the same backend type passed to the other allocators (`CPUBackend`,
+`CUDABackend`, `AMDGPUBackend`), and `ni` is `(nx, ny)` in 2D or `(nx, ny, nz)` in 3D. Fill
+the fractions with `update_rock_ratio!`, or with `JustPIC.compute_rock_fraction!` when the
+liquid domain is bounded by a marker chain.
+"""
 function RockRatio(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return RockRatio(ni...)
 end

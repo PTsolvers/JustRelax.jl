@@ -82,6 +82,8 @@ function _solve_DYREL!(
     di_center = di.center
     ni = size(stokes.P)
 
+    igg.me == 0 && @printf("\n######## Running forward Stokes solver (DYREL) ########\n")
+
     residuals = @residuals(stokes.R)
     fields = dyrel_fields(dyrel, dim)
 

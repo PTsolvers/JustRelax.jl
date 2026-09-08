@@ -32,7 +32,12 @@ module JustRelax2D
     # `@index` there is KernelAbstractions' kernel index macro -- so it is re-exported here.
     export @index
 
-    __init__() = @init_parallel_stencil(Threads, Float64, 2)
+    function __init__()
+        @init_parallel_stencil(Threads, Float64, 2)
+        # Multiphase rheology closures exceed Enzyme's default type-offset limit.
+        Enzyme.API.maxtypeoffset!(4096) # 1024
+        return nothing
+    end
 
     include("common.jl")
 

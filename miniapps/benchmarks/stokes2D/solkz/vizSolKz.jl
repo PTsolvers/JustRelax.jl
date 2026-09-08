@@ -1,6 +1,6 @@
 using ParallelStencil.FiniteDifferences2D
 
-include("SolKz_solution.jl")
+include(joinpath(@__DIR__, "SolKz_solution.jl"))
 
 function solkz_solution(geometry)
     # element center

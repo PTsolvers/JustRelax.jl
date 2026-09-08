@@ -30,11 +30,11 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays, Statistics, Dates, JLD2
+using GeoParams, GLMakie, Statistics, Dates
 
 # Load file with all the rheology configurations
-include("Caldera_setup.jl")
-include("Caldera_rheology.jl")
+include(joinpath(@__DIR__, "Caldera_setup.jl"))
+include(joinpath(@__DIR__, "Caldera_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

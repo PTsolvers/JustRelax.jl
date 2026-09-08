@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays
+using GeoParams, GLMakie
 
 
 import JustPIC.GridGeometryUtils as GGU

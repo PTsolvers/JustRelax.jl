@@ -6,7 +6,7 @@ using Statistics: mean
 # HAL Id: cea-02434556
 # https://hal-cea.archives-ouvertes.fr/cea-02434556
 
-include("vizTaylorGreen.jl")
+include(joinpath(@__DIR__, "vizTaylorGreen.jl"))
 
 function body_forces(xi::NTuple{3, T}) where {T}
     xx, yy, zz = xi

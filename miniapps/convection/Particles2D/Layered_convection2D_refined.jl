@@ -33,7 +33,7 @@ end
 using GeoParams, GLMakie
 
 # Load file with all the rheology configurations
-include("Layered_rheology.jl")
+include(joinpath(@__DIR__, "Layered_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

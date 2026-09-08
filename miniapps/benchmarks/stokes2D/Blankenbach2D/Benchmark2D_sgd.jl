@@ -45,11 +45,11 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # The material parameters are defined in
 # [`Blankenbach_Rheology.jl`](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/benchmarks/stokes2D/Blankenbach2D/Blankenbach_Rheology.jl).
-include("Blankenbach_Rheology.jl")
+include(joinpath(@__DIR__, "Blankenbach_Rheology.jl"))
 
 # ## Helper functions
 

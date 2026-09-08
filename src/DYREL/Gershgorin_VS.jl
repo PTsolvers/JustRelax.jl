@@ -17,22 +17,21 @@ end
 Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ::Nothing, _dy, i, j) = _d_ya(ρgy, _dy, i, j)
 Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ϕ::JustRelax.RockRatio, _dy, i, j) = _d_ya(ρgy, ϕ.center, _dy, i, j)
 
-# Store a preconditioner diagonal and its eigenvalue bound. The bounded face mass is the outer
-# `W_L^u` factor of the variational velocity preconditioner. The physical row sum is not rescaled,
-# so sliver faces correctly increase the preconditioned eigenvalue bound.
+# Store a preconditioner diagonal and its eigenvalue bound. The viscosity and penalty
+# coefficients passed as `diagonal` already contain the volume-fraction weighting of the
+# variational residual. Multiplying the complete diagonal by the face fraction here would
+# apply that weighting a second time (`ϕ²`) for a uniform cut cell.
 #
 # A diagonal of exactly zero is a legitimate mask-boundary row that `isvalid_*` accepts but whose
 # neighbouring stress weights all vanish; it carries no coupling, so the identity is the right
 # preconditioner for it. A negative or non-finite diagonal is not legitimate — it means either a
 # degenerate viscosity sample or an FSSA term large enough to invert the row — and is propagated as
 # `NaN`, the same signal `free_surface_pseudotime` raises, rather than silently replaced by 1.
-Base.@propagate_inbounds @inline function set_preconditioner!(D, λmaxV, diagonal, row_sum, face_fraction, i, j)
-    face_mass = variational_face_mass(face_fraction)
-    weighted_diagonal = face_mass * diagonal
-    if weighted_diagonal > zero(weighted_diagonal)
-        D[i, j] = weighted_diagonal
-        λmaxV[i, j] = row_sum / weighted_diagonal
-    elseif iszero(weighted_diagonal)
+Base.@propagate_inbounds @inline function set_preconditioner!(D, λmaxV, diagonal, row_sum, i, j)
+    if diagonal > zero(diagonal)
+        D[i, j] = diagonal
+        λmaxV[i, j] = row_sum / diagonal
+    elseif iszero(diagonal)
         D[i, j] = one(eltype(D))
         λmaxV[i, j] = one(eltype(λmaxV))
     else
@@ -53,7 +52,15 @@ end
     return ϕij / (inv(ηij) + invGdt)
 end
 
-function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
+# Vertex viscosity seen by the variational operator. `compute_stress_DRYEL!` builds the
+# vertex stress from the harmonic mean of the four surrounding center viscosities, clamped
+# at the domain border, so the Gershgorin bound must sample that same combination for the
+# preconditioner to describe the operator being iterated.
+Base.@propagate_inbounds @inline function η_vertex(η, ni, i, j)
+    return harm_clamped(η, clamped_indices(ni, i, j)...)
+end
+
+function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
     ni = size(η)
     @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
         Dx,
@@ -61,7 +68,6 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
         λmaxVx,
         λmaxVy,
         η,
-        ηv,
         γ_eff,
         di.center,
         di.vertex,
@@ -76,9 +82,11 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
 end
 
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
+        Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, ϕ::JustRelax.RockRatio, rheology, dt, ρgy
     )
+
+    ni = size(η)
 
     # @inbounds begin
     phase = phase_vertex[i + 1, j + 1]
@@ -89,10 +97,13 @@ end
     GW = fn_ratio(get_shear_modulus, rheology, phase)
 
 
-    ηN = ηv[i + 1, j + 1]
-    ηS = ηv[i + 1, j]
+    ηN = η_vertex(η, ni, i + 1, j + 1)
+    ηS = η_vertex(η, ni, i + 1, j)
     ηW = η[i, j]
 
+    # Powell-Hestenes penalty coefficient using the same effective weighting as the
+    # pressure update. `γ_eff` already compensates the center fraction in the weighted
+    # continuity residual, so the preconditioner must not reintroduce a second fraction.
     γW = γ_eff[i, j] * ϕ.center[i, j]
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
@@ -139,7 +150,7 @@ end
                 abs((γW + ηS - c23 * ηW) * _dxdy)
 
             Dx_ij = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
-            set_preconditioner!(Dx, λmaxVx, Dx_ij, Cxx + Cxy, ϕ.Vx[i + 1, j], i, j)
+            set_preconditioner!(Dx, λmaxVx, Dx_ij, Cxx + Cxy, i, j)
         else
             Dx[i, j] = one(eltype(Dx))
             λmaxVx[i, j] = one(eltype(λmaxVx))
@@ -153,10 +164,9 @@ end
     GE = GN # reuse cached value
 
     ηS = η[i, j]
-    ηW = ηv[i, j + 1]
-    ηE = ηv[i + 1, j + 1]
-    # Powell-Hestenes penalty coupling; γW already carries the single variational
-    # ϕ.center[i, j] weight applied by the momentum gradient.
+    ηW = η_vertex(η, ni, i, j + 1)
+    ηE = η_vertex(η, ni, i + 1, j + 1)
+    # Powell-Hestenes penalty coupling; γW already carries the ϕ.center[i, j] weights.
     γS = γW # reuse cached value
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
@@ -207,7 +217,7 @@ end
                 abs((γS + ηE - c23 * ηS) * _dxdy) +
                 abs((γS - c23 * ηS + ηW) * _dxdy)
 
-            set_preconditioner!(Dy, λmaxVy, Dy_ij, Cyx + Cyy, ϕ.Vy[i, j + 1], i, j)
+            set_preconditioner!(Dy, λmaxVy, Dy_ij, Cyx + Cyy, i, j)
         else
             Dy[i, j] = one(eltype(Dy))
             λmaxVy[i, j] = one(eltype(λmaxVy))

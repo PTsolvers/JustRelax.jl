@@ -204,7 +204,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
@@ -272,17 +272,31 @@ function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_rati
     return nothing
 end
 
+# `ηb` holds the same material quantity as the full-volume solver: the rock fraction
+# reaches the continuity equation through the assembled residual (see
+# `variational_continuity_residual`), not through its coefficients.
+#
+# `γ_eff` is not a coefficient of that equation but the step length of the pressure
+# update `P += γ_eff * RP`, so it must undo the weight `RP` carries. The Schur
+# complement of a cut cell is proportional to `ϕ.center` — the row is weighted by it
+# while the momentum rows it drives are normalized by their own rock fraction through
+# `Dx`/`Dy` — hence the reciprocal factor here. Without it the pressure of a cut cell
+# relaxes `ϕ.center` times slower than the rest of the domain and is left visibly
+# under-converged along a free surface. Every consumer multiplies at least one rock
+# fraction back in (`γ_eff * RP` and the single center-fraction factor used by the
+# Gershgorin bound), so no second volume-fraction factor is introduced; `isvalid_c`
+# guarantees the divisor is positive.
 @parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
 
     if isvalid_c(ϕ, I...)
         ratios = @cell phase_ratios_center[I...]
         Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
-        ηb[I...] = Kbdt * ϕ.center[I...]
+        ηb[I...] = Kbdt
 
         η_local = η[I...]
         γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
         γ_phy = isinf(Kbdt) ? γ_num : Kbdt
-        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) * ϕ.center[I...]
+        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) / ϕ.center[I...]
     else
         ηb[I...] = 0.0e0
         γ_eff[I...] = 0.0e0

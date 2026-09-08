@@ -10,6 +10,8 @@
 # itself is NOT stored inside the loop (RP is derived from the in-register `div_ij`); the public
 # `stokes.∇V` diagnostic is recomputed once from the converged velocity field after the loop.
 # ε.*_c interpolation is likewise skipped in-loop (the stress kernel reads ε.xy at vertices).
+# ϕ selects which entries are written but does not scale ε: the rock fraction reaches the
+# deviatoric term once, in the stress divergence taken by the momentum kernels below.
 function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, args, do_strain_rate = true)
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
@@ -72,7 +74,7 @@ end
                     _dx_vy = @dx(_di_vy, i)
                     dVx_dy = (vx_n - vx_s) * _dy_vx
                     dVy_dx = (vy_e - vy_w) * _dx_vy
-                    εxy[i, j] = ϕ.vertex[i, j] * 0.5 * (dVx_dy + dVy_dx)
+                    εxy[i, j] = 0.5 * (dVx_dy + dVy_dx)
                 end
             else
                 do_strain_rate && (εxy[i, j] = zero(T))
@@ -91,16 +93,19 @@ end
 
                 if do_strain_rate
                     div_third = div_ij * third
-                    center_fraction = ϕ.center[i, j]
-                    εxx[i, j] = center_fraction * (dVx_dx - div_third)
-                    εyy[i, j] = center_fraction * (dVy_dy - div_third)
+                    εxx[i, j] = dVx_dx - div_third
+                    εyy[i, j] = dVy_dy - div_third
                 end
 
-                # pressure residual (reuses `div_ij` in-register). Masked to 0 in air below,
-                # where ηb = 0 would make (P - P0)/ηb NaN. Recomputed with do_strain_rate = false
-                # before the pressure update so it reflects the final velocity.
-                weighted_div = variational_pressure_divergence(div_ij, ϕ.center[i, j])
-                RP[i, j] = _RP_cell(P[i, j], P0[i, j], weighted_div, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j)
+                # pressure residual (reuses `div_ij` in-register). Assembled unweighted and
+                # scaled by the rock fraction once, so divergence, compressibility and the
+                # volumetric sources all carry it exactly once. Recomputed with
+                # do_strain_rate = false before the pressure update so it reflects the final
+                # velocity.
+                RP[i, j] = variational_continuity_residual(
+                    _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j),
+                    ϕ.center[i, j],
+                )
             else
                 if do_strain_rate
                     εxx[i, j] = zero(T)

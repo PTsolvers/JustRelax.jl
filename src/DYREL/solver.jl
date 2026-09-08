@@ -129,6 +129,8 @@ function _solve_DYREL!(
         kwargs...,
     ) where {N}
 
+    @copy stokes.P0 stokes.P
+
     dim = Val(N)
     v_dofs = velocity_dofs(dim)
     p_dof = pressure_dof(dim)
@@ -145,7 +147,6 @@ function _solve_DYREL!(
     iter = 0
 
     # solver loop
-    @copy stokes.P0 stokes.P
     residuals0 = fields.R0
 
     for Aij in @tensor_center(stokes.ε_pl)
@@ -450,6 +451,15 @@ end
 # uniform volumetric mode carries no pressure correction and `relax_volumetric_mode!` is a no-op.
 function volumetric_compliance_total(ηb, mask)
     return sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
+end
+
+# Variational counterpart: a uniform shift of the retained pressures moves each residual by
+# `ϕ.center / ηb`, because the continuity residual is weighted by the rock fraction.
+function volumetric_compliance_total(ηb, ϕ::JustRelax.RockRatio, mask)
+    return sum_mpi(
+        (ηbᵢ, ϕᵢ, valid) -> valid ? ϕᵢ * volumetric_compliance(ηbᵢ) : zero(ηbᵢ),
+        ηb, ϕ.center, mask,
+    )
 end
 
 function relax_volumetric_mode!(P, RP, ηb, mask, relaxation = 1, compliance = volumetric_compliance_total(ηb, mask))

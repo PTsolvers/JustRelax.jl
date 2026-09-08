@@ -213,7 +213,7 @@ function _solve_VariationalDYREL!(
         # velocity updates would drive the free-surface-stabilization residual term against
         # a dτ tuned for the plain viscous operator and diverge.
         if !iszero(free_surface)
-            Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
+            Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
             update_dτV_α_β!(dyrel)
         end
         while (err_vel > ϵ_vel && itPT ≤ iterMax_DR)
@@ -291,7 +291,7 @@ function _solve_VariationalDYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
+                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -308,7 +308,7 @@ function _solve_VariationalDYREL!(
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
         # Both the refresh and the relaxation are skipped where the mode carries no correction.
-        compliance = volumetric_compliance_total(dyrel.ηb, maskP)
+        compliance = volumetric_compliance_total(dyrel.ηb, ϕ, maskP)
         if !iszero(compliance)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
             relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)

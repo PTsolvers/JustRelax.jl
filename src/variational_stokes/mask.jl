@@ -66,7 +66,13 @@ end
 # keeps partially filled velocity rows finite; fully filled rows remain exact.
 @inline variational_face_mass(x) = max(x, oftype(x, 0.1))
 
-@inline variational_pressure_divergence(∇V, center_fraction) = ∇V * center_fraction
+# Weight of a continuity row. Every additive term of the residual — the divergence,
+# the compressibility term and the volumetric sources — carries the rock fraction
+# exactly once, matching the momentum rows, where it arrives through
+# `d_xa(P, ϕ.center)`, `av_xa(ρgx, ϕ.center)` and the stress divergence. Weighting
+# the assembled residual keeps that true term by term, and keeps the Powell-Hestenes
+# penalty `Bᵀ γ B` quadratic in the rock fraction rather than cubic.
+@inline variational_continuity_residual(RP, center_fraction) = RP * center_fraction
 
 """
     update_rock_ratio!(ϕ::JustRelax.RockRatio, phase_ratios, air_phase)
@@ -179,8 +185,8 @@ end
 
 Check whether the 2D pressure degree of freedom is connected to liquid.
 
-The cell-centred pressure row is retained only when `ϕ.center[i,j]` and all
-four adjacent velocity faces are active:
+The cell-centred pressure row is retained when `ϕ.center[i,j]` carries liquid
+and *all four* adjacent velocity faces are active:
 
                  Vy[i, j+1]
                        o
@@ -190,28 +196,21 @@ four adjacent velocity faces are active:
                        o
                  Vy[i, j]
 
-This is the local null-space elimination used by the matrix-free reduced
-system. It is intentionally stricter than testing the centre fraction alone.
+This is the local null-space elimination of the matrix-free reduced system.
+`∇V` is built from these four faces, and the pressure of the cell acts back on
+them through the weighted gradient, so a row that keeps an inactive face is a
+row whose divergence no free velocity can relieve: the Powell-Hestenes penalty
+then drives its pressure without bound.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j)
-    # A pressure cell is retained only when its centre and all four adjacent
-    # velocity faces are connected to liquid:
-    #
-    #                  Vy[i, j+1]
-    #                        o
-    #                        |
-    #         Vx[i, j]  o--- p[i,j] ---o  Vx[i+1, j]
-    #                        |
-    #                        o
-    #                  Vy[i, j]
-    vx = isvalid(ϕ.Vx, i, j) * isvalid(ϕ.Vx[i + 1, j])
-    vy = isvalid(ϕ.Vy, i, j) * isvalid(ϕ.Vy[i, j + 1])
-    v = vx * vy
-    return v * isvalid(ϕ.center, i, j)
+    isvalid(ϕ.center, i, j) || return false
+    vx = isvalid(ϕ.Vx, i, j) & isvalid(ϕ.Vx, i + 1, j)
+    vy = isvalid(ϕ.Vy, i, j) & isvalid(ϕ.Vy, i, j + 1)
+    return vx & vy
 end
 
 @parallel_indices (i, j) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
@@ -220,16 +219,18 @@ end
 end
 
 """
-    isvalid_v(ϕ::JustRelax.RockRatio, inds...)
+    isvalid_c(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.vertex[inds...]` is a not a nullspace in 3D.
+Check whether the 3D pressure degree of freedom is connected to liquid. As in
+2D, the row is retained when the centre carries liquid and all six adjacent
+velocity faces are active.
 """
 Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, j, k)
-    vx = isvalid(ϕ.Vx, i, j, k) * isvalid(ϕ.Vx, i + 1, j, k)
-    vy = isvalid(ϕ.Vy, i, j, k) * isvalid(ϕ.Vy, i, j + 1, k)
-    vz = isvalid(ϕ.Vz, i, j, k) * isvalid(ϕ.Vz, i, j, k + 1)
-    v = vx * vy * vz
-    return v * isvalid(ϕ.center, i, j, k)
+    isvalid(ϕ.center, i, j, k) || return false
+    vx = isvalid(ϕ.Vx, i, j, k) & isvalid(ϕ.Vx, i + 1, j, k)
+    vy = isvalid(ϕ.Vy, i, j, k) & isvalid(ϕ.Vy, i, j + 1, k)
+    vz = isvalid(ϕ.Vz, i, j, k) & isvalid(ϕ.Vz, i, j, k + 1)
+    return vx & vy & vz
 end
 
 """
@@ -258,46 +259,43 @@ end
 """
     isvalid_vx(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.Vx[inds...]` is a not a nullspace.
+Check whether the x-velocity degree of freedom at `inds` is not a nullspace.
+
+The face is retained when its own control volume carries liquid, `ϕ.Vx > 0`. A
+`Vx`/`Vy` control volume straddles two cell halves, so it runs dry before the
+cells it separates do; the face is then a rigid lid on the cut cell behind it.
+That is what pairs with [`isvalid_c`](@ref): a face with no liquid contributes
+to the divergence of both cells it separates without being able to relieve it,
+so the two rules have to draw the boundary in the same place.
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-Base.@propagate_inbounds @inline function isvalid_vx(
-        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
-    ) where {N}
-    return isvalid(ϕ.Vx, I...)
+Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, i, j)
+    return isvalid(ϕ.Vx, i, j)
 end
 
-# Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, I::Vararg{Integer,N}) where {N}
-#     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i - 1, j] > 0)
-#     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i, j + 1] > 0)
-#     # cv = c * v
-#     # return cv * (ϕ.Vx[i, j] > 0)
-#     return (ϕ.Vx[I...] > 0)
-# end
+Base.@propagate_inbounds @inline function isvalid_vx(ϕ::JustRelax.RockRatio, i, j, k)
+    return isvalid(ϕ.Vx, i, j, k)
+end
 
 """
     isvalid_vy(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.Vy[inds...]` is a not a nullspace.
+Check whether the y-velocity degree of freedom at `inds` is not a nullspace.
+Retained when `ϕ.Vy > 0`; see [`isvalid_vx`](@ref).
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-# Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
-#     # c = (ϕ.center[i, j] > 0) * (ϕ.center[i, j - 1] > 0)
-#     # v = (ϕ.vertex[i, j] > 0) * (ϕ.vertex[i + 1, j] > 0)
-#     # cv = c * v
-#     # return cv * (ϕ.Vy[i, j] > 0)
-#     return (ϕ.Vy[i, j] > 0)
-# end
-Base.@propagate_inbounds @inline function isvalid_vy(
-        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
-    ) where {N}
-    return isvalid(ϕ.Vy, I...)
+Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j)
+    return isvalid(ϕ.Vy, i, j)
+end
+
+Base.@propagate_inbounds @inline function isvalid_vy(ϕ::JustRelax.RockRatio, i, j, k)
+    return isvalid(ϕ.Vy, i, j, k)
 end
 
 @parallel_indices (i, j) function update_valid_v_masks!(maskVx, maskVy, ϕ::JustRelax.RockRatio)
@@ -329,16 +327,15 @@ end
 """
     isvalid_vz(ϕ::JustRelax.RockRatio, inds...)
 
-Check if  `ϕ.Vz[inds...]` is a not a nullspace.
+Check whether the z-velocity degree of freedom at `inds` is not a nullspace.
+Retained when `ϕ.Vz > 0`; see [`isvalid_vx`](@ref).
 
 # Arguments
 - `ϕ::JustRelax.RockRatio`: The `RockRatio` object to check against.
 - `inds`: Cartesian indices to check.
 """
-Base.@propagate_inbounds @inline function isvalid_vz(
-        ϕ::JustRelax.RockRatio, I::Vararg{Integer, N}
-    ) where {N}
-    return isvalid(ϕ.Vz, I...)
+Base.@propagate_inbounds @inline function isvalid_vz(ϕ::JustRelax.RockRatio, i, j, k)
+    return isvalid(ϕ.Vz, i, j, k)
 end
 
 """

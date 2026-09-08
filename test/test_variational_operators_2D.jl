@@ -44,6 +44,10 @@ end
     end
 end
 
+# Face-retention rule the kernels apply: a velocity row survives when its own control
+# volume holds liquid.
+_face_active(w_face, _w_lo, _w_hi) = w_face > 0
+
 """Return the interior x-face pressure gradient used by the 2D layout."""
 function _pressure_gradient_x(p, wₚ, wᵤ, dx)
     nx, ny = size(p)
@@ -51,7 +55,7 @@ function _pressure_gradient_x(p, wₚ, wᵤ, dx)
     for j in 1:ny, i in 1:(nx - 1)
         # The padded production indices are P[i, j] and Vx[i + 1, j + 1],
         # while the corresponding masks live at center[i, j] and Vx[i + 1, j].
-        active = wᵤ[i + 1, j] > 0
+        active = _face_active(wᵤ[i + 1, j], wₚ[i, j], wₚ[i + 1, j])
         gx[i, j] = active * dx * (-wₚ[i, j] * p[i, j] + wₚ[i + 1, j] * p[i + 1, j])
     end
     return gx
@@ -64,7 +68,7 @@ function _pressure_gradient_y(p, wₚ, wᵥ, dy)
     for j in 1:(ny - 1), i in 1:nx
         # The padded production indices are P[i, j] and Vy[i + 1, j + 1],
         # while the corresponding mask is Vy[i, j + 1].
-        active = wᵥ[i, j + 1] > 0
+        active = _face_active(wᵥ[i, j + 1], wₚ[i, j], wₚ[i, j + 1])
         gy[i, j] = active * dy * (-wₚ[i, j] * p[i, j] + wₚ[i, j + 1] * p[i, j + 1])
     end
     return gy
@@ -77,7 +81,7 @@ function _dense_gradient_x(wₚ, wᵤ, dx)
     col(i, j) = i + (j - 1) * nx
     for j in 1:ny, i in 1:(nx - 1)
         r = row(i, j)
-        active = wᵤ[i + 1, j] > 0
+        active = _face_active(wᵤ[i + 1, j], wₚ[i, j], wₚ[i + 1, j])
         G[r, col(i, j)] = -active * dx * wₚ[i, j]
         G[r, col(i + 1, j)] = active * dx * wₚ[i + 1, j]
     end
@@ -91,7 +95,7 @@ function _dense_gradient_y(wₚ, wᵥ, dy)
     col(i, j) = i + (j - 1) * nx
     for j in 1:(ny - 1), i in 1:nx
         r = row(i, j)
-        active = wᵥ[i, j + 1] > 0
+        active = _face_active(wᵥ[i, j + 1], wₚ[i, j], wₚ[i, j + 1])
         G[r, col(i, j)] = -active * dy * wₚ[i, j]
         G[r, col(i, j + 1)] = active * dy * wₚ[i, j + 1]
     end
@@ -224,6 +228,58 @@ end
     end
 end
 
+@testset "Variational Stokes 2D strain rate carries no rock fraction" begin
+    # The rock fraction reaches the deviatoric term once, where the stress divergence
+    # is taken. The strain-rate kernel must therefore return the strain rate itself,
+    # not a ϕ-scaled copy of it — otherwise the deviatoric term enters the momentum
+    # balance weighted by ϕ² while pressure and buoyancy carry ϕ.
+    ni = nx, ny = 4, 3
+    grid = Geometry(ni, (nx * 0.7, ny * 1.3))
+    xci, xvi = grid.xci, grid.xvi
+    ε̇ = 0.35
+
+    function strain_rates(ϕ)
+        stokes = StokesArrays(JustRelax.CPUBackend, ni)
+        ghost(c) = (d = c[2] - c[1]; vcat(c[1] - d, c..., c[end] + d))
+        # pure shear: εxx = -εyy = ε̇, εxy = 0, ∇V = 0
+        stokes.V.Vx .= [ε̇ * x for x in xvi[1], _ in ghost(xci[2])]
+        stokes.V.Vy .= [-ε̇ * y for _ in ghost(xci[1]), y in xvi[2]]
+        @parallel (JustRelax.JustRelax2D.@idx ni) JustRelax.JustRelax2D.compute_∇V!(
+            stokes.∇V, JustRelax.JustRelax2D.@velocity(stokes), ϕ, grid._di.vertex
+        )
+        @parallel (JustRelax.JustRelax2D.@idx ni .+ 1) JustRelax.JustRelax2D.compute_strain_rate!(
+            JustRelax.JustRelax2D.@strain(stokes)...,
+            stokes.∇V,
+            JustRelax.JustRelax2D.@velocity(stokes)...,
+            ϕ,
+            grid._di.vertex,
+            grid._di.velocity...,
+        )
+        return stokes
+    end
+
+    full = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, ni)
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ
+    end
+    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, ni)
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ.center[2, 2] = 0.25
+        ϕ.vertex[2, 2] = 0.25
+        ϕ
+    end
+
+    reference = strain_rates(full)
+    masked = strain_rates(cut)
+
+    @test reference.ε.xx[2, 2] ≈ ε̇
+    @test reference.ε.yy[2, 2] ≈ -ε̇
+    # The partially filled cell deforms at the same rate as a full one.
+    @test masked.ε.xx ≈ reference.ε.xx
+    @test masked.ε.yy ≈ reference.ε.yy
+    @test masked.ε.xy ≈ reference.ε.xy
+end
+
 @testset "Variational Stokes 2D active-volume policy" begin
     @test JustRelax.JustRelax2D.variational_active(0.0) == false
     @test JustRelax.JustRelax2D.variational_active(nextfloat(0.0)) == true
@@ -237,6 +293,49 @@ end
     @test JustRelax.JustRelax2D.isvalid_vy(ϕ, 2, 3)
 end
 
+@testset "Variational Stokes 2D pressure row retention" begin
+    isvalid_c = JustRelax.JustRelax2D.isvalid_c
+
+    full = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, (3, 3))
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ
+    end
+    @test isvalid_c(full, 2, 2)
+
+    # A single empty face eliminates the row even though the cell still holds rock:
+    # the pressure acts back on that face through the weighted gradient, so a row
+    # that keeps it carries a divergence no free velocity can relieve and the
+    # Powell-Hestenes penalty drives its pressure without bound.
+    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, (3, 3))
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ.center[2, 2] = 0.2
+        ϕ.Vy[2, 3] = 0.0
+        ϕ
+    end
+    @test !isvalid_c(cut, 2, 2)
+
+    # An empty cell is eliminated whatever its faces carry, ...
+    empty_center = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, (3, 3))
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ.center[2, 2] = 0.0
+        ϕ
+    end
+    @test !isvalid_c(empty_center, 2, 2)
+
+    # ... and so is a cell whose four faces are all empty: `∇V` is built from those
+    # faces alone, so its continuity row is identically zero.
+    isolated = let ϕ = JustRelax.JustRelax2D.RockRatio(JustRelax.CPUBackend, (3, 3))
+        foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+        ϕ.Vx[2, 2] = ϕ.Vx[3, 2] = ϕ.Vy[2, 2] = ϕ.Vy[2, 3] = 0.0
+        ϕ
+    end
+    @test !isvalid_c(isolated, 2, 2)
+
+    # The face and cell rules draw the boundary in the same place: the empty face
+    # that eliminates the cell is itself eliminated.
+    @test !JustRelax.JustRelax2D.isvalid_vy(cut, 2, 3)
+end
+
 @testset "Variational Stokes 2D bounded face mass" begin
     for fraction in (0.0, nextfloat(0.0), 0.05, 0.1, 0.75, 1.0)
         mass = JustRelax.JustRelax2D.variational_face_mass(fraction)
@@ -246,27 +345,23 @@ end
     @test JustRelax.JustRelax2D.variational_face_mass(1.0) == 1.0
 end
 
-@testset "Variational DYREL weighted momentum diagonal" begin
+@testset "Variational DYREL momentum diagonal" begin
     D = zeros(1, 1)
     λmax = zeros(1, 1)
     store! = JustRelax.JustRelax2D.set_preconditioner!
 
-    store!(D, λmax, 4.0, 12.0, 0.05, 1, 1)
-    @test D[1, 1] == 0.4
-    @test λmax[1, 1] ≈ 30.0
-
-    store!(D, λmax, 4.0, 12.0, 1.0, 1, 1)
+    store!(D, λmax, 4.0, 12.0, 1, 1)
     @test D[1, 1] == 4.0
     @test λmax[1, 1] ≈ 3.0
 
     # A decoupled mask-boundary row — every surrounding stress weight vanishes — is preconditioned
     # with the identity.
-    store!(D, λmax, 0.0, 0.0, 1.0, 1, 1)
+    store!(D, λmax, 0.0, 0.0, 1, 1)
     @test D[1, 1] == 1.0
     @test λmax[1, 1] == 1.0
 
     # A row the FSSA term inverts, or one fed a degenerate viscosity, is not silently rescued.
-    store!(D, λmax, -2.0, 12.0, 1.0, 1, 1)
+    store!(D, λmax, -2.0, 12.0, 1, 1)
     @test isnan(D[1, 1])
     @test isnan(λmax[1, 1])
 
@@ -276,8 +371,8 @@ end
 end
 
 @testset "Variational DYREL weighted pressure residual" begin
-    weighted_divergence = JustRelax.JustRelax2D.variational_pressure_divergence
-    @test weighted_divergence(2.0, 1.0) == 2.0
-    @test weighted_divergence(2.0, 0.25) == 0.5
-    @test weighted_divergence(2.0, 0.0) == 0.0
+    weighted_residual = JustRelax.JustRelax2D.variational_continuity_residual
+    @test weighted_residual(2.0, 1.0) == 2.0
+    @test weighted_residual(2.0, 0.25) == 0.5
+    @test weighted_residual(2.0, 0.0) == 0.0
 end

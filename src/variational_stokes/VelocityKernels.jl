@@ -29,6 +29,12 @@ end
     compute_strain_rate!(εxx, εyy, εxy, ∇V, Vx, Vy, ϕ, _dx, _dy)
 
 Compute the components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`.
+
+`ϕ` selects which entries are computed at all; it does not scale them. The rock
+fraction enters the momentum balance once, where the stress divergence is taken
+(`d_xa(τxx, ϕ.center)`, `d_yi(τxy, ϕ.vertex)`). Scaling `ε` by it as well would
+weight the deviatoric term by `ϕ²` while pressure and buoyancy carry `ϕ`, which
+softens partially filled cells relative to the rest of the momentum equation.
 """
 @parallel_indices (i, j) function compute_strain_rate!(
         εxx::AbstractArray{T, 2},
@@ -56,15 +62,15 @@ Compute the components of the strain rate tensor `ε` from the velocity field `V
             Vy3 = Vy[i + 1, j + 1]
 
             ∇V_ij = ∇V[i, j] / 3
-            εxx[i, j] = ϕ.center[i, j] * ((Vx3 - Vx2) * _dx - ∇V_ij)
-            εyy[i, j] = ϕ.center[i, j] * ((Vy3 - Vy2) * _dy - ∇V_ij)
+            εxx[i, j] = (Vx3 - Vx2) * _dx - ∇V_ij
+            εyy[i, j] = (Vy3 - Vy2) * _dy - ∇V_ij
         else
             εxx[i, j] = zero(T)
             εyy[i, j] = zero(T)
         end
     end
     @inbounds if isvalid_v(ϕ, i, j)
-        εxy[i, j] = ϕ.vertex[i, j] * 0.5 * ((Vx2 - Vx1) * _dy_vx + (Vy2 - Vy1) * _dx_vy)
+        εxy[i, j] = 0.5 * ((Vx2 - Vx1) * _dy_vx + (Vy2 - Vy1) * _dx_vy)
     else
         εxy[i, j] = zero(T)
     end
@@ -76,6 +82,9 @@ end
     compute_strain_rate_from_increment!(εxx, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ, _dt)
 
 Compute the components of the strain rate tensor `ε` from the strain increments `Δε`, taking into account the rock ratio `ϕ` and time step `_dt`.
+
+As in `compute_strain_rate!`, `ϕ` only selects which entries are computed; the
+rock fraction is applied once, in the stress divergence.
 """
 @parallel_indices (i, j) function compute_strain_rate_from_increment!(
         εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ::JustRelax.RockRatio, _dt
@@ -83,8 +92,8 @@ Compute the components of the strain rate tensor `ε` from the strain increments
 
     if all((i, j) .≤ size(εxx))
         if isvalid_c(ϕ, i, j)
-            εxx[i, j] = ϕ.center[i, j] * Δεxx[i, j] * _dt
-            εyy[i, j] = ϕ.center[i, j] * Δεyy[i, j] * _dt
+            εxx[i, j] = Δεxx[i, j] * _dt
+            εyy[i, j] = Δεyy[i, j] * _dt
         else
             εxx[i, j] = zero(T)
             εyy[i, j] = zero(T)
@@ -93,7 +102,7 @@ Compute the components of the strain rate tensor `ε` from the strain increments
     end
 
     εxy[i, j] = if isvalid_v(ϕ, i, j)
-        ϕ.vertex[i, j] * Δεxy[i, j] * _dt
+        Δεxy[i, j] * _dt
     else
         zero(T)
     end

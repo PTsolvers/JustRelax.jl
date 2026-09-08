@@ -27,7 +27,7 @@ end
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
-const backend_JR = @static if isCUDA
+const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -42,14 +42,7 @@ else
 end
 
 using JustPIC
-````
-
-Threads is the default backend,
-to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-
-````julia
-const backend = @static if isCUDA
+const backend_JP = @static if isCUDA
     CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
@@ -59,7 +52,7 @@ end
 Load script dependencies
 
 ````julia
-using Printf, LinearAlgebra, GeoParams, CairoMakie, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie
 ````
 
 The material parameters are defined in
@@ -162,7 +155,7 @@ particle phases to the staggered grid.
 ````julia
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
 ````
@@ -172,7 +165,7 @@ temperature
 ````julia
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 ````
@@ -185,14 +178,14 @@ Allocate the Stokes and thermal fields together with their
 pseudo-transient coefficients.
 
 ````julia
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
 ````
 
 ----------------------------------------------------
 
 ````julia
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
 ````
 
 Initialize the conductive profile and impose fixed temperatures at the
@@ -249,7 +242,7 @@ Allocate pseudo-transient coefficients for thermal diffusion.
 
 ````julia
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.5 / √2.1
     )
 ````
 
@@ -297,7 +290,6 @@ Plot the initial temperature and viscosity depth profiles.
     end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
     pT0.data .= pT.data
 
@@ -326,6 +318,8 @@ Buffer arrays to compute velocity rms
 ````julia
     Vx_v = @zeros(ni .+ 1...)
     Vy_v = @zeros(ni .+ 1...)
+
+    dt₀ = similar(thermal.T)
 
     while it ≤ nit
         @show it
@@ -389,6 +383,10 @@ Buffer arrays to compute velocity rms
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
@@ -412,7 +410,7 @@ advect particles in memory
 check if we need to inject particles
 
 ````julia
-        inject_particles_phase!(particles, pPhases, (pT,), (T_buffer,))
+        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
 ````
 
 update phase ratios
@@ -454,7 +452,7 @@ $$
 6. Interpolate particle temperature back to the thermal grid.
 
 ````julia
-        particle2centroid!(T_buffer, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
         @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 ````

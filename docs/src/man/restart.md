@@ -20,7 +20,8 @@ using JustPIC
 const backend = CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
 ```
 
-!!! tip "Script" Leave most of your original script unchanged and only change the parts we highlight in this example, unless you want to explicitly change some model parameters (e.g., rheology, boundary conditions, etc.). Make sure you dont accidentally overwrite your loaded arrays/particles with new initializations.
+!!! tip "Script"
+    Leave most of your original script unchanged and only change the parts highlighted in this example, unless you want to explicitly change some model parameters (e.g., rheology, boundary conditions, etc.). Make sure you do not accidentally overwrite the loaded arrays/particles with new initializations.
 
 ## Load and initialize particles fields
 The `JustPIC` specific function `TA()` will convert the loaded particles to the correct backend.

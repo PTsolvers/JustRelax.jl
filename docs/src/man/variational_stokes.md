@@ -7,8 +7,10 @@ partly occupied by liquid. The implementation follows the weighted formulation
 of Larionov, Batty and Bridson (2017), with the physical geodynamic body-force
 terms and JustRelax's pseudo-transient iteration added separately.
 
-The implementation described here is currently 2D. The governing equations and
-the weighted operators are implemented in
+The equations and operators described on this page are the 2D ones, which is
+what the tests and miniapps exercise. `solve_VariationalStokes!` also has a
+3D method, built on the same weights, that no test or miniapp covers. Both are
+implemented in
 [`src/variational_stokes/`](https://github.com/PTsolvers/JustRelax.jl/tree/main/src/variational_stokes).
 
 The equations below distinguish the mathematical target from the current
@@ -94,8 +96,8 @@ operators apply the same weighted blocks matrix-free.
 
 For a cell \((i,j)\), the divergence is evaluated from the surrounding face
 velocities. A liquid cell is active only if the pressure cell and the required
-velocity faces are connected to liquid degrees of freedom. In the current 2D
-implementation this reduced-space rule is represented by `isvalid_c`,
+velocity faces are connected to liquid degrees of freedom. In 2D this
+reduced-space rule is represented by `isvalid_c`,
 `isvalid_vx`, and `isvalid_vy` in
 [`mask.jl`](https://github.com/PTsolvers/JustRelax.jl/blob/main/src/variational_stokes/mask.jl).
 
@@ -166,7 +168,7 @@ unconstrained null-space unknowns.
 
 The liquid weights are continuous fractions, but degree-of-freedom elimination
 is binary. A zero-weight unknown is removed from the reduced system; a positive
-weight remains active. For a cell-centred pressure unknown, the current 2D rule
+weight remains active. For a cell-centred pressure unknown, the 2D rule
 requires the pressure cell and all four surrounding velocity faces to be active:
 
 \`\`\`text
@@ -298,10 +300,10 @@ solve_VariationalStokes!(
 )
 ```
 
-The same weighted operator is available with dynamic relaxation in 2D. Build
-`DYREL` with the `RockRatio` and call `solve_VariationalDYREL!`; see
+The same weighted operator is available with dynamic relaxation. Build `DYREL`
+with the `RockRatio` and call `solve_VariationalDYREL!`; see
 [DYREL](./DYREL.md#2d-variational-dyrel). The variational DYREL path reuses the
-center, vertex, and face weights described here and is currently 2D-only.
+center, vertex, and face weights described here and is 2D-only.
 
 Options may be given either as the plain keywords above or bundled as a single
 `kwargs = (; ...)` NamedTuple.

@@ -131,6 +131,7 @@ makedocs(;
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
+            "Visualization" => "man/visualization.md",
         ],
         "Examples" => Any[
             "Blankenbach" => "man/Blankenbach.md",

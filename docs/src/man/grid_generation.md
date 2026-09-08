@@ -80,7 +80,7 @@ Here `grid.xci`, `grid.xvi`, and `grid.xi_vel` correspond to the local rank, whi
 
 ## Particle initialization
 
-Recent particle-related updates use the staggered velocity grids stored in `Geometry` directly:
+Particles are initialized from the staggered velocity grids stored in `Geometry`:
 
 ```julia
 using JustPIC
@@ -92,7 +92,7 @@ min_xcell = 12
 particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 ```
 
-This is the preferred setup in the current examples and tests. You only need `velocity_grids(xci, xvi, di)` explicitly if you want the staggered coordinates outside of `Geometry`.
+`velocity_grids(xci, xvi, di)` builds the same coordinates outside of a `Geometry`, for the cases that need them separately.
 
 ## API reference
 

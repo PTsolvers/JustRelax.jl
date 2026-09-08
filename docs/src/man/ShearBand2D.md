@@ -19,23 +19,48 @@ The simulation writes one figure per time step to `ShearBands2D/`.
 
 ## Imports and backends
 
-The model uses the threaded CPU backend for both JustRelax and JustPIC.
-`ParallelStencil` supplies the device-agnostic phase-initialization kernel,
-`GeoParams` defines the material behavior, and CairoMakie writes the figures.
+The model runs on the threaded CPU backend for both JustRelax and JustPIC; set
+`isCUDA = true` to run the same model on an NVIDIA GPU. `ParallelStencil`
+supplies the device-agnostic phase-initialization kernel, `GeoParams` defines
+the material behavior, and CairoMakie writes the figures.
 
 ````julia
+const isCUDA = false
+````
+
+const isCUDA = true
+
+````julia
+@static if isCUDA
+    using CUDA
+end
+
 using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC
-import JustPIC.GridGeometryUtils as GGU
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
 
-const backend_JP = JustPIC.CPU
+import JustPIC.GridGeometryUtils as GGU
 ````
 
 ## Helper functions

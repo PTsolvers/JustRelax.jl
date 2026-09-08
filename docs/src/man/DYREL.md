@@ -1,10 +1,9 @@
 # Using the APT method with auto tuned damping coefficients
 
 > [!WARNING]
-> This solver is still work-in-progress/experimental. The documented DYREL path
-> currently supports 2D Stokes. The separate 2D variational-Stokes solver is
-> documented in [2D variational Stokes](./variational_stokes.md); 3D DYREL remains
-> outside the documented scope.
+> This solver is experimental. The DYREL path supports 2D Stokes only. The
+> separate 2D variational-Stokes solver is documented in
+> [2D variational Stokes](./variational_stokes.md).
 
 Instead of using the Accelerated Pseudo-Transient method, where the damping coefficients are constant throughout the PT iterations (as in [Räss et al., 2022](https://gmd.copernicus.org/articles/15/5757/2022/)), we can use a self-tuning version of the APT method based on the approach described in [Duretz et al., 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
 

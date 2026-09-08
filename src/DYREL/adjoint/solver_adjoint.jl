@@ -234,19 +234,9 @@ function solve_DYREL_adjoint!(
                 push!(err_evo_P, errPt / errPt0)
                 push!(err_evo_it, iter)
 
-                # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
                 end
-                # λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
-                # @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
-
-                # # Optimal pseudo-time steps - can be replaced by AD
-                # Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
-                # free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
-
-                # # Select dτ
-                # update_dτV_α_β!(dyrel)
             end
 
         end
@@ -256,37 +246,10 @@ function solve_DYREL_adjoint!(
         iter > total_iterMax && break
     end
 
-    igg.me == 0 && @printf("\n######## Calculate Sensitivities ########\n")
-
-    stokes_ad.P .= 0.0
-    stokes_ad.θ .= 0.0
-    stokes_ad.R.RP .= 0.0
-    stokes_ad.τ.xx .= 0.0
-    stokes_ad.τ.yy .= 0.0
-    stokes_ad.τ.xy_c .= 0.0
-    stokes_ad.τ.xx_v .= 0.0
-    stokes_ad.τ.yy_v .= 0.0
-    stokes_ad.τ.xy .= 0.0
-    stokes_ad.τ.II .= 0.0
-    stokes_ad.viscosity.η .= 0.0
-    stokes_ad.viscosity.ηv .= 0.0
-    stokes_ad.ρ .= 0.0
-
-    dρgx = @zeros(ni...)
-    @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-    @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-    enzyme_compute_PH_residual_V_sensitivity!(
-        stokes, stokes_ad, ρg, (dρgx, stokes_ad.ρ), _di, ni
+    # sensitivity evaluation
+    compute_sensitivities!(
+        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg
     )
-    enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt
-    )
-
-    gravity = compute_gravity(first(rheology))
-    gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
-    # The residual depends on density through the buoyancy forces ρgx = ρ*gx and
-    # ρgy = ρ*gy. The chain rule therefore gives dJ/dρ = gx*dJ/dρgx + gy*dJ/dρgy.
-    @. stokes_ad.ρ = gx * dρgx + gy * stokes_ad.ρ
 
     # Do not carry adjoint iteration history into the next forward solve.
     dyrel.dVxdτ .= 0

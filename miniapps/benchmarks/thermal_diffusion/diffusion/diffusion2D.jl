@@ -26,9 +26,6 @@ end
 using Printf, LinearAlgebra, GeoParams
 
 
-# using JustPIC
-# const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)
         T[i + 1, j + 1] = 300.0

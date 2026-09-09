@@ -27,12 +27,35 @@ The model uses the threaded CPU backend for both JustRelax and JustPIC.
 using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
-using ParallelStencil
-@init_parallel_stencil(Threads, Float64, 2)
 
-const backend = CPUBackend
+const backend = @static if isCUDA
+    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+else
+    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+end
+
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
 
 using JustPIC
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+else
+    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
+end
+````
+
+Load script dependencies
+
+````julia
+using GeoParams, CairoMakie
+
+
 import JustPIC.GridGeometryUtils as GGU
 
 const backend_JP = JustPIC.CPU

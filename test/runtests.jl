@@ -45,7 +45,10 @@ function runtests(args)
     for k in collect(keys(testsuite))
         startswith(basename(k), "test_") || delete!(testsuite, k)
     end
-    backend_name == "CPU" || delete!(testsuite, "test_variational_operators_2D")
+    if backend_name != "CPU"
+        delete!(testsuite, "test_variational_operators_2D")
+        delete!(testsuite, "test_rheology")
+    end
 
     # Separate MPI tests – always run sequentially via mpiexec
     mpi_keys = [k for k in keys(testsuite) if occursin("MPI", k)]

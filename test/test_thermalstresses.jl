@@ -329,7 +329,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
     t, it = 0.0, 0
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
     centroid2particle!(pT, T_buffer, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
@@ -416,6 +416,11 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt

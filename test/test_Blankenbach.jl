@@ -157,7 +157,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     update_halo!(@velocity(stokes)...)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
     centroid2particle!(pT, thermal.T, particles)
     pT0.data .= pT.data
 
@@ -221,6 +221,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt

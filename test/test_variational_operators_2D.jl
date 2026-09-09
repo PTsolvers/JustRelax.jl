@@ -365,7 +365,7 @@ end
     @test isnan(D[1, 1])
     @test isnan(λmax[1, 1])
 
-    store!(D, λmax, NaN, 12.0, 1.0, 1, 1)
+    store!(D, λmax, NaN, 12.0, 1, 1)
     @test isnan(D[1, 1])
     @test isnan(λmax[1, 1])
 end

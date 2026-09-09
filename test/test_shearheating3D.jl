@@ -146,7 +146,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, thermal.T, particles)
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
 
     # Time loop
     t, it = 0.0, 0
@@ -208,6 +208,13 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt

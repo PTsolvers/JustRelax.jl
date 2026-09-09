@@ -264,10 +264,10 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
         # Populate the ghost cells before interpolating to particles.
-        @views dt₀[1, :] .= dt₀[2, :]
-        @views dt₀[end, :] .= dt₀[end - 1, :]
-        @views dt₀[:, 1] .= dt₀[:, 2]
-        @views dt₀[:, end] .= dt₀[:, end - 1]
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
         @views dt₀[:, :, 1] .= dt₀[:, :, 2]
         @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)

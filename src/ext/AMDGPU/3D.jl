@@ -452,7 +452,7 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles::Particles{AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt₀,
         phases::JustPIC.PhaseRatios,
         rheology,
@@ -469,7 +469,7 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles::Particles{AMDGPUBackend},
+        particles::Particles{ROCBackend},
         dt₀,
         phases::AbstractArray{Int, N},
         rheology,

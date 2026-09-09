@@ -30,7 +30,7 @@ directly, so the same solver code runs unmodified on CPU, CUDA, or AMDGPU
 
 ````@example diffusion2D_periodic
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end

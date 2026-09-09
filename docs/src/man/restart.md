@@ -11,13 +11,13 @@ Load JustRelax necessary modules and define backend.
 using CUDA # comment this out if you are not using CUDA; or load AMDGPU.jl if you are using an AMD GPU
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
-const backend_JR = CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JR = JustRelax.CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
 For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl)
 ```julia
 using JustPIC
-const backend = CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
+const backend = CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 ```
 
 !!! tip "Script"

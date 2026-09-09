@@ -33,7 +33,7 @@ end
 using Printf, LinearAlgebra, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
-include("Blankenbach_Rheology.jl")
+include(joinpath(@__DIR__, "Blankenbach_Rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 function copyinn_x!(A, B)

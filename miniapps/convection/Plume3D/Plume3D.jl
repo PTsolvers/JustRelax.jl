@@ -36,7 +36,7 @@ end
 
 using GeoParams, CairoMakie, Printf
 
-include("Plume3D_rheology.jl")
+include(joinpath(@__DIR__, "Plume3D_rheology.jl"))
 
 ## MAIN SCRIPT ----------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-include("SolCx_solution.jl")
+include(joinpath(@__DIR__, "SolCx_solution.jl"))
 
 function solCx_solution(geometry; η_left = 1, η_right = 1.0e6)
     # element center

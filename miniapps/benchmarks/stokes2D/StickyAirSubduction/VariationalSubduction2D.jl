@@ -34,7 +34,7 @@ using GeoParams
 using CairoMakie
 
 # Load file with all the rheology configurations
-include("VariationalSubduction2D_rheology.jl")
+include(joinpath(@__DIR__, "VariationalSubduction2D_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

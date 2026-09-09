@@ -34,7 +34,6 @@ using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
 using StaticArrays
 using ImplicitGlobalGrid
 using MPI: MPI
-using WriteVTK
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

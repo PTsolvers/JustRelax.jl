@@ -1,7 +1,7 @@
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
 
 # include benchmark related plotting and error functions
-include("vizSolKz.jl")
+include(joinpath(@__DIR__, "vizSolKz.jl"))
 
 function solKz_viscosity(xci, ni, di; B = log(1.0e6))
     xc, yc = xci

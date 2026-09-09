@@ -39,7 +39,7 @@ end
 
 using GeoParams, Printf
 
-include("Plume3D_rheology.jl")
+include(joinpath(@__DIR__, "Plume3D_rheology.jl"))
 
 import ParallelStencil.INDICES
 const idx_k = INDICES[3]

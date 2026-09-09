@@ -106,7 +106,7 @@ makedocs(;
         devbranch = "main",
         devurl = "dev",
     ),
-    modules = [JustRelax],
+    modules = [JustRelax, JustRelax.JustRelax2D, JustRelax.JustRelax3D, JustRelax.DataIO],
     checkdocs = :exports,
     # :missing_docs stays a warning: JustRelax2D.Data/JustRelax3D.Data are
     # ParallelStencil.@init_parallel_stencil-generated submodules whose docstring

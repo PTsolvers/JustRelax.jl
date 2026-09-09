@@ -302,7 +302,7 @@ solve_VariationalStokes!(
 
 The same weighted operator is available with dynamic relaxation. Build `DYREL`
 with the `RockRatio` and call `solve_VariationalDYREL!`; see
-[DYREL](./DYREL.md#2d-variational-dyrel). The variational DYREL path reuses the
+[DYREL](./DYREL.md#2D-variational-DYREL). The variational DYREL path reuses the
 center, vertex, and face weights described here and is 2D-only.
 
 Options may be given either as the plain keywords above or bundled as a single

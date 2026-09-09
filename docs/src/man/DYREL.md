@@ -86,7 +86,7 @@ dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0
 solve_VariationalDYREL!(
     stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
     rheology, args, grid, dt, igg;
-    air_phase,
+    air_phase = air_phase,
     linear_viscosity = true,
     free_surface = true,
     pressure_relaxation = 0.5,

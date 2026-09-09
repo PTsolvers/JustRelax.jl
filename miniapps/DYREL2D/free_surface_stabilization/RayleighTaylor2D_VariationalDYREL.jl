@@ -195,7 +195,7 @@ function main(igg, nx, ny)
     dt_max = 25.0e3 * (3600 * 24 * 365.25)
     dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
 
-    while it < 50#0 #00
+    while it < 200
 
         # Stokes solver ----------------
         result = solve_VariationalDYREL!(

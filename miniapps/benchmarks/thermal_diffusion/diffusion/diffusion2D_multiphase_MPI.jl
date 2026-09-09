@@ -89,7 +89,6 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
     ni = nx, ny
     li = lx, ly  # domain length in x- and y-
     origin = 0.0, -ly
-    # igg = IGG(init_global_grid(nx, ny, 1; init_MPI = true)...) #init MPI
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
     grid = Geometry(ni, li; origin = origin)
     (; xci, xvi) = grid # nodes at the center and vertices of the cells

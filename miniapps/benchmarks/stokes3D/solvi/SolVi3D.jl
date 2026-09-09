@@ -4,7 +4,7 @@ using ParallelStencil.FiniteDifferences3D
 #   D. W. Schmid and Y. Y. Podladchikov. Analytical solutions for deformable elliptical inclusions in
 #   general shear. Geophysical Journal International, 155(1):269–288, 2003.
 
-include("vizSolVi3D.jl")
+include(joinpath(@__DIR__, "vizSolVi3D.jl"))
 
 @parallel function smooth!(A2::AbstractArray{T, 3}, A::AbstractArray{T, 3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))

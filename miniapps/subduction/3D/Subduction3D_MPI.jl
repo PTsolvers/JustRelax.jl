@@ -34,8 +34,8 @@ using GeoParams, CairoMakie
 
 
 # Load file with all the rheology configurations
-include("Subduction3D_rheology.jl")
-include("Subduction3D_setup_MPI.jl")
+include(joinpath(@__DIR__, "Subduction3D_rheology.jl"))
+include(joinpath(@__DIR__, "Subduction3D_setup_MPI.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

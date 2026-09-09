@@ -34,11 +34,11 @@ end
 # http://dx.doi.org/10.1002/2014GL060438
 
 
-using Printf, LinearAlgebra, GeoParams, CellArrays
+using Printf, LinearAlgebra, GeoParams
 using CairoMakie
 
 # Load file with all the rheology configurations
-include("Shearheating_rheology.jl")
+include(joinpath(@__DIR__, "Shearheating_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

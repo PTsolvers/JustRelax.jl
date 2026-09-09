@@ -23,9 +23,6 @@ else
 end
 
 # Load script dependencies
-# using CairoMakie
-
-
 using GeoParams
 
 using CairoMakie

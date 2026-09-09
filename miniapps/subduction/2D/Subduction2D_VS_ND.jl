@@ -34,8 +34,8 @@ using GeoParams, GLMakie
 
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
-include("Subduction2D_rheology_ND.jl")
+include(joinpath(@__DIR__, "Subduction2D_setup.jl"))
+include(joinpath(@__DIR__, "Subduction2D_rheology_ND.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

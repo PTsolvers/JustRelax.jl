@@ -19,22 +19,11 @@ The simulation writes one figure per time step to `ShearBands2D/`.
 
 ## Imports and backends
 
-The model runs on the threaded CPU backend for both JustRelax and JustPIC; set
-`isCUDA = true` to run the same model on an NVIDIA GPU. `ParallelStencil`
-supplies the device-agnostic phase-initialization kernel, `GeoParams` defines
-the material behavior, and CairoMakie writes the figures.
+The model uses the threaded CPU backend for both JustRelax and JustPIC.
+`ParallelStencil` supplies the device-agnostic phase-initialization kernel,
+`GeoParams` defines the material behavior, and CairoMakie writes the figures.
 
 ````julia
-const isCUDA = false
-````
-
-const isCUDA = true
-
-````julia
-@static if isCUDA
-    using CUDA
-end
-
 using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
@@ -59,8 +48,17 @@ const backend_JP = @static if isCUDA
 else
     JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
+````
+
+Load script dependencies
+
+````julia
+using GeoParams, CairoMakie
+
 
 import JustPIC.GridGeometryUtils as GGU
+
+const backend_JP = JustPIC.CPU
 ````
 
 ## Helper functions

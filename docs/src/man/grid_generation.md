@@ -13,6 +13,10 @@ For most workflows you either build a uniform grid from the number of cells and 
 
 Use `Geometry(ni, li; origin = ...)` to create a uniform grid:
 
+<!-- Not an @example block: the Getting started page runs init_global_grid, so a
+     Geometry(ni, li) evaluated during the build reports the spacing of that global
+     grid rather than of ni. -->
+
 ```julia
 using JustRelax
 
@@ -35,7 +39,7 @@ In serial, the grid covers the full domain directly. If `ImplicitGlobalGrid` is 
 
 Use explicit vertex coordinates when you want local refinement or nonuniform spacing:
 
-```julia
+```@example grid
 using JustRelax
 
 xv = [0.0, 0.1, 0.2, 0.4, 0.7, 1.0]
@@ -59,8 +63,9 @@ This constructor derives:
 
 The vertex coordinates are passed as a tuple. If you want the coordinate arrays stored in a specific array type, pass an array constructor as the first argument, in which case the coordinates are given as separate arguments:
 
-```julia
+```@example grid
 grid = Geometry(Array, xv, yv)
+grid.xvi[1]
 ```
 
 ## MPI-distributed grids

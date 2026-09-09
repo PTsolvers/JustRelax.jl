@@ -1,9 +1,14 @@
 # Miniapps
 
 Runnable example scripts exercising JustRelax.jl on concrete problems, grouped
-by folder. None of these are (yet) built into the documentation — clone the
-repo, `]activate --temp` (or use the project's own `Project.toml`), and run a
-script directly, for example:
+by folder. They have their own environment, `miniapps/Project.toml`, which is
+separate from the package environment and has to be instantiated once:
+
+```sh
+julia --project=miniapps -e 'using Pkg; Pkg.instantiate()'
+```
+
+A script is then run directly against that environment:
 
 ```sh
 julia --project=miniapps --startup-file=no miniapps/benchmarks/thermal_diffusion/diffusion/diffusion2D.jl
@@ -11,11 +16,12 @@ julia --project=miniapps --startup-file=no miniapps/benchmarks/thermal_diffusion
 
 Add `-p n` or an MPI launcher for the `_MPI` variants.
 
-## Validation
-
-- CPU syntax parsing: changed Julia drivers pass.
-- Include-path audit: all local includes use `@__DIR__`.
-- MPI, CUDA, and AMDGPU runs: not run in this environment.
+Three of these scripts are also the source of documentation pages, generated
+with Literate.jl by `docs/make.jl`:
+`benchmarks/thermal_diffusion/diffusion/diffusion2D_periodic.jl`,
+`benchmarks/stokes2D/shear_band/ShearBand2D.jl`, and
+`benchmarks/stokes2D/Blankenbach2D/Benchmark2D_sgd.jl`. Edits to them change
+the corresponding page.
 
 ## `benchmarks/stokes2D/` — 2D Stokes flow benchmarks
 

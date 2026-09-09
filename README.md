@@ -1,8 +1,8 @@
 <h1><img src="./docs/src/assets/logo.png" alt="JustRelax.jl" width="50"> JustRelax.jl</h1>
 
-[![Documentation (stable)](https://img.shields.io/badge/docs-stable-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/stable/)
-[![Documentation (dev)](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
-[![Version](https://docs.juliahub.com/General/JustRelax/stable/version.svg)](https://juliahub.com/ui/Packages/General/JustRelax)
+[![Stable Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/stable/)
+[![Dev Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://ptsolvers.github.io/JustRelax.jl/dev/)
+[![Version](https://juliahub.com/docs/General/JustRelax/stable/version.svg)](https://juliahub.com/ui/Packages/General/JustRelax)
 [![Ask us anything](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg)](https://github.com/PTsolvers/JustRelax.jl/discussions/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10212422.svg)](https://doi.org/10.5281/zenodo.10212422)
 [![JOSS](https://joss.theoj.org/papers/10.21105/joss.09365/status.svg)](https://doi.org/10.21105/joss.09365)
@@ -22,7 +22,7 @@
 JustRelax.jl is a Julia package for geodynamic modeling with matrix-free, accelerated pseudo-transient solvers. It supports two- and three-dimensional applications on CPUs and GPUs, including distributed-memory runs with MPI.
 
 JustRelax.jl supports Julia 1.10 through 1.12. Start with the CPU backend, then
-use the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend/)
+use the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend)
 to configure CUDA, AMDGPU, or MPI workflows.
 
 The package is part of the [PTSolvers organisation](https://ptsolvers.github.io/) and was developed within the [GPU4GEO project](https://www.pasc.ch/projects/2021-2024/gpu4geo/). For an overview of the methods and examples, see the [documentation](https://ptsolvers.github.io/JustRelax.jl/dev/).
@@ -64,7 +64,7 @@ The package can be loaded with:
 using JustRelax
 ```
 
-See the [installation guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/installation/) for testing the installation and for running the miniapps, and the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend/) for CUDA, AMDGPU, and MPI setup.
+See the [installation guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/installation) for testing the installation and for running the miniapps, and the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend) for CUDA, AMDGPU, and MPI setup.
 
 ## Quick start
 
@@ -84,7 +84,7 @@ thermal   = ThermalArrays(backend, ni)     # temperature, fluxes, heat sources
 pt_stokes = PTStokesCoeffs(li, grid.di.center; ϵ_rel = 1.0e-6, CFL = 0.9 / √2.1)
 ```
 
-Three-dimensional models use `JustRelax.JustRelax3D` and a three-element `ni`/`li`. From here, a model adds a rheology, boundary conditions, and a time loop calling `solve!` and `heatdiffusion_PT!`; the [getting-started walkthrough](https://ptsolvers.github.io/JustRelax.jl/dev/man/diffusion2D_periodic/) builds one end to end.
+Three-dimensional models use `JustRelax.JustRelax3D` and a three-element `ni`/`li`. From here, a model adds a rheology, boundary conditions, and a time loop calling `solve!` and `heatdiffusion_PT!`; the [getting-started walkthrough](https://ptsolvers.github.io/JustRelax.jl/dev/man/diffusion2D_periodic) builds one end to end.
 
 ## Testing
 
@@ -105,7 +105,7 @@ For local development, activate the repository and run the same command:
 
 The [`miniapps/`](miniapps) directory contains small, focused examples and benchmark problems covering convection, thermal diffusion, Stokes flow, shear heating, subduction, and more. They are intended as starting points for application codes and as reference cases for performance experiments.
 
-Most examples run on a single node. They can be extended to multiple nodes with [MPI.jl](https://github.com/JuliaParallel/MPI.jl) and [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl). The documentation also includes guided examples for [Blankenbach convection](https://ptsolvers.github.io/JustRelax.jl/dev/man/Blankenbach/), [shear bands](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBand2D/), and [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/setup/).
+Most examples run on a single node. They can be extended to multiple nodes with [MPI.jl](https://github.com/JuliaParallel/MPI.jl) and [ImplicitGlobalGrid.jl](https://github.com/omlins/ImplicitGlobalGrid.jl). The documentation also includes guided examples for [Blankenbach convection](https://ptsolvers.github.io/JustRelax.jl/dev/man/Blankenbach), [shear bands](https://ptsolvers.github.io/JustRelax.jl/dev/man/ShearBand2D), and [2D subduction](https://ptsolvers.github.io/JustRelax.jl/dev/man/subduction2D/setup).
 
 ## Contributing
 

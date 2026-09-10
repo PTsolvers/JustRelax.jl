@@ -32,7 +32,7 @@ end
 # Load script dependencies
 # const backend = CPUBackend
 
-using Printf, GeoParams, CairoMakie, CellArrays
+using Printf, GeoParams, CairoMakie
 
 # const backend_JP = JustPIC.CPU
 

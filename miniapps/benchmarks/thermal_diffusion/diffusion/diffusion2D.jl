@@ -23,11 +23,8 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CellArrays
+using Printf, LinearAlgebra, GeoParams
 
-
-# using JustPIC
-# const backend = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 @parallel_indices (i, j) function init_T!(T, z)
     if z[j] == maximum(z)

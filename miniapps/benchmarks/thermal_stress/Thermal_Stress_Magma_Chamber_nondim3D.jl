@@ -30,11 +30,9 @@ else
 end
 
 # Load script dependencies
-using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
-using StaticArrays
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
 using ImplicitGlobalGrid
 using MPI: MPI
-using WriteVTK
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 

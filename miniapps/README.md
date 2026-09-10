@@ -1,10 +1,27 @@
 # Miniapps
 
 Runnable example scripts exercising JustRelax.jl on concrete problems, grouped
-by folder. None of these are (yet) built into the documentation — clone the
-repo, `]activate --temp` (or use the project's own `Project.toml`), and run a
-script directly with `julia --project script.jl` (add `-p n`/an MPI launcher
-for the `_MPI` variants).
+by folder. They have their own environment, `miniapps/Project.toml`, which is
+separate from the package environment and has to be instantiated once:
+
+```sh
+julia --project=miniapps -e 'using Pkg; Pkg.instantiate()'
+```
+
+A script is then run directly against that environment:
+
+```sh
+julia --project=miniapps --startup-file=no miniapps/benchmarks/thermal_diffusion/diffusion/diffusion2D.jl
+```
+
+Add `-p n` or an MPI launcher for the `_MPI` variants.
+
+Three of these scripts are also the source of documentation pages, generated
+with Literate.jl by `docs/make.jl`:
+`benchmarks/thermal_diffusion/diffusion/diffusion2D_periodic.jl`,
+`benchmarks/stokes2D/shear_band/ShearBand2D.jl`, and
+`benchmarks/stokes2D/Blankenbach2D/Benchmark2D_sgd.jl`. Edits to them change
+the corresponding page.
 
 ## `benchmarks/stokes2D/` — 2D Stokes flow benchmarks
 
@@ -88,7 +105,7 @@ solver" docs page).
 - `StickyAirSubduction/` — sticky-air subduction (`Subduction2D.jl` and DYREL/non-dimensionalized variants; setup/rheology alongside).
 - `convection/` — layered convection with DYREL (`GlobalConvection2D_DYREL_refined.jl`,
   `Layered_convection2D_DYREL.jl`, `Layered_convection2D_DYREL_refined.jl`; rheology in
-  `Layered_rheology.jl`/`GlobalConvectionrheology .jl`).
+  `Layered_rheology.jl`/`GlobalConvection_rheology.jl`).
 - `shear_band/` — shear localization with DYREL (`ShearBand2D_DYREL.jl`, MPI and
   simple-shear-periodic variants, power-law variant).
 - `shear_heating/Shearheating2D_DYREL.jl` — shear heating with DYREL (rheology in `Shearheating_rheology.jl`).

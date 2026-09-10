@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 
 
 import JustPIC.GridGeometryUtils as GGU

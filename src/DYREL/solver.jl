@@ -35,6 +35,13 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
   history-dependent state. Default: `false`.
+- `η_multiplier`: Optional cell-wise viscosity scaling, given as a named tuple
+  `(; center, vertex)` of arrays matching `stokes.viscosity.η` and `.ηv`. Applied right after
+  the rheology-driven `compute_viscosity!` and before the DYREL coefficients are built, so
+  the preconditioner stays consistent with the scaled viscosity. Used for a gradient-test to verify
+  adjoint gradients. Pair it with `linear_viscosity = true`, otherwise the in-loop τII viscosity
+  refresh overwrites it.
+  Default: `nothing`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs...)
@@ -71,6 +78,7 @@ function _solve_DYREL!(
         free_surface = false,
         adjoint = false,
         observation = nothing,
+        η_multiplier = nothing,
         kwargs...,
     ) where {N}
 
@@ -124,6 +132,13 @@ function _solve_DYREL!(
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    # impose a cell-wise viscosity scaling the per-phase rheology cannot express. This has to
+    # happen before `DYREL!`, so that the Gershgorin bounds and the preconditioner are built
+    # from the viscosity the solve actually uses.
+    if !isnothing(η_multiplier)
+        stokes.viscosity.η .*= η_multiplier.center
+        stokes.viscosity.ηv .*= η_multiplier.vertex
+    end
     compute_ρg!(ρg[end], phase_ratios, rheology, args)
     DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt)
     if free_surface

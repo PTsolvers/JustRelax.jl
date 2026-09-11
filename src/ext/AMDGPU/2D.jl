@@ -11,7 +11,6 @@ using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
 using Statistics
 using MPI
-using Statistics
 
 import JustRelax.JustRelax2D as JR2D
 

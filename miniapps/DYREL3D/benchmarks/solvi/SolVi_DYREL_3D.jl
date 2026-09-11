@@ -11,12 +11,6 @@ include("viz_SolVi_DYREL_3D.jl")
     return nothing
 end
 
-# Keep the smoothed viscosity below, just as the original Stokes benchmark does.
-const SolViArgs = NamedTuple{(:T, :P, :dt, :prescribed_viscosity)}
-JustRelax.JustRelax3D.compute_viscosity!(
-    _stokes::JustRelax.StokesArrays, _phase_ratios, _args::SolViArgs, _rheology, _cutoff; _kwargs...
-) = nothing
-
 @parallel function smooth!(A2::AbstractArray{T, 3}, A::AbstractArray{T, 3}, fact::T) where {T}
     @inn(A2) = @inn(A) + one(T) / 6.1 / fact * (@d2_xi(A) + @d2_yi(A) + @d2_zi(A))
     return nothing
@@ -155,6 +149,7 @@ function solVi3D(;
                 verbose_PH = true,
                 verbose_DR = false,
                 linear_viscosity = true,
+                update_material = false,
             ),
         )
         t += Δt

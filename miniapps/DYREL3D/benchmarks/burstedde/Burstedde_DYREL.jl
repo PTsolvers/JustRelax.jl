@@ -12,15 +12,6 @@ include("viz_Burstedde_DYREL.jl")
     return nothing
 end
 
-# Keep the analytical fields below, just as the original Stokes benchmark does.
-const BursteddeArgs = NamedTuple{(:T, :P, :dt, :prescribed_viscosity, :prescribed_body_force)}
-JustRelax.JustRelax3D.compute_viscosity!(
-    _stokes::JustRelax.StokesArrays, _phase_ratios, _args::BursteddeArgs, _rheology, _cutoff; _kwargs...
-) = nothing
-JustRelax.JustRelax3D.compute_ρg!(
-    _ρg, _phase_ratios::JustPIC.PhaseRatios, _rheology, _args::BursteddeArgs
-) = nothing
-
 @parallel_indices (i, j, k) function _viscosity!(η, x, y, z, β)
     η[i, j, k] = exp(1 - β * (x[i] * (1 - x[i]) + y[j] * (1 - y[j]) + z[k] * (1 - z[k])))
 
@@ -243,6 +234,7 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
                 rel_drop = 5.0e-3,
                 b_width = (4, 4, 4),
                 linear_viscosity = true,
+                update_material = false,
                 verbose_PH = true,
                 verbose_DR = false,
             )

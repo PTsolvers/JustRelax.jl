@@ -130,10 +130,12 @@ end
             kwargs = (;
                 verbose_PH = false,
                 verbose_DR = false,
-                iterMax = 5.0e3,
+                iterMax_PH = 1.0e3,
+                iterMax_DR = 5.0e3,
                 total_iterMax = 5.0e3,
                 nout = 20,
                 rel_drop = 0.1,
+                pressure_relaxation = 1.0,
                 viscosity_relaxation = 1.0,
                 linear_viscosity = true,
                 free_surface = true,

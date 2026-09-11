@@ -380,7 +380,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 150.0e3,
+                iterMax_DR = 150.0e3,
                 total_iterMax = 150.0e3,
                 nout = 1,
                 rel_drop = 1.0e-2,

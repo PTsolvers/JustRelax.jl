@@ -170,7 +170,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                 kwargs = (;
                     verbose_PH = true,
                     verbose_DR = false,
-                    iterMax = 50.0e3,
+                    iterMax_DR = 50.0e3,
                     nout = 10,
                     rel_drop = 1.0e-2,
                     λ_relaxation_PH = 1,

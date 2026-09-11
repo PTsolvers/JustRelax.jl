@@ -185,7 +185,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
             kwargs = (;
                 verbose_PH = false,
                 verbose_DR = false,
-                iterMax = 50.0e3,
+                iterMax_DR = 50.0e3,
                 nout = 100,
                 rel_drop = 0.1,
                 λ_relaxation_DR = 1,

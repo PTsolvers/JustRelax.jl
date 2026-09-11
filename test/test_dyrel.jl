@@ -49,6 +49,11 @@ end
         @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
+
+        dyrel_forwarded = JustRelax2D.DYREL(backend_JR, nx, ny; CFL = 0.7, γfact = 31.0)
+        @test size(dyrel_forwarded.Dy) == (nx, ny - 1)
+        @test dyrel_forwarded.CFL === 0.7
+        @test dyrel_forwarded.γfact === 31.0
     end
 
     @testset "update_α_β! 2D" begin

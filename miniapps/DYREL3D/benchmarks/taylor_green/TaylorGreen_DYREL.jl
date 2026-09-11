@@ -172,7 +172,7 @@ function taylorGreen(;
             dt,
             igg;
             kwargs = (;
-                iterMax = 50.0e3,
+                iterMax_DR = 50.0e3,
                 total_iterMax = 50.0e3,
                 nout = 20,
                 rel_drop = 0.1,

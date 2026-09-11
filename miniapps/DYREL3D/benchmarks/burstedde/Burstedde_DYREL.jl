@@ -228,7 +228,7 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
             dt,
             igg;
             kwargs = (;
-                iterMax = 50.0e3,
+                iterMax_DR = 50.0e3,
                 total_iterMax = 50.0e3,
                 nout = 1,
                 rel_drop = 5.0e-3,

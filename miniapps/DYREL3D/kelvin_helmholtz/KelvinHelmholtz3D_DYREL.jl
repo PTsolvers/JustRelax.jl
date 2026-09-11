@@ -57,7 +57,7 @@ else
     JustPIC.CPU
 end
 
-using GeoParams, CairoMakie, Printf
+using GeoParams, GLMakie, Printf
 
 const Myr = 1.0e6 * 3600 * 24 * 365.25
 
@@ -242,7 +242,7 @@ function main3D(igg; nx = 64, ny = 16, nz = 16, figdir = "KelvinHelmholtz3D", do
                 kwargs = (;
                     verbose_PH = true,
                     verbose_DR = false,
-                    iterMax = 50.0e3,
+                    iterMax_DR = 50.0e3,
                     total_iterMax = 50.0e3,
                     nout = 1,
                     rel_drop = 1.0e-2,

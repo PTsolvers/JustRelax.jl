@@ -182,7 +182,7 @@ function main3D(
             kwargs = (;
                 verbose_PH = true,
                 verbose_DR = false,
-                iterMax = 50.0e3,
+                iterMax_DR = 50.0e3,
                 total_iterMax = 50.0e3,
                 nout = 50,
                 rel_drop = 0.5,

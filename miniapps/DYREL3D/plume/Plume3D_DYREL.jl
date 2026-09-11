@@ -164,7 +164,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
                 kwargs = (;
                     verbose_PH = true,
                     verbose_DR = false,
-                    iterMax = 100.0e3,
+                    iterMax_DR = 100.0e3,
                     total_iterMax = 100.0e3,
                     nout = 1,
                     rel_drop = 1.0e-2,

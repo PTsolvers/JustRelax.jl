@@ -116,8 +116,12 @@ end
         stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
         stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
 
-        dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt; γfact = 37.0)
+        dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt; CFL = 0.61, γfact = 37.0)
         JR3K.DYREL!(dyrel, stokes, local_rheology, local_phases, grid.di, local_dt)
+        @test all(
+            pair -> all(Array(pair[1] .^ 2 .* pair[2]) .≈ 4 * dyrel.CFL^2),
+            zip((dyrel.dτVx, dyrel.dτVy, dyrel.dτVz), (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz)),
+        )
         @test dyrel.γfact === 37.0
         @test all(Array(dyrel.ηb) .≈ 5.0)
         @test all(Array(dyrel.γ_eff) .≈ 5.0 * 37.0 / (5.0 + 37.0))
@@ -406,7 +410,7 @@ end
         η_host = [10.0^mod(i + 2j + 3k, 4) for i in 1:ni[1], j in 1:ni[2], k in 1:ni[3]]
         γ_host = [isodd(i + j + k) ? 0.01 : 1000.0 for i in 1:ni[1], j in 1:ni[2], k in 1:ni[3]]
         copyto!(stokes.viscosity.η, η_host)
-        grid = Geometry(ni, Float64.(ni))
+        grid = Geometry(ni, (1.7, 2.9, 5.3))
         dyrel = JustRelax3D.DYREL(backend_JR, ni; CFL = 0.99)
         copyto!(dyrel.γ_eff, γ_host)
         gersh_rheology = (
@@ -429,42 +433,49 @@ end
         ηxz(i, j, k) = JustRelax.JustRelax3D._ηve_xz(η_host, xz, gersh_rheology, dt, ni, i, j, k)
         ηxy(i, j, k) = JustRelax.JustRelax3D._ηve_xy(η_host, xy, gersh_rheology, dt, ni, i, j, k)
         i, j, k = 2, 2, 3
+        _dx, _dy, _dz = grid._di.center
+        _dx2, _dy2, _dz2 = _dx^2, _dy^2, _dz^2
+        _dxdy, _dxdz, _dydz = _dx * _dy, _dx * _dz, _dy * _dz
 
         ηW, ηE = ηc(i, j, k), ηc(i + 1, j, k)
         ηS, ηN = ηxy(i + 1, j, k), ηxy(i + 1, j + 1, k)
         ηB, ηF = ηxz(i + 1, j, k), ηxz(i + 1, j, k + 1)
         γW, γE = γ_host[i, j, k], γ_host[i + 1, j, k]
-        expected_Dx = ηN + ηS + ηB + ηF + γE + γW + 4 / 3 * (ηE + ηW)
-        expected_Cx = abs(γE + 4 / 3 * ηE) + abs(γW + 4 / 3 * ηW) +
-            abs(ηN) + abs(ηS) + abs(ηB) + abs(ηF) +
-            abs(γE - 2 / 3 * ηE + ηN) + abs(γE - 2 / 3 * ηE + ηS) +
-            abs(γW + ηN - 2 / 3 * ηW) + abs(γW + ηS - 2 / 3 * ηW) +
-            abs(γE + ηB - 2 / 3 * ηE) + abs(γW + ηB - 2 / 3 * ηW) +
-            abs(γE - 2 / 3 * ηE + ηF) + abs(γW + ηF - 2 / 3 * ηW) + abs(expected_Dx)
+        expected_Dx = (ηN + ηS) * _dy2 + (ηB + ηF) * _dz2 +
+            (γE + γW + 4 / 3 * (ηE + ηW)) * _dx2
+        expected_Cx = abs((γE + 4 / 3 * ηE) * _dx2) + abs((γW + 4 / 3 * ηW) * _dx2) +
+            abs(ηN * _dy2) + abs(ηS * _dy2) + abs(ηB * _dz2) + abs(ηF * _dz2) +
+            abs((γE - 2 / 3 * ηE + ηN) * _dxdy) + abs((γE - 2 / 3 * ηE + ηS) * _dxdy) +
+            abs((γW + ηN - 2 / 3 * ηW) * _dxdy) + abs((γW + ηS - 2 / 3 * ηW) * _dxdy) +
+            abs((γE + ηB - 2 / 3 * ηE) * _dxdz) + abs((γW + ηB - 2 / 3 * ηW) * _dxdz) +
+            abs((γE - 2 / 3 * ηE + ηF) * _dxdz) + abs((γW + ηF - 2 / 3 * ηW) * _dxdz) + abs(expected_Dx)
 
         ηW, ηE = ηxy(i, j + 1, k), ηxy(i + 1, j + 1, k)
         ηS, ηN = ηc(i, j, k), ηc(i, j + 1, k)
         ηB, ηF = ηyz(i, j + 1, k), ηyz(i, j + 1, k + 1)
         γS, γN = γ_host[i, j, k], γ_host[i, j + 1, k]
-        expected_Dy = ηE + ηW + ηB + ηF + γN + γS + 4 / 3 * (ηN + ηS)
-        expected_Cy = abs(ηE) + abs(ηW) + abs(γN + 4 / 3 * ηN) + abs(γS + 4 / 3 * ηS) +
-            abs(ηB) + abs(ηF) +
-            abs(γN + ηE - 2 / 3 * ηN) + abs(γS + ηE - 2 / 3 * ηS) +
-            abs(γN - 2 / 3 * ηN + ηW) + abs(γS - 2 / 3 * ηS + ηW) +
-            abs(γN + ηB - 2 / 3 * ηN) + abs(γS + ηB - 2 / 3 * ηS) +
-            abs(γN + ηF - 2 / 3 * ηN) + abs(γS + ηF - 2 / 3 * ηS) + abs(expected_Dy)
+        expected_Dy = (ηE + ηW) * _dx2 + (ηB + ηF) * _dz2 +
+            (γN + γS + 4 / 3 * (ηN + ηS)) * _dy2
+        expected_Cy = abs(ηE * _dx2) + abs(ηW * _dx2) +
+            abs((γN + 4 / 3 * ηN) * _dy2) + abs((γS + 4 / 3 * ηS) * _dy2) +
+            abs(ηB * _dz2) + abs(ηF * _dz2) +
+            abs((γN + ηE - 2 / 3 * ηN) * _dxdy) + abs((γS + ηE - 2 / 3 * ηS) * _dxdy) +
+            abs((γN - 2 / 3 * ηN + ηW) * _dxdy) + abs((γS - 2 / 3 * ηS + ηW) * _dxdy) +
+            abs((γN + ηB - 2 / 3 * ηN) * _dydz) + abs((γS + ηB - 2 / 3 * ηS) * _dydz) +
+            abs((γN + ηF - 2 / 3 * ηN) * _dydz) + abs((γS + ηF - 2 / 3 * ηS) * _dydz) + abs(expected_Dy)
 
         ηW, ηE = ηxz(i, j, k + 1), ηxz(i + 1, j, k + 1)
         ηS, ηN = ηyz(i, j, k + 1), ηyz(i, j + 1, k + 1)
         ηB, ηF = ηc(i, j, k), ηc(i, j, k + 1)
         γB, γF = γ_host[i, j, k], γ_host[i, j, k + 1]
-        expected_Dz = ηE + ηW + ηN + ηS + γB + γF + 4 / 3 * (ηB + ηF)
-        expected_Cz = abs(ηE) + abs(ηW) + abs(ηN) + abs(ηS) +
-            abs(γB + 4 / 3 * ηB) + abs(γF + 4 / 3 * ηF) +
-            abs(γB - 2 / 3 * ηB + ηE) + abs(γB - 2 / 3 * ηB + ηW) +
-            abs(γF + ηE - 2 / 3 * ηF) + abs(γF - 2 / 3 * ηF + ηW) +
-            abs(γB - 2 / 3 * ηB + ηN) + abs(γB - 2 / 3 * ηB + ηS) +
-            abs(γF - 2 / 3 * ηF + ηN) + abs(γF - 2 / 3 * ηF + ηS) + abs(expected_Dz)
+        expected_Dz = (ηE + ηW) * _dx2 + (ηN + ηS) * _dy2 +
+            (γB + γF + 4 / 3 * (ηB + ηF)) * _dz2
+        expected_Cz = abs(ηE * _dx2) + abs(ηW * _dx2) + abs(ηN * _dy2) + abs(ηS * _dy2) +
+            abs((γB + 4 / 3 * ηB) * _dz2) + abs((γF + 4 / 3 * ηF) * _dz2) +
+            abs((γB - 2 / 3 * ηB + ηE) * _dxdz) + abs((γB - 2 / 3 * ηB + ηW) * _dxdz) +
+            abs((γF + ηE - 2 / 3 * ηF) * _dxdz) + abs((γF - 2 / 3 * ηF + ηW) * _dxdz) +
+            abs((γB - 2 / 3 * ηB + ηN) * _dydz) + abs((γB - 2 / 3 * ηB + ηS) * _dydz) +
+            abs((γF - 2 / 3 * ηF + ηN) * _dydz) + abs((γF - 2 / 3 * ηF + ηS) * _dydz) + abs(expected_Dz)
 
         D = map(Array, (dyrel.Dx, dyrel.Dy, dyrel.Dz))
         λmax = map(Array, (dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz))

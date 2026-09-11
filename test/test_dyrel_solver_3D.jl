@@ -125,14 +125,6 @@ end
         @test Array(linear_stokes.τ.yz)[2, 2, 2] ≈
             2 * length(ηyz) / sum(inv, ηyz)
 
-        @test_throws ErrorException solve_DYREL!(
-            stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
-            kwargs = (;
-                free_surface = true,
-                verbose_PH = false,
-                verbose_DR = false,
-            ),
-        )
         out = solve_DYREL!(
             stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
             kwargs = (;
@@ -144,6 +136,7 @@ end
                 rel_drop = 0.1,
                 viscosity_relaxation = 1.0,
                 linear_viscosity = true,
+                free_surface = true,
             ),
         )
 

@@ -122,4 +122,22 @@ end
         expected_dτ = 2 / sqrt(4.0) * dyrel.CFL
         @test all(A -> all(Array(A) .≈ expected_dτ), dτV)
     end
+
+    @testset "free-surface diagonal 3D" begin
+        nx, ny, nz = 5, 4, 4
+        grid = Geometry((nx, ny, nz), (1.0, 1.0, 1.0))
+        Dz = @ones(nx, ny, nz - 1) .* 4.0
+        λmaxVz = @ones(nx, ny, nz - 1) .* 3.0
+        ρgz = @zeros(nx, ny, nz)
+        ρgz[:, :, 1:2] .= 3.0
+        ρgz[:, :, 3:end] .= 1.0
+
+        JustRelax3D.apply_free_surface_diagonal!(Dz, λmaxVz, ρgz, grid.di.center, 0.5)
+
+        c_fs = -0.5 * (1.0 - 3.0) / grid.di.center[3]
+        @test all(Array(Dz[:, :, 2]) .≈ 4.0 + c_fs)
+        @test all(Array(λmaxVz[:, :, 2]) .≈ (12.0 + c_fs) / (4.0 + c_fs))
+        @test all(Array(Dz[:, :, 1]) .≈ 4.0)
+        @test all(Array(Dz[:, :, 3]) .≈ 4.0)
+    end
 end

@@ -33,6 +33,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `update_material`: Recompute viscosity and buoyancy from `rheology`. Set to `false` when
+  those fields are prescribed by the caller. Default: `true`.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
     out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
@@ -66,6 +68,7 @@ function _solve_DYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         free_surface = false,
+        update_material = true,
         kwargs...,
     ) where {N}
 
@@ -116,19 +119,20 @@ function _solve_DYREL!(
     θc = dyrel.P_num
 
     # recompute all the DYREL variables
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-    compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    if update_material
+        compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+        compute_ρg!(ρg[end], phase_ratios, rheology, args)
+    end
     DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt; CFL = dyrel.CFL)
     if free_surface
-        N == 2 || error("DYREL free-surface stabilization currently supports only 2D")
-        apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
+        apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], grid.di.center, dt)
         update_dτV_α_β!(dyrel)
     end
 
     # Powell-Hestenes iterations
     for itPH in 1:1000
         # update buoyancy forces
-        update_ρg!(ρg, phase_ratios, rheology, args)
+        update_material && update_ρg!(ρg, phase_ratios, rheology, args)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass
         # isone(itPH) &&
@@ -207,15 +211,6 @@ function _solve_DYREL!(
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
             compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             update_stress_halo!(stokes, dim, linear_viscosity)
-            # update_halo!(stokes.λv)
-            # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
-            # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
-            # stay consistent across ranks — matching the original stress→halo→viscosity ordering.
-            if linear_viscosity
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-            else
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
-            end
             free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
             # Velocity residuals + damped pseudo-transient velocity update (fused; the small pressure
@@ -270,7 +265,7 @@ function _solve_DYREL!(
 
                 # Optimal pseudo-time steps - can be replaced by AD
                 Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
-                free_surface && apply_free_surface_diagonal!(fields.D[2], fields.λmaxV[2], ρg[end], grid.di.center, dt)
+                free_surface && apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], grid.di.center, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -369,7 +364,8 @@ function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{2}, linear_vi
     return nothing
 end
 
-function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{3}, linear_viscosity)
+function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{3}, _linear_viscosity)
+    # The 3D momentum kernels use center viscosity directly; only edge shear stresses need halos.
     update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
     return nothing
 end

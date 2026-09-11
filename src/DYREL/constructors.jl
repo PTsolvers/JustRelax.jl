@@ -157,7 +157,7 @@ end
 
 
 """
-    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=0.99, γfact=dyrel.γfact)
+    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=dyrel.CFL, γfact=dyrel.γfact)
 
 Updates the fields of the `DYREL` struct in-place for the current time step.
 
@@ -172,12 +172,12 @@ This function recomputes:
 - `rheology`, `phase_ratios`: Material properties.
 - `di`: Grid spacing.
 - `dt`: Current time step.
-- `CFL`: Courant number (default: 0.99).
+- `CFL`: Courant number (default: the value stored in `dyrel`).
 - `γfact`: Penalty factor (default: the value stored in `dyrel`).
 
 Returns `nothing`.
 """
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = dyrel.γfact)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
     dim = Val(ndims(stokes.P))
 
     # compute bulk viscosity and penalty parameter
@@ -193,7 +193,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = 0.99, γfact = dyrel.γfact)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
     dim = Val(ndims(stokes.P))
 
     # compute bulk viscosity and penalty parameter

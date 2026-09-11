@@ -19,18 +19,19 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv,
 end
 
 """
-    apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+    apply_free_surface_diagonal!(Dn, λmaxVn, ρgn, di_center, dt)
 
-Add the 2D free-surface diagonal `-dt * ∂y(ρg)` to the vertical DYREL
-preconditioner and its Gershgorin row bound. Passing `dt = 0` is a no-op.
+Add the free-surface diagonal `-dt * ∂n(ρg)` to the normal DYREL preconditioner
+and its Gershgorin row bound. The normal direction is y in 2D and z in 3D.
+Passing `dt = 0` is a no-op.
 """
-function apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+function apply_free_surface_diagonal!(Dy::AbstractArray{<:Any, 2}, λmaxVy, ρgy, di_center, dt)
     ni = size(Dy)
-    @parallel (@idx ni) _apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+    @parallel (@idx ni) _apply_free_surface_diagonal_2D!(Dy, λmaxVy, ρgy, di_center, dt)
     return nothing
 end
 
-@parallel_indices (i, j) function _apply_free_surface_diagonal!(Dy, λmaxVy, ρgy, di_center, dt)
+@parallel_indices (i, j) function _apply_free_surface_diagonal_2D!(Dy, λmaxVy, ρgy, di_center, dt)
     @inbounds if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
         _dy = inv(@dy(di_center, j))
         j_N = min(j + 1, size(ρgy, 2))
@@ -40,6 +41,26 @@ end
         D_new = D_old + c_fs
         Dy[i, j] = D_new
         λmaxVy[i, j] = row_sum / D_new
+    end
+    return nothing
+end
+
+function apply_free_surface_diagonal!(Dz::AbstractArray{<:Any, 3}, λmaxVz, ρgz, di_center, dt)
+    ni = size(Dz)
+    @parallel (@idx ni) _apply_free_surface_diagonal_3D!(Dz, λmaxVz, ρgz, di_center, dt)
+    return nothing
+end
+
+@parallel_indices (i, j, k) function _apply_free_surface_diagonal_3D!(Dz, λmaxVz, ρgz, di_center, dt)
+    @inbounds if i ≤ size(Dz, 1) && j ≤ size(Dz, 2) && k ≤ size(Dz, 3)
+        _dz = inv(@dz(di_center, k))
+        k_T = min(k + 1, size(ρgz, 3))
+        c_fs = free_surface_diagonal(ρgz[i, j, k], ρgz[i, j, k_T], _dz, dt)
+        D_old = Dz[i, j, k]
+        row_sum = λmaxVz[i, j, k] * D_old + c_fs
+        D_new = D_old + c_fs
+        Dz[i, j, k] = D_new
+        λmaxVz[i, j, k] = row_sum / D_new
     end
     return nothing
 end
@@ -252,8 +273,10 @@ end
     )
 
     ni = size(η)
-    c13 = 1 / 3
+    c23 = 2 / 3
     c43 = 4 / 3
+    ηC = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+    γC = γ_eff[i, j, k]
 
     # DYREL D/λ arrays store active velocity updates; boundary values are enforced by flow_bcs! after the shifted update.
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2) && k ≤ size(Dx, 3)
@@ -266,40 +289,42 @@ end
         _dxdy = _dx * _dy
         _dxdz = _dx * _dz
 
-        ηW = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηW = ηC
         ηE = _ηve_center(η, phase_center, rheology, dt, i + 1, j, k)
         ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j, k)
         ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
         ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k)
         ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
-        γW = γ_eff[i, j, k]
+        γW = γC
         γE = γ_eff[i + 1, j, k]
+        γηW = γW + c43 * ηW
+        γηE = γE + c43 * ηE
+        γτW = γW - c23 * ηW
+        γτE = γE - c23 * ηE
 
         Dx_ijk = Dx[i, j, k] = @muladd(
             (ηN + ηS) * _dy2 +
                 (ηB + ηF) * _dz2 +
-                (γE + γW + c43 * (ηE + ηW)) * _dx2
+                (γηE + γηW) * _dx2
         )
 
+        # ηve and γ_eff are nonnegative, so only the mixed-component coefficients can change sign.
         Cx = @muladd(
-            abs((γE + c43 * ηE) * _dx2) +
-                abs((γW + c43 * ηW) * _dx2) +
-                abs(ηN * _dy2) +
-                abs(ηS * _dy2) +
-                abs(ηB * _dz2) +
-                abs(ηF * _dz2) +
-                abs((γE - (2 / 3) * ηE + ηN) * _dxdy) +
-                abs((γE - (2 / 3) * ηE + ηS) * _dxdy) +
-                abs((γW + ηN - (2 / 3) * ηW) * _dxdy) +
-                abs((γW + ηS - (2 / 3) * ηW) * _dxdy) +
-                abs((γE - (2 / 3) * ηE + ηB) * _dxdz) +
-                abs((γW + ηB - (2 / 3) * ηW) * _dxdz) +
-                abs((γE - (2 / 3) * ηE + ηF) * _dxdz) +
-                abs((γW + ηF - (2 / 3) * ηW) * _dxdz) +
-                abs(Dx_ijk)
+            (γηE + γηW) * _dx2 +
+                (ηN + ηS) * _dy2 +
+                (ηB + ηF) * _dz2 +
+                abs((γτE + ηN) * _dxdy) +
+                abs((γτE + ηS) * _dxdy) +
+                abs((γτW + ηN) * _dxdy) +
+                abs((γτW + ηS) * _dxdy) +
+                abs((γτE + ηB) * _dxdz) +
+                abs((γτW + ηB) * _dxdz) +
+                abs((γτE + ηF) * _dxdz) +
+                abs((γτW + ηF) * _dxdz) +
+                Dx_ijk
         )
 
-        λmaxVx[i, j, k] = Cx / Dx_ijk
+        λmaxVx[i, j, k] = Cx * inv(Dx_ijk)
     end
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2) && k ≤ size(Dy, 3)
@@ -314,38 +339,39 @@ end
 
         ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j + 1, k)
         ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
-        ηS = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηS = ηC
         ηN = _ηve_center(η, phase_center, rheology, dt, i, j + 1, k)
         ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k)
         ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
-        γS = γ_eff[i, j, k]
+        γS = γC
         γN = γ_eff[i, j + 1, k]
+        γηS = γS + c43 * ηS
+        γηN = γN + c43 * ηN
+        γτS = γS - c23 * ηS
+        γτN = γN - c23 * ηN
 
         Dy_ijk = Dy[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
                 (ηB + ηF) * _dz2 +
-                (γN + γS + c43 * (ηN + ηS)) * _dy2
+                (γηN + γηS) * _dy2
         )
 
         Cy = @muladd(
-            abs(ηE * _dx2) +
-                abs(ηW * _dx2) +
-                abs((γN + c43 * ηN) * _dy2) +
-                abs((γS + c43 * ηS) * _dy2) +
-                abs(ηB * _dz2) +
-                abs(ηF * _dz2) +
-                abs((γN + ηE - (2 / 3) * ηN) * _dxdy) +
-                abs((γS + ηE - (2 / 3) * ηS) * _dxdy) +
-                abs((γN - (2 / 3) * ηN + ηW) * _dxdy) +
-                abs((γS - (2 / 3) * ηS + ηW) * _dxdy) +
-                abs((γN - (2 / 3) * ηN + ηB) * _dydz) +
-                abs((γS - (2 / 3) * ηS + ηB) * _dydz) +
-                abs((γN - (2 / 3) * ηN + ηF) * _dydz) +
-                abs((γS - (2 / 3) * ηS + ηF) * _dydz) +
-                abs(Dy_ijk)
+            (ηE + ηW) * _dx2 +
+                (γηN + γηS) * _dy2 +
+                (ηB + ηF) * _dz2 +
+                abs((γτN + ηE) * _dxdy) +
+                abs((γτS + ηE) * _dxdy) +
+                abs((γτN + ηW) * _dxdy) +
+                abs((γτS + ηW) * _dxdy) +
+                abs((γτN + ηB) * _dydz) +
+                abs((γτS + ηB) * _dydz) +
+                abs((γτN + ηF) * _dydz) +
+                abs((γτS + ηF) * _dydz) +
+                Dy_ijk
         )
 
-        λmaxVy[i, j, k] = Cy / Dy_ijk
+        λmaxVy[i, j, k] = Cy * inv(Dy_ijk)
     end
 
     if i ≤ size(Dz, 1) && j ≤ size(Dz, 2) && k ≤ size(Dz, 3)
@@ -362,36 +388,37 @@ end
         ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
         ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k + 1)
         ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
-        ηB = _ηve_center(η, phase_center, rheology, dt, i, j, k)
+        ηB = ηC
         ηF = _ηve_center(η, phase_center, rheology, dt, i, j, k + 1)
-        γB = γ_eff[i, j, k]
+        γB = γC
         γF = γ_eff[i, j, k + 1]
+        γηB = γB + c43 * ηB
+        γηF = γF + c43 * ηF
+        γτB = γB - c23 * ηB
+        γτF = γF - c23 * ηF
 
         Dz_ijk = Dz[i, j, k] = @muladd(
             (ηE + ηW) * _dx2 +
                 (ηN + ηS) * _dy2 +
-                (γB + γF + c43 * (ηB + ηF)) * _dz2
+                (γηB + γηF) * _dz2
         )
 
         Cz = @muladd(
-            abs(ηE * _dx2) +
-                abs(ηW * _dx2) +
-                abs(ηN * _dy2) +
-                abs(ηS * _dy2) +
-                abs((γB + c43 * ηB) * _dz2) +
-                abs((γF + c43 * ηF) * _dz2) +
-                abs((γB - (2 / 3) * ηB + ηE) * _dxdz) +
-                abs((γB - (2 / 3) * ηB + ηW) * _dxdz) +
-                abs((γF - (2 / 3) * ηF + ηE) * _dxdz) +
-                abs((γF - (2 / 3) * ηF + ηW) * _dxdz) +
-                abs((γB - (2 / 3) * ηB + ηN) * _dydz) +
-                abs((γB - (2 / 3) * ηB + ηS) * _dydz) +
-                abs((γF - (2 / 3) * ηF + ηN) * _dydz) +
-                abs((γF - (2 / 3) * ηF + ηS) * _dydz) +
-                abs(Dz_ijk)
+            (ηE + ηW) * _dx2 +
+                (ηN + ηS) * _dy2 +
+                (γηB + γηF) * _dz2 +
+                abs((γτB + ηE) * _dxdz) +
+                abs((γτB + ηW) * _dxdz) +
+                abs((γτF + ηE) * _dxdz) +
+                abs((γτF + ηW) * _dxdz) +
+                abs((γτB + ηN) * _dydz) +
+                abs((γτB + ηS) * _dydz) +
+                abs((γτF + ηN) * _dydz) +
+                abs((γτF + ηS) * _dydz) +
+                Dz_ijk
         )
 
-        λmaxVz[i, j, k] = Cz / Dz_ijk
+        λmaxVz[i, j, k] = Cz * inv(Dz_ijk)
     end
 
     return nothing

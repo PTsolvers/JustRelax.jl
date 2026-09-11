@@ -1,5 +1,7 @@
+push!(LOAD_PATH, "..")
+
 using Test
-using JustRelax, JustRelax.JustRelax2D
+using JustRelax, JustRelax.JustRelax3D
 using GeoParams
 using StaticArrays
 
@@ -9,7 +11,7 @@ using StaticArrays
     Kb = 20.0
     dt = 0.25
 
-    elastic = ConstantElasticity(; G = G, Kb = Kb)
+    elastic = ConstantElasticity(; G, Kb)
     viscous = LinearViscous(; η = eta)
     rheology = (
         SetMaterialParams(;
@@ -19,21 +21,21 @@ using StaticArrays
         ),
     )
 
-    eps_ij = (0.1, -0.03, -0.07, 0.02, 0.03, -0.01) # xx, yy, zz, yz, xz, xy
+    eps_ij = (0.1, -0.03, -0.07, 0.02, 0.03, -0.01)
     tau_old = ntuple(_ -> 0.0, Val(6))
     phase_ratio = SVector(1.0)
 
-    out = JustRelax2D.compute_local_stress(
+    out = JustRelax3D.compute_local_stress(
         eps_ij,
         tau_old,
         eta,
-        0.0, # P
-        0.0, # lambda
-        1.0, # lambda relaxation
+        0.0,
+        0.0,
+        1.0,
         rheology,
         phase_ratio,
         dt,
-        0.0, # EII
+        0.0,
     )
 
     @test length(out) == 17

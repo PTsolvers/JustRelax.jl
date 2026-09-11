@@ -83,6 +83,31 @@ end
         @test all(A -> all(abs.(Array(A)) .< 1.0e-12), (stokes.ε.yz, stokes.ε.xz, stokes.ε.xy))
     end
 
+    @testset "3D shear-stress divergence stencil" begin
+        local_ni = 6, 5, 4
+        nx, ny, nz = local_ni
+        li = 1.7, 2.9, 5.3
+        grid = Geometry(local_ni, li)
+        stokes = StokesArrays(backend_JR, local_ni)
+        ρg = ntuple(_ -> @zeros(local_ni...), Val(3))
+
+        foreach(A -> fill!(A, 0.0), (stokes.P, stokes.ΔPψ, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz))
+        copyto!(stokes.τ.xy, [10i + 2j + 13k for i in 1:(nx + 1), j in 1:(ny + 1), k in 1:nz])
+        copyto!(stokes.τ.xz, [3i + 17j + 5k for i in 1:(nx + 1), j in 1:ny, k in 1:(nz + 1)])
+        copyto!(stokes.τ.yz, [19i + 7j + 11k for i in 1:nx, j in 1:(ny + 1), k in 1:(nz + 1)])
+
+        @parallel (@idx local_ni) JR3K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.R.Rz,
+            stokes.P, stokes.ΔPψ, @stress(stokes)..., ρg...,
+            grid._di.center, grid._di.vertex,
+        )
+
+        idx, idy, idz = local_ni ./ li
+        @test Array(stokes.R.Rx) ≈ fill(2idy + 5idz, size(stokes.R.Rx))
+        @test Array(stokes.R.Ry) ≈ fill(10idx + 11idz, size(stokes.R.Ry))
+        @test Array(stokes.R.Rz) ≈ fill(3idx + 7idy, size(stokes.R.Rz))
+    end
+
     @testset "fused kernels 3D" begin
         local_ni = 6, 5, 4
         nx, ny, nz = local_ni

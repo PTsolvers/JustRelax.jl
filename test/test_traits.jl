@@ -1,7 +1,7 @@
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using JustRelax, Test
@@ -40,7 +40,7 @@ end
 A, M, V = @static if env_backend === "AMDGPU"
     ROCArray, ROCMatrix, ROCVector
 elseif env_backend === "CUDA"
-    CuArray, CuMatrix, CuVector
+    CUDA.CuArray, CUDA.CuMatrix, CUDA.CuVector
 else
     Array, Matrix, Vector
 end

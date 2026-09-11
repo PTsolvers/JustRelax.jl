@@ -64,7 +64,27 @@ The package can be loaded with:
 using JustRelax
 ```
 
-See the [installation guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/installation) for backend-specific setup, including GPU and MPI environments.
+See the [installation guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/installation) for testing the installation and for running the miniapps, and the [backend guide](https://ptsolvers.github.io/JustRelax.jl/dev/man/backend) for CUDA, AMDGPU, and MPI setup.
+
+## Quick start
+
+Every model allocates the same handful of containers and threads them through the solver calls:
+
+```julia
+using JustRelax, JustRelax.JustRelax2D
+
+backend = CPUBackend                       # CUDABackend / AMDGPUBackend on GPUs
+
+ni     = 64, 64                            # number of cells
+li     = 1.0e6, 5.0e5                      # domain size [m]
+grid   = Geometry(ni, li; origin = (0.0, -5.0e5))
+
+stokes    = StokesArrays(backend, ni)      # velocity, pressure, stresses, residuals
+thermal   = ThermalArrays(backend, ni)     # temperature, fluxes, heat sources
+pt_stokes = PTStokesCoeffs(li, grid.di.center; ϵ_rel = 1.0e-6, CFL = 0.9 / √2.1)
+```
+
+Three-dimensional models use `JustRelax.JustRelax3D` and a three-element `ni`/`li`. From here, a model adds a rheology, boundary conditions, and a time loop calling `solve!` and `heatdiffusion_PT!`; the [getting-started walkthrough](https://ptsolvers.github.io/JustRelax.jl/dev/man/diffusion2D_periodic) builds one end to end.
 
 ## Testing
 

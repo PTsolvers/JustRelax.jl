@@ -2,7 +2,7 @@ module JustRelaxCUDAExt
 
 using CUDA
 using JustRelax: JustRelax
-import JustRelax: PTArray, backend, CUDABackendTrait
+import JustRelax: PTArray, backend, CUDABackendTrait, CUDABackend
 
 PTArray(::Type{CUDABackend}) = CuArray
 

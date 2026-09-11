@@ -11,26 +11,39 @@ Important companion packages are:
 - [GeoParams.jl](https://github.com/JuliaGeodynamics/GeoParams.jl) for rheology and material properties.
 - [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) for particle and phase-ratio methods.
 
+## Detailed references
+
+This file is the entry point. Four companion documents in [`.agents/`](.agents/) go deeper;
+read the relevant one before changing code in that area.
+
+| Document | Read it before |
+|----------|----------------|
+| [`.agents/api.md`](.agents/api.md) | adding, renaming, or deprecating anything public; wiring a new function through the backend traits; choosing a solver calling convention |
+| [`.agents/solvers.md`](.agents/solvers.md) | touching a Stokes, variational Stokes, DYREL, or thermal-diffusion iteration loop, or its convergence criteria |
+| [`.agents/grid.md`](.agents/grid.md) | writing a kernel, allocating a field, or reasoning about staggered locations, array sizes, and grid spacing |
+| [`.agents/mpi.md`](.agents/mpi.md) | changing halo exchange, global reductions, parallel I/O, or anything whose correctness depends on the domain decomposition |
+
 ## Repository map
 
 - `src/`: package implementation and shared solver kernels.
 - `src/common.jl`: common implementation included by the CPU and GPU 2D/3D variants. Shared functionality should generally be added here or in a file it includes.
-- `src/stokes/`: standard Stokes solver implementation.
-- `src/variational_stokes/`: variational Stokes and free-surface support.
-- `src/DYREL/`: 2D dynamic-relaxation solver.
-- `src/thermal_diffusion/`: pseudo-transient and explicit thermal solvers.
-- `src/types/`, `src/grid/`, `src/boundaryconditions/`, and `src/IO/`: core data structures, grids, boundary conditions, and output/checkpointing.
+- `src/stokes/`, `src/variational_stokes/`, `src/DYREL/`, `src/thermal_diffusion/`: the four solver families — see [`.agents/solvers.md`](.agents/solvers.md).
+- `src/types/` and `src/boundaryconditions/`: core data structures and boundary conditions — see [`.agents/api.md`](.agents/api.md).
+- `src/grid/`: staggered grids, the `IGG` MPI handle, and spacing helpers — see [`.agents/grid.md`](.agents/grid.md).
+- `src/IO/`: VTK output and HDF5/JLD2 checkpointing — the parallel writers are covered in [`.agents/mpi.md`](.agents/mpi.md).
 - `ext/`: optional CUDA, AMDGPU, and Makie package extensions.
-- `test/`: package test environment and test suite.
+- `test/`: package test environment and test suite. Files matching `*MPI*` run separately under `mpiexec`.
 - `miniapps/`: standalone examples and benchmark applications with their own environment.
 - `docs/`: Documenter/Vitepress documentation and documentation environment.
 
 ## Development rules
 
-- Preserve the public API unless the change explicitly requires an API change. Deprecate before removing an established interface when practical.
+- Preserve the public API unless the change explicitly requires an API change. Deprecate before removing an established interface when practical ([`.agents/api.md`](.agents/api.md)).
 - Keep kernels backend- and dimension-agnostic when possible. Do not include a 2D kernel file from a 3D module or vice versa.
 - Follow the existing backend-trait dispatch pattern. CPU implementations normally live in shared code, while GPU extensions specialize dispatch and forward to the shared implementation.
 - Be careful with array allocation: constructors and solver state must remain on the selected CPU/GPU backend.
+- Index against `eachindex`/`axes` and the grid's own spacing accessors rather than hard-coded `1:n` and scalar spacings, so kernels stay valid on refined and offset grids ([`.agents/grid.md`](.agents/grid.md)).
+- A field read across a rank boundary needs a matching `update_halo!`, and any convergence test or time-step bound needs a global reduction ([`.agents/mpi.md`](.agents/mpi.md)).
 - New kernels must use the project’s ParallelStencil conventions and respect the module’s `@init_parallel_stencil` initialization.
 - Update relevant tests, miniapps, and documentation when changing a solver, public type, or user-facing behavior.
 - Do not commit generated documentation builds, local manifests, benchmark outputs, or large simulation data unless the task explicitly calls for them.

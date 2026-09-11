@@ -722,6 +722,10 @@ function sum_mpi(A)
     return MPI.Allreduce(_sum(A), MPI.SUM, MPI.COMM_WORLD)
 end
 
+function sum_mpi(f::F, A, Bs...) where {F <: Function}
+    return MPI.Allreduce(mapreduce(f, +, A, Bs...), MPI.SUM, MPI.COMM_WORLD)
+end
+
 """
     minimum_mpi(A)
 
@@ -754,3 +758,5 @@ for (f1, f2) in zip(
         $f1(A) = $f2(A)
     end
 end
+masked_norm_mpi(mask, A) = sqrt(sum_mpi((m, a) -> m ? abs2(a) : zero(abs2(a)), mask, A))
+masked_norm_mpi(mask, A, B) = sqrt(sum_mpi((m, a, b) -> m ? abs2(a * b) : zero(abs2(a * b)), mask, A, B))

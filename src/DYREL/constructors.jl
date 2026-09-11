@@ -5,11 +5,13 @@ Creates a new `DYREL` struct with fields initialized to zero.
 
 # Arguments
 - `ni`: Tuple containing the grid dimensions `(nx, ny)` for 2D or `(nx, ny, nz)` for 3D.
-- `ϵ`: General convergence tolerance.
-- `ϵ_vel`: Velocity convergence tolerance.
-- `CFL`: Courant-Friedrichs-Lewy number.
-- `c_fact`: Damping scaling factor.
-- `γfact`: Penalty scaling factor.
+
+# Keyword arguments
+- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
+- `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
+- `c_fact`: Damping scaling factor. Default: `0.5`.
+- `γfact`: Penalty scaling factor. Default: `20.0`.
 """
 function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny = ni
@@ -115,6 +117,10 @@ function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, pha
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
+function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
 
 """
     DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0)
@@ -133,7 +139,13 @@ This function:
 - `phase_ratios`: Phase fraction information.
 - `di`: Grid spacing tuple.
 - `dt`: Time step.
-- `γfact`: Factor for penalty parameter calculation (default: 20.0).
+
+# Keyword arguments
+- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
+- `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
+- `c_fact`: Damping scaling factor. Default: `0.5`.
+- `γfact`: Factor for the penalty parameter calculation. Default: `20.0`.
 """
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
 
@@ -152,6 +164,12 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)
 
+    return dyrel
+end
+
+function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt; CFL = CFL, γfact = γfact)
     return dyrel
 end
 
@@ -193,14 +211,12 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
-    dim = Val(ndims(stokes.P))
-
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt, ρgy = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)
@@ -264,23 +280,35 @@ end
 
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, ϕ, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, ϕ, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
+# `ηb` holds the same material quantity as the full-volume solver: the rock fraction
+# reaches the continuity equation through the assembled residual (see
+# `variational_continuity_residual`), not through its coefficients.
+#
+# `γ_eff` is not a coefficient of that equation but the step length of the pressure
+# update `P += γ_eff * RP`, so it must undo the weight `RP` carries. The Schur
+# complement of a cut cell is proportional to `ϕ.center` — the row is weighted by it
+# while the momentum rows it drives are normalized by their own rock fraction through
+# `Dx`/`Dy` — hence the reciprocal factor here. Without it the pressure of a cut cell
+# relaxes `ϕ.center` times slower than the rest of the domain and is left visibly
+# under-converged along a free surface. Every consumer multiplies at least one rock
+# fraction back in (`γ_eff * RP` and the single center-fraction factor used by the
+# Gershgorin bound), so no second volume-fraction factor is introduced; `isvalid_c`
+# guarantees the divisor is positive.
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
 
     if isvalid_c(ϕ, I...)
-        # bulk viscosity
         ratios = @cell phase_ratios_center[I...]
-        Kb = fn_ratio(get_bulk_modulus, rheology, ratios)
-        Kb = isinf(Kb) ? η_mean : Kb
-        ηb[I...] = Kb * dt * ϕ.center[I...]
+        Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
+        ηb[I...] = Kbdt
 
-        # penalty parameter factor
-        γ_num = γfact * η_mean
-        γ_phy = Kb * dt
-        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) * ϕ.center[I...]
+        η_local = η[I...]
+        γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
+        γ_phy = isinf(Kbdt) ? γ_num : Kbdt
+        γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) / ϕ.center[I...]
     else
         ηb[I...] = 0.0e0
         γ_eff[I...] = 0.0e0

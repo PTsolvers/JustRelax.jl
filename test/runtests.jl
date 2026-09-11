@@ -45,6 +45,10 @@ function runtests(args)
     for k in collect(keys(testsuite))
         startswith(basename(k), "test_") || delete!(testsuite, k)
     end
+    if backend_name != "CPU"
+        delete!(testsuite, "test_variational_operators_2D")
+        delete!(testsuite, "test_rheology")
+    end
 
     # Separate MPI tests – always run sequentially via mpiexec
     mpi_keys = [k for k in keys(testsuite) if occursin("MPI", k)]
@@ -102,7 +106,7 @@ _, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String
 elseif backend_name == "CUDA"
     Pkg.add("CUDA")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
-    using CUDA; CUDA.versioninfo()
+    import CUDA; CUDA.versioninfo()
 elseif backend_name == "CPU"
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end

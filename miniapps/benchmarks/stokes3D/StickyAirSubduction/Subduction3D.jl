@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,8 +30,6 @@ else
 end
 
 # Load script dependencies
-# const backend_JP = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-# const backend_JP = JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 
 
 using Printf, LinearAlgebra, GeoParams, CairoMakie

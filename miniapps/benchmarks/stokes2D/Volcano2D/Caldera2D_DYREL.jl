@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, Statistics, Dates
+using GeoParams, GLMakie, Statistics, Dates, JLD2
 
 # Load file with all the rheology configurations
 include(joinpath(@__DIR__, "Caldera_setup.jl"))
@@ -270,7 +270,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     end
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
     centroid2particle!(pT, T_buffer, particles)
 
     ## Plot initial T and P profile
@@ -299,6 +298,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
     # τxx_v = @zeros(ni .+ 1...)
     # τyy_v = @zeros(ni .+ 1...)
+
+    dt₀ = similar(thermal.T)
 
     # Time loop
     t, it = 0.0, 0
@@ -372,6 +373,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt

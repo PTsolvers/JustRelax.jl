@@ -111,7 +111,9 @@ makedocs(;
     # :missing_docs stays a warning: JustRelax2D.Data/JustRelax3D.Data are
     # ParallelStencil.@init_parallel_stencil-generated submodules whose docstring
     # carries @ref links into ParallelStencil, which this build does not document.
-    warnonly = [:missing_docs],
+    # GeoParams docstrings likewise contain @ref links to bindings that are not
+    # documented canonically in the JustRelax manual.
+    warnonly = [:missing_docs, :cross_references],
     pages = [
         "Home" => "index.md",
         "Getting started" => "man/diffusion2D_periodic.md",
@@ -131,6 +133,7 @@ makedocs(;
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
+            "Visualization" => "man/visualization.md",
         ],
         "Examples" => Any[
             "Blankenbach" => "man/Blankenbach.md",

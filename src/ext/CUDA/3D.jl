@@ -14,8 +14,19 @@ using Statistics
 
 import JustRelax.JustRelax3D as JR3D
 
+# `CUDABackend` names JustRelax's backend tag, which the public constructors dispatch on.
+# CUDA.jl exports a KernelAbstractions backend under the same name; the explicit import
+# below shadows it. JustPIC types carry that other one as their backend parameter, so
+# their signatures spell it `CUDA.CUDABackend`.
 import JustRelax:
-    IGG, BackendTrait, CPUBackendTrait, CUDABackendTrait, backend, CPUBackend, Geometry
+    IGG,
+    BackendTrait,
+    CPUBackendTrait,
+    CUDABackendTrait,
+    backend,
+    CPUBackend,
+    CUDABackend,
+    Geometry
 import JustRelax:
     AbstractBoundaryConditions,
     TemperatureBoundaryConditions,
@@ -433,14 +444,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDA.CUDABackend},
+        dt₀,
         phases::JustPIC.PhaseRatios,
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     )
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -449,14 +461,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDA.CUDABackend},
+        dt₀,
         phases::AbstractArray{Int, N},
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     ) where {N}
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -517,7 +530,7 @@ end
 # stress rotation on particles
 
 function JR3D.rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method::Symbol = :matrix
     )
     fn = if method === :matrix
         rotate_stress_particles_rotation_matrix!
@@ -543,14 +556,14 @@ function JR3D.update_rock_ratio!(
 end
 
 function JR3D.stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, particles
+        stokes, τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, particles
     )
     stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, dt
+        τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, stokes, particles, dt
     )
     rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
@@ -559,7 +572,7 @@ end
 # Phase ratios with arrays
 
 function JR3D.update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_ratios::JustPIC.PhaseRatios{CUDA.CUDABackend, T},
         phase_arrays::NTuple{N, CuArray{U, 3}},
         xci,
         xvi

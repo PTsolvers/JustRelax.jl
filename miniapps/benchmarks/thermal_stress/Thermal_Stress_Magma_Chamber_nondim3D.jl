@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -31,6 +31,7 @@ end
 
 # Load script dependencies
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
+using StaticArrays
 using ImplicitGlobalGrid
 using MPI: MPI
 
@@ -338,6 +339,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         fig
     end
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     local Vx_v, Vy_v
@@ -347,7 +350,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    dt₀ = similar(stokes.P)
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
 
@@ -416,6 +418,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt

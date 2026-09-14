@@ -50,9 +50,12 @@ const RHO, GRAV = 1.0, 1.0
 end
 
 # The staggered volume fractions are analytic, so they are assembled on the host
-# and uploaded; on GPU backends they live in device memory.
+# and uploaded; on GPU backends they live in device memory. Uploading through the
+# backend's array constructor (rather than copyto! straight into the pre-allocated
+# device array) is the same host->device path already used elsewhere in this suite
+# for both CUDA and AMDGPU (e.g. test_dyrel_solver_3D.jl's `PTArray(backend_JR)(...)`).
 function setmask!(dst, f, xs, ys)
-    copyto!(dst, [f(x, y) for x in xs, y in ys])
+    dst .= PTArray(backend_JR)([f(x, y) for x in xs, y in ys])
     return dst
 end
 
@@ -149,7 +152,7 @@ function rigid(igg, n, U, ω)
     for j in axes(ϕVy, 2), i in axes(ϕVy, 1)
         ϕVy[i, j] > 0 && (vy0[i + 1, j] = ω * (xc[i] - XC0); my[i + 1, j] = true)
     end
-    copyto!(Vx, vx0); copyto!(Vy, vy0)
+    Vx .= PTArray(backend_JR)(vx0); Vy .= PTArray(backend_JR)(vy0)
     solve!(m, igg; iterMax = 5.0e3)
     vx, vy = Array(Vx), Array(Vy)
     den = dot(vx0[mx], vx0[mx]) + dot(vy0[my], vy0[my])

@@ -31,6 +31,14 @@ else
     JustPIC.CPU
 end
 
+const JR3K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax3D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax3D
+else
+    JustRelax3D
+end
+
 @parallel_indices (i, j, k) function _init_single_phase_solver_3D!(phases)
     @index phases[1, i, j, k] = 1.0
     return nothing
@@ -116,7 +124,7 @@ end
             backend_JR, linear_stokes, linear_rheology, phase_ratios, grid.di, dt
         )
         θc = copy(linear_dyrel.P_num)
-        JustRelax3D.compute_stress_viscosity_DRYEL!(
+        JR3K.compute_stress_viscosity_DRYEL!(
             linear_stokes, θc, linear_dyrel.γ_eff, linear_rheology, phase_ratios,
             1.0, dt, 1.0, linear_args, (-Inf, Inf), true,
         )

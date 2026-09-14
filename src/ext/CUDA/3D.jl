@@ -82,6 +82,9 @@ function JR3D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
     return update_dτV_α_β!(dyrel)
 end
 
+function JR3D.apply_free_surface_diagonal!(Dz::CuArray, λmaxVz::CuArray, ρgz::CuArray, di_center, dt)
+    return apply_free_surface_diagonal!(Dz, λmaxVz, ρgz, di_center, dt)
+end
 
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)

@@ -38,7 +38,6 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `update_material`: Recompute viscosity and buoyancy from `rheology`. Set to `false` when
   those fields are prescribed by the caller. Default: `true`.
-- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -93,7 +92,6 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
-- `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -129,7 +127,6 @@ function _solve_DYREL!(
         total_iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
-        b_width = (4, 4, 0),
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
@@ -203,7 +200,7 @@ function _solve_DYREL!(
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass
         # isone(itPH) &&
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
         compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
@@ -273,7 +270,7 @@ function _solve_DYREL!(
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
             # compute divergence, deviatoric strain rate and pressure residual in one pass
-            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
             compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
@@ -340,7 +337,7 @@ function _solve_DYREL!(
         end
 
         # update pressure
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, false)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, false; args...)
         @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
 
         iter > total_iterMax && break

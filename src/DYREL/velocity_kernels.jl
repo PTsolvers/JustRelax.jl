@@ -151,9 +151,10 @@ end
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_strain_rate = true)
-    ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
-    melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
+function compute_∇V_strain_rate_RP!(
+        stokes, dyrel, rheology, phase_ratios, _di, ni, dt, do_strain_rate = true;
+        ΔT = nothing, melt_fraction = nothing, kwargs...,
+    )
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,
@@ -399,45 +400,6 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        P,
-        P_num,
-        ΔPψ,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        Dx,
-        Dy,
-        _di_center,
-        _di_vertex,
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-
-    # @inbounds begin
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        _dx_c = @dx(_di_center, i)
-        _dy_v = @dy(_di_vertex, j)
-        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-        Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
-    end
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
-        _dx_v = @dx(_di_vertex, i)
-        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-        Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
-    end
-    # end
-
-    return nothing
-end
-
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
         Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex
     ) where {T}
@@ -535,6 +497,10 @@ end
     return nothing
 end
 
+# Non-fused 3D DR residual (no damped velocity update). Used to probe the discretized momentum
+# operator column-by-column (see the Gershgorin row-sum test), where only the raw residual per
+# unit input is needed, not the pseudo-time state (dVdτ, α, β, dτV) carried by
+# `compute_DR_residual_update_V!`.
 @parallel_indices (i, j, k) function compute_DR_residual_V!(
         Rx::AbstractArray{T, 3},
         Ry,
@@ -561,14 +527,10 @@ end
     Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
     Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
     Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
     Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
 
-    # @inbounds begin
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
         _dy = @dy(_di_vertex, j)
@@ -608,7 +570,6 @@ end
                 d_za(P, _dz) - d_za(P_num, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
         ) / Dz[i, j, k]
     end
-    # end
 
     return nothing
 end
@@ -673,7 +634,7 @@ end
     return dVdτ_new, dVdτ_new * β * dτ
 end
 
-# Fuses `compute_DR_residual_V!` (velocity residual R = ∂ⱼτiⱼ − ∂ᵢ(P + θc) − ρgᵢ, /Dᵢ, where the
+# Fuses the velocity residual (R = ∂ⱼτiⱼ − ∂ᵢ(P + θc) − ρgᵢ, /Dᵢ, where the
 # small pressure correction θc = P_num + ΔPψ is assembled once per iteration by the stress kernel)
 # with the damped update of `update_V_damping_DR_V!`. Folding only the two small corrections (not the
 # large hydrostatic P) collapses three neighbour-stencil reads into two while keeping P differenced

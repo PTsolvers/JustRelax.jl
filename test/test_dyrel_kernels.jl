@@ -168,7 +168,7 @@ end
         # P0 = P and Q = 0 ⇒ RP = -∇V = -(a+b), independent of ηb
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
-        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt; args...)
         @test all(Array(stokes.R.RP) .≈ -(a + b))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b) / 3)
 

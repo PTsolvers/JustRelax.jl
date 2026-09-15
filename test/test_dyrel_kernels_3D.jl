@@ -160,7 +160,7 @@ end
         @test all(A -> all(>(0), Array(A)), (dyrel.Dx, dyrel.Dy, dyrel.Dz))
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
-        JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, local_rheology, local_phases, grid._di, local_ni, local_dt, args)
+        JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, local_rheology, local_phases, grid._di, local_ni, local_dt; args...)
         @test all(Array(stokes.R.RP) .≈ -(a + b + c))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b + c) / 3)
 
@@ -175,7 +175,7 @@ end
         )
         ΔT = @ones(local_ni .+ 2...) .* 10.0
         thermal_args = merge(args, (; ΔT))
-        JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, thermal_rheology, local_phases, grid._di, local_ni, local_dt, thermal_args)
+        JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, thermal_rheology, local_phases, grid._di, local_ni, local_dt; thermal_args...)
         expected_RP = -(a + b + c) + 0.02 * 10.0 / local_dt
         @test all(Array(stokes.R.RP) .≈ expected_RP)
 
@@ -541,7 +541,7 @@ end
                         end
                     end
                     flow_bcs!(stokes, flow_bcs)
-                    JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, gersh_rheology, phase_ratios, grid._di, ni, dt, linear_args)
+                    JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, gersh_rheology, phase_ratios, grid._di, ni, dt; linear_args...)
                     JR3K.compute_stress_viscosity_DRYEL!(
                         stokes, θc, dyrel.γ_eff, gersh_rheology, phase_ratios,
                         1.0, dt, 1.0, linear_args, (-Inf, Inf), true,

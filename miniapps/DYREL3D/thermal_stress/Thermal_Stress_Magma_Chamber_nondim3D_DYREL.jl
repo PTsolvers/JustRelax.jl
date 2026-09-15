@@ -1,5 +1,5 @@
-const isCUDA = false
-# const isCUDA = true
+# const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -345,8 +345,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, thermal.T, particles)
+    dt₀ = similar(thermal.T)
+    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
+    centroid2particle!(pT, T_buffer, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
@@ -422,9 +423,16 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -438,7 +446,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(thermal.T, pT, particles)
+        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
+        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
         @views thermal.T[:, :, end] .= Tsurf
         @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)

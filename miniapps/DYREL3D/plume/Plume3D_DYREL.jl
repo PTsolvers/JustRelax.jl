@@ -1,7 +1,7 @@
 # 3D thermal plume rising through a layered lithosphere.
 # Rheology after Cloetingh et al. (2022), "Fingerprinting secondary mantle plumes".
 
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
@@ -11,7 +11,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 # using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend
 end
@@ -32,7 +32,7 @@ else
     JustPIC.CPU
 end
 
-using GeoParams, CairoMakie, Printf
+using GeoParams, GLMakie, Printf
 
 include("Plume3D_DYREL_rheology.jl")
 
@@ -125,7 +125,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, thermal.T, particles)
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -202,6 +202,13 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
@@ -285,7 +292,7 @@ end
 
 do_vtk = true  # set to true to generate VTK files for ParaView
 ar = 1         # aspect ratio
-n = 32
+n = 64
 nx = ny = nz = n
 igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
     IGG(init_global_grid(nx, ny, nz; init_MPI = true)...)

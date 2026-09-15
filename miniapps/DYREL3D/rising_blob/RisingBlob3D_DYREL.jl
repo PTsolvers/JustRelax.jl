@@ -286,6 +286,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, front = true, back = true, top = true, bot = true),
         no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
+        free_surface = true,
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
@@ -340,7 +341,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, T_buffer, particles)
 
@@ -408,6 +409,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt

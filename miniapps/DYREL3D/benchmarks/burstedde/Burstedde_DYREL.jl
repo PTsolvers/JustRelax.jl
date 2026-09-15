@@ -232,7 +232,6 @@ function burstedde(; nx = 16, ny = 16, nz = 16, β = 10.0, init_MPI = true, fina
                 total_iterMax = 50.0e3,
                 nout = 1,
                 rel_drop = 5.0e-3,
-                b_width = (4, 4, 4),
                 linear_viscosity = true,
                 update_material = false,
                 verbose_PH = true,

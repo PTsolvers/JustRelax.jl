@@ -176,7 +176,6 @@ function taylorGreen(;
                 total_iterMax = 50.0e3,
                 nout = 20,
                 rel_drop = 0.1,
-                b_width = (4, 4, 4),
                 verbose_PH = verbose,
                 verbose_DR = false,
             )

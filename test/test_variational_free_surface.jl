@@ -23,7 +23,7 @@ const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    CUDA.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
     CPUBackend
@@ -55,7 +55,7 @@ end
 # device array) is the same host->device path already used elsewhere in this suite
 # for both CUDA and AMDGPU (e.g. test_dyrel_solver_3D.jl's `PTArray(backend_JR)(...)`).
 function setmask!(dst, f, xs, ys)
-    dst .= PTArray(backend_JR)([f(x, y) for x in xs, y in ys])
+    copyto!(dst, PTArray(backend_JR)([f(x, y) for x in xs, y in ys]))
     return dst
 end
 
@@ -152,7 +152,7 @@ function rigid(igg, n, U, ω)
     for j in axes(ϕVy, 2), i in axes(ϕVy, 1)
         ϕVy[i, j] > 0 && (vy0[i + 1, j] = ω * (xc[i] - XC0); my[i + 1, j] = true)
     end
-    Vx .= PTArray(backend_JR)(vx0); Vy .= PTArray(backend_JR)(vy0)
+    copyto!(Vx, PTArray(backend_JR)(vx0)); copyto!(Vy, PTArray(backend_JR)(vy0))
     solve!(m, igg; iterMax = 5.0e3)
     vx, vy = Array(Vx), Array(Vy)
     den = dot(vx0[mx], vx0[mx]) + dot(vy0[my], vy0[my])

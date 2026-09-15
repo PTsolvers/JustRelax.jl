@@ -5,7 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     import CUDA
 end
 
-using Test, Suppressor
+using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
@@ -168,7 +168,7 @@ end
         # P0 = P and Q = 0 ⇒ RP = -∇V = -(a+b), independent of ηb
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
-        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt; args...)
         @test all(Array(stokes.R.RP) .≈ -(a + b))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b) / 3)
 
@@ -191,6 +191,15 @@ end
             stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
             _di.center, _di.vertex,
+        )
+        @test all(isfinite, Array(stokes.R.Rx))
+        @test all(isfinite, Array(stokes.R.Ry))
+
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))

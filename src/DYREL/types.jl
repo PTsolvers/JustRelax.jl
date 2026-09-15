@@ -17,6 +17,7 @@ Structure containing parameters and arrays for the DYREL (Dynamic Relaxation) so
 - `P_num`: Numerical pressure scratch field.
 - `Rx0`, `Ry0`, `Rz0`: Velocity residual history scratch fields.
 - `CFL`: Courant-Friedrichs-Lewy number.
+- `γfact`: Penalty scaling factor.
 - `ϵ`: General convergence tolerance.
 - `ϵ_vel`: Velocity convergence tolerance.
 - `c_fact`: Damping scaling factor.
@@ -53,6 +54,7 @@ struct DYREL{T, F}
     Ry0::T    # velocity residual history scratch
     Rz0::T    # velocity residual history scratch (3D)
     CFL::F    # Courant-Friedrichs-Lewy condition
+    γfact::F  # penalty scaling factor
     ϵ::F      # convergence criterion
     ϵ_vel::F  # convergence criterion
     c_fact::F # damping factor

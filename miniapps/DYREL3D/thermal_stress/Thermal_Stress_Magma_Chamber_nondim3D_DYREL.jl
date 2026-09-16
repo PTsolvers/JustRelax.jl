@@ -131,8 +131,8 @@ function init_rheology(CharDim; is_compressible = false, steady_state = true)
     if is_compressible == true
         el = SetConstantElasticity(; G = G0, ν = 0.25)           # elastic spring
         el_magma = SetConstantElasticity(; G = G_magma, ν = 0.25) # elastic spring
-        β_rock = 6.0e-11
-        β_magma = 6.0e-11
+        β_rock = 1.0e-12
+        β_magma = 1.0e-12
     else
         el = SetConstantElasticity(; G = G0, ν = 0.5)            # elastic spring
         el_magma = SetConstantElasticity(; G = G_magma, ν = 0.5) # elastic spring
@@ -142,13 +142,13 @@ function init_rheology(CharDim; is_compressible = false, steady_state = true)
     if steady_state == true
         creep_rock = LinearViscous(; η = 1.0e23 * Pa * s)
         creep_magma = LinearViscous(; η = 1.0e18 * Pa * s)
-        creep_air = LinearViscous(; η = 1.0e18 * Pa * s)
+        creep_air = LinearViscous(; η = 1.0e20 * Pa * s)
     else
         creep_rock = DislocationCreep(; A = 1.67e-24, n = 3.5, E = 1.87e5, V = 6.0e-6, r = 0.0, R = 8.3145)
         creep_magma = DislocationCreep(; A = 1.67e-24, n = 3.5, E = 1.87e5, V = 6.0e-6, r = 0.0, R = 8.3145)
-        creep_air = LinearViscous(; η = 1.0e18 * Pa * s)
-        β_rock = 6.0e-11
-        β_magma = 6.0e-11
+        creep_air = LinearViscous(; η = 1.0e20 * Pa * s)
+        β_rock = 1.0e-12
+        β_magma = 1.0e-12
     end
     g = 9.81m / s^2
     return rheology = (
@@ -223,6 +223,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     cutoff_visc = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
     κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
+    dt = nondimensionalize(10e3yr, CharDim) # initial timestep
+    dt_max = nondimensionalize(25e3yr, CharDim) # initial timestep
 
     # Initialize particles -------------------------------
     nxcell = 20
@@ -331,7 +333,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Time loop
     t, it = 0.0, 0
-    local Vx_v, Vy_v
+    local Vx_v, Vy_v, Vz_v
     if do_vtk
         Vx_v = @zeros(ni .+ 1...)
         Vy_v = @zeros(ni .+ 1...)
@@ -379,7 +381,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         )
         tensor_invariant!(stokes.ε)
 
-        dt = compute_dt(stokes, di, dt_diff, igg) / 10
+        # dt = compute_dt(stokes, di, dt_diff, igg)
+        dt = compute_dt(stokes, di, dt_max, igg)
+        println("\n dt = $(ustrip.(dimensionalize(dt, yr, CharDim))) yr \n")
         # --------------------------------
 
         compute_shear_heating!(

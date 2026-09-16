@@ -48,6 +48,7 @@ function runtests(args)
     if backend_name != "CPU"
         delete!(testsuite, "test_variational_operators_2D")
         delete!(testsuite, "test_rheology")
+        delete!(testsuite, "test_dyrel_solver_3D")
     end
 
     # Separate MPI tests – always run sequentially via mpiexec

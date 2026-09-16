@@ -347,10 +347,10 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     @copy thermal.Told thermal.T
     dyrel = DYREL(
         backend, stokes, rheology, phase_ratios, grid.di, dt;
-        ϵ = 1.0e-4, CFL = 0.99, γfact = 20.0,
+        ϵ = 1.0e-4, CFL = 0.99, γfact = 2.5,
     )
 
-    while it < 25
+    while it < 2
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
@@ -373,7 +373,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 iterMax_DR = 150.0e3,
                 total_iterMax = 150.0e3,
                 nout = 100,
-                rel_drop = 0.75,
+                rel_drop = 1e-3,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,
                 free_surface = false,
@@ -514,7 +514,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         end
     end
 
-    finalize_global_grid()
     return nothing
 end
 

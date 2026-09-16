@@ -225,15 +225,17 @@ end
 
 """
     enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt,
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing,
     )
 
-Differentiate the constitutive kernel only with respect to center and vertex
+Differentiate the constitutive kernel with respect to center and vertex
 viscosity. Stress seeds come from `adjoint.τ`; viscosity sensitivities
 accumulate in `adjoint.viscosity.η` and `adjoint.viscosity.ηv`.
+When `gradients` is supplied, also accumulate derivatives with respect to the
+selected multipliers. `compute_sensitivities!` converts these to material derivatives.
 """
 function enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;)
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) configcall = compute_stress_DRYEL!(
@@ -289,7 +291,7 @@ function enzyme_compute_stress_DRYEL_sensitivity!(
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
-        Enzyme.Const(controls),
+        isnothing(gradients) ? Enzyme.Const(controls) : Enzyme.Duplicated(controls, gradients),
     )
     return nothing
 end

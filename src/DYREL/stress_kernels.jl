@@ -228,8 +228,8 @@ end
 @inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII) =
     compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, nothing, ())
 
-@inline _material_multiplier(::Nothing, phase, I...) = 1.0
-@inline _material_multiplier(A, phase, I...) = @inbounds A[phase, I...]
+@inline _material_multiplier(::Nothing, I...) = 1.0
+@inline _material_multiplier(A, I...) = @inbounds A[I...]
 
 @generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, G_multiplier, I) where {N}
     return quote
@@ -243,7 +243,9 @@ end
 
             else
                 # get rheological properties for this phase
-                G = get_shear_modulus(rheology, phase) * _material_multiplier(G_multiplier, phase, I...)
+                G = get_shear_modulus(rheology, phase)
+                # A purely viscous phase has no active G; avoid differentiating Inf * multiplier.
+                G = isinf(G) ? G : G * _material_multiplier(G_multiplier, I...)
                 Kb = get_bulk_modulus(rheology, phase)
                 ratio_I .* _compute_local_stress(
                     εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII

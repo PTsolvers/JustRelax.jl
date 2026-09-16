@@ -16,12 +16,100 @@ const Enzyme = JustRelax2D.Enzyme
     return nothing
 end
 
+@parallel_indices (i, j) function _init_G_gradient_phases!(phase)
+    @index phase[1, i, j] = 0.2
+    @index phase[2, i, j] = 0.5
+    @index phase[3, i, j] = 0.3
+    return nothing
+end
+
+function _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt, controls)
+    @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
+        stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
+        stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+        grid._di.center, grid._di.vertex,
+    )
+    return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
+        sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
+end
+
+@testset "Whole-expression shear-modulus sensitivity" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 0.7
+    moduli = (2.0, 2.0, Inf)
+    rheology = ntuple(3) do p
+        elasticity = ConstantElasticity(; G = moduli[p], Kb = 10.0)
+        SetMaterialParams(;
+            Phase = p,
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 3.0), elasticity)),
+            Elasticity = elasticity,
+        )
+    end
+    phases = PhaseRatios(JustPIC.CPU, 3, ni)
+    @parallel (@idx ni) _init_G_gradient_phases!(phases.center)
+    @parallel (@idx ni .+ 1) _init_G_gradient_phases!(phases.vertex)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ρg = (@zeros(ni...), @zeros(ni...))
+    controls, gradients = material_controls(CPUBackend, ni, (:G,))
+    stokes.viscosity.η .= 3.0
+    stokes.viscosity.ηv .= 3.0
+    stokes.ε.xx .= 0.2
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.3
+    # Nonzero, fixed stress history must contribute to dτ/dG as well.
+    stokes.τ_o.xx .= 0.4
+    stokes.τ_o.yy .= -0.2
+    stokes.τ_o.xy_c .= 0.1
+    stokes.τ_o.xx_v .= 0.4
+    stokes.τ_o.yy_v .= -0.2
+    stokes.τ_o.xy .= 0.1
+    adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
+    adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
+
+    # Check every finite-G phase and grid point against perturbations in actual G.
+    # Repeat after poisoning the buffers to ensure each call replaces old gradients.
+    for _ in 1:2
+        gradients.G.center .= 123.0
+        gradients.G.vertex .= 123.0
+        _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
+        JustRelax2D.compute_sensitivities!(
+            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+            (; me = 0), controls, gradients,
+        )
+        @test all(isfinite, gradients.G.center)
+        @test all(isfinite, gradients.G.vertex)
+        @test any(!iszero, gradients.G.center)
+        @test any(!iszero, gradients.G.vertex)
+
+        # Perturb one center G. The corresponding vertex controls are obtained with
+        # center2vertex!, so this checks the combined gradient and its boundary weights.
+        for I in CartesianIndices(gradients.G.center)
+            h = 1.0e-5
+            controls.G.center[I] = 1 + h / first(moduli)
+            center2vertex!(controls.G.vertex, controls.G.center)
+            plus = _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
+            controls.G.center[I] = 1 - h / first(moduli)
+            center2vertex!(controls.G.vertex, controls.G.center)
+            minus = _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
+            controls.G.center[I] = 1.0
+            center2vertex!(controls.G.vertex, controls.G.center)
+            @test gradients.G.center[I] ≈ (plus - minus) / (2h) rtol = 1.0e-6 atol = 1.0e-8
+        end
+    end
+    @test all(isone, controls.G.center)
+    @test all(isone, controls.G.vertex)
+end
+
 @parallel_indices (i, j) function _selected_control_kernel!(yc, yv, xc, xv, controls)
     @inbounds begin
         if i <= size(yc, 1) && j <= size(yc, 2)
-            yc[i, j] = xc[i, j] * controls.G.center[1, i, j]
+            yc[i, j] = xc[i, j] * controls.G.center[i, j]
         end
-        yv[i, j] = xv[i, j] * controls.G.vertex[1, i, j]
+        yv[i, j] = xv[i, j] * controls.G.vertex[i, j]
     end
     return nothing
 end
@@ -58,34 +146,30 @@ end
     yv = @zeros(ni .+ 1...)
     xc = @ones(ni...) .* 2.0
     xv = @ones(ni .+ 1...) .* 3.0
-    controls, dcontrols = material_controls(CPUBackend, ni, (:G,); nphases = 2)
+    controls, dcontrols = material_controls(CPUBackend, ni, (:G,))
     empty_controls, empty_gradients = material_controls(CPUBackend, ni, ())
-    controls3D, gradients3D = JR3.material_controls(
-        CPUBackend, (3, 2, 4), (:G, :C); nphases = 2
-    )
+    controls3D, gradients3D = JR3.material_controls(CPUBackend, (3, 2, 4), (:G, :C))
 
     @test keys(controls) == (:G,)
     @test !haskey(controls, :C)
     @test isempty(empty_controls)
     @test isempty(empty_gradients)
-    @test size(controls.G.center) == (2, ni...)
-    @test size(controls.G.vertex) == (2, (ni .+ 1)...)
+    @test size(controls.G.center) == ni
+    @test size(controls.G.vertex) == ni .+ 1
     @test all(isone, controls.G.center)
     @test all(iszero, dcontrols.G.center)
     @test controls.G.center !== dcontrols.G.center
     @test keys(controls3D) == (:G, :C)
-    @test size(controls3D.G.center) == (2, 3, 2, 4)
-    @test size(controls3D.C.vertex) == (2, 4, 3, 5)
+    @test size(controls3D.G.center) == (3, 2, 4)
+    @test size(controls3D.C.vertex) == (4, 3, 5)
     @test controls3D.G.center !== gradients3D.G.center
 
     @parallel (@idx ni .+ 1) _selected_control_kernel!(yc, yv, xc, xv, controls)
     dyc = @ones(ni...)
     dyv = @ones(ni .+ 1...)
     _selected_control_sensitivity!(yc, dyc, yv, dyv, xc, xv, controls, dcontrols, ni .+ 1)
-    @test dcontrols.G.center[1, :, :] ≈ xc
-    @test dcontrols.G.vertex[1, :, :] ≈ xv
-    @test all(iszero, @view(dcontrols.G.center[2, :, :]))
-    @test all(iszero, @view(dcontrols.G.vertex[2, :, :]))
+    @test dcontrols.G.center ≈ xc
+    @test dcontrols.G.vertex ≈ xv
 
     dxc = @zeros(ni...)
     dxv = @zeros(ni .+ 1...)

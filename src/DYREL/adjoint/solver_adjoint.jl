@@ -50,6 +50,7 @@ function solve_DYREL_adjoint!(
         free_surface,
         observation,
         controls,
+        gradients = nothing,
         kwargs...,
     ) where {N}
     dim = Val(N)
@@ -249,7 +250,7 @@ function solve_DYREL_adjoint!(
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg, controls
+        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg, controls, gradients
     )
 
     # Do not carry adjoint iteration history into the next forward solve.

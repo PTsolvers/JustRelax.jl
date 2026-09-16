@@ -1,19 +1,27 @@
 """
-    material_controls(CPUBackend, ni, parameters; nphases = 1)
+    material_controls(CPUBackend, ni, parameters)
 
-Allocate phase-resolved center and vertex multiplier fields and matching zero-valued
-gradient fields only for the selected material-parameter symbols. Multipliers start at one,
-so selecting a parameter does not change the forward problem.
+Allocate center and vertex multiplier fields and matching zero-valued gradient fields only
+for the selected material-parameter symbols. Multipliers start at one, so selecting a
+parameter does not change the forward problem. Each field differentiates the complete
+multiphase constitutive expression; there is no separate control per material phase.
+
+Pass both returned named tuples as `controls` and `gradients` to
+`solve_DYREL!(...; adjoint = true, controls, gradients, ...)`. Currently `:G` is
+supported for material sensitivities in the 2D adjoint solver. After the solve,
+`gradients.G.center` contains the full derivative with respect to a center-based local
+shear modulus, including the vertex contribution. `gradients.G.vertex` retains the raw
+vertex contribution for diagnostics. Calls without `gradients` leave controls inactive
+in the sensitivity pass.
 """
 function material_controls(
-        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol};
-        nphases::Integer = 1,
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol}
     ) where {N, M}
     multipliers = map(parameters) do _
-        (; center = @ones(nphases, ni...), vertex = @ones(nphases, (ni .+ 1)...))
+        (; center = @ones(ni...), vertex = @ones(ni .+ 1...))
     end
     gradients = map(parameters) do _
-        (; center = @zeros(nphases, ni...), vertex = @zeros(nphases, (ni .+ 1)...))
+        (; center = @zeros(ni...), vertex = @zeros(ni .+ 1...))
     end
     return NamedTuple{parameters}(multipliers), NamedTuple{parameters}(gradients)
 end

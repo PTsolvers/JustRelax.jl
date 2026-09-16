@@ -15,6 +15,11 @@ module SinkingBlockVECase
     include("SinkingBlock2D_VE_adjoint.jl")
 end
 
+module SinkingBlockGCase
+    const NO_AUTORUN = true
+    include("SinkingBlock2D_VE_adjoint_G.jl")
+end
+
 module ShearBandCase
     const NO_AUTORUN = true
     include("ShearBand2D_adjoint.jl")
@@ -114,7 +119,41 @@ function stationary_taylor_test(name, run_case, igg, ε, δ; fit_range = (1.0e-4
     slope0 = loglog_slope(ε, remainder0; fit_range)
     slope1 = loglog_slope(ε, remainder1; fit_range)
     @info "stationary Stokes viscosity Taylor test" example = name cost = baseline.cost dJ_adjoint fit_range slope0 slope1 remainder0 remainder1
-    return (; name, remainder0, remainder1, fit_range, slope0, slope1)
+    return (; name, parameter = "viscosity", remainder0, remainder1, fit_range, slope0, slope1)
+end
+
+function evaluate_G_case(run_case, igg, ε, δ; adjoint)
+    Random.seed!(1234)
+    return run_case(
+        igg;
+        G_multiplier = exp.(ε .* δ),
+        adjoint,
+        return_fields = true,
+        plot_results = adjoint,
+        solver_ϵ = 1.0e-10,
+        verbose = false,
+    )
+end
+
+function stationary_G_taylor_test(name, run_case, igg, ε, δ; fit_range = (1.0e-4, 1.0e-1))
+    baseline = evaluate_G_case(run_case, igg, 0.0, δ; adjoint = true)
+    # G(ε) = G exp(εδ), hence dG/dε at ε=0 is Gδ.
+    dJ_adjoint = dot(baseline.G_gradient, baseline.shear_modulus .* δ)
+    scale = max(abs(baseline.cost), eps(Float64))
+    remainder0 = similar(ε)
+    remainder1 = similar(ε)
+
+    for i in eachindex(ε)
+        perturbed = evaluate_G_case(run_case, igg, ε[i], δ; adjoint = false)
+        ΔJ = perturbed.cost - baseline.cost
+        remainder0[i] = abs(ΔJ) / scale
+        remainder1[i] = abs(ΔJ - ε[i] * dJ_adjoint) / scale
+    end
+
+    slope0 = loglog_slope(ε, remainder0; fit_range)
+    slope1 = loglog_slope(ε, remainder1; fit_range)
+    @info "stationary Stokes shear-modulus Taylor test" example = name cost = baseline.cost dJ_adjoint fit_range slope0 slope1 remainder0 remainder1
+    return (; name, parameter = "shear-modulus", remainder0, remainder1, fit_range, slope0, slope1)
 end
 
 function plot_taylor_tests(results, ε, filename)
@@ -122,14 +161,14 @@ function plot_taylor_tests(results, ε, filename)
     fig = Figure(; size = (400 * nplots, 450))
     Label(
         fig[0, 1:nplots],
-        "Taylor test of adjoint viscosity gradient", ;
+        "Taylor tests of adjoint material gradients", ;
         fontsize = 22,
     )
     for (column, result) in enumerate(results)
         axis = Axis(
             fig[1, column];
             title = result.name,
-            xlabel = "viscosity perturbation ε",
+            xlabel = "$(result.parameter) perturbation ε",
             ylabel = column == 1 ? "normalized corrected remainder" : "",
             xscale = log10,
             yscale = log10,
@@ -160,20 +199,32 @@ function main(igg; n = 16, figdir = joinpath("figures", "DYREL_adjoint_gradient_
         stationary_taylor_test(name, run_case, igg, ε, δ; fit_range)
     end
 
-    filename = joinpath(figdir, "stationary_stokes_viscosity_taylor_tests.png")
+    G_case = (igg; kwargs...) -> SinkingBlockGCase.sinking_block2D_VE(
+        igg; nx = n, ny = n, ar = 1, nt = 4,
+        figdir = joinpath(figdir, "SinkingBlock2D_VE_G"), kwargs...
+    )
+    G_result = stationary_G_taylor_test(
+        "SinkingBlock2D VE: G", G_case, igg, ε, δ.center;
+        fit_range = (1.0e-4, 1.0e-1),
+    )
+    results = (results..., G_result)
+
+    filename = joinpath(figdir, "stationary_stokes_material_taylor_tests.png")
     plot_taylor_tests(results, ε, filename)
     println("Saved stationary Stokes gradient plot to $filename")
 
     return results
 end
 
-n = 16
+if !@isdefined(NO_AUTORUN)
+    n = 16
 
-# `init_global_grid` throws if a global grid is already active, which is the case whenever this
-# script is re-run in the same REPL session, or after one of the included examples was executed
-# directly. Tear the stale grid down first -- with `finalize_MPI = false`, since MPI cannot be
-# re-initialized in the same process -- so the grid is always rebuilt for the current `n`.
-ImplicitGlobalGrid.grid_is_initialized() && finalize_global_grid(; finalize_MPI = false)
-igg = IGG(init_global_grid(n, n, 1; init_MPI = !JustRelax.MPI.Initialized())...)
+    # `init_global_grid` throws if a global grid is already active, which is the case whenever this
+    # script is re-run in the same REPL session, or after one of the included examples was executed
+    # directly. Tear the stale grid down first -- with `finalize_MPI = false`, since MPI cannot be
+    # re-initialized in the same process -- so the grid is always rebuilt for the current `n`.
+    ImplicitGlobalGrid.grid_is_initialized() && finalize_global_grid(; finalize_MPI = false)
+    igg = IGG(init_global_grid(n, n, 1; init_MPI = !JustRelax.MPI.Initialized())...)
 
-main(igg)
+    main(igg)
+end

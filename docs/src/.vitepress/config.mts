@@ -42,6 +42,14 @@ export default defineConfig({
     // REPLACE_ME_DOCUMENTER_VITEPRESS_NOINDEX
   ],
 
+  // `@autodocs` renders GeoParams docstrings whose `@ref` links point at bindings this
+  // manual does not document; Documenter leaves those unresolved as hrefs starting with
+  // `./@ref` (see `warnonly = [:cross_references]` in make.jl). Nothing legitimate starts
+  // that way, so every other dead link still fails the build.
+  ignoreDeadLinks: [
+    /^\.\/@ref/,
+  ],
+
   markdown: {
     codeTransformers: [juliaReplTransformer()],
     config(md) {

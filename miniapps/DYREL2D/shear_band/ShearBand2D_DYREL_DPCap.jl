@@ -1,40 +1,14 @@
-const isCUDA = false
-# const isCUDA = true
-
-@static if isCUDA
-    using CUDA
-end
-
-using JustRelax, JustRelax.JustRelax2D
-using Pkg; Pkg.activate("miniapps")
-
-const backend = @static if isCUDA
-    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-end
-
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-
-@static if isCUDA
-    @init_parallel_stencil(CUDA, Float64, 2)
-else
-    @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-end
-
-# Load script dependencies
 using GeoParams, CairoMakie
+using JustRelax, JustRelax.JustRelax2D
+using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2)
 
+const backend = CPUBackend
 
-import JustPIC.GridGeometryUtils as GGU
+using JustPIC, JustPIC._2D
+import JustPIC._2D.GridGeometryUtils as GGU
 
+const backend_JP = JustPIC.CPUBackend
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 @inline function tensile_cap_params(sinϕ::T, cosϕ::T, sinψ::T, C::T, pT::T) where {T}
@@ -86,9 +60,11 @@ function init_phases!(phase_ratios, xci, xvi, circle)
         if GGU.inside(p, circle)
             @index phases[1, i, j] = 0.0
             @index phases[2, i, j] = 1.0
+
         else
             @index phases[1, i, j] = 1.0
             @index phases[2, i, j] = 0.0
+
         end
         return nothing
     end
@@ -98,8 +74,9 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     return nothing
 end
 
+
 # MAIN SCRIPT --------------------------------------------------------------------
-function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
+function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # Physical domain ------------------------------------
     ly = 1.0e0          # domain length in y
@@ -107,9 +84,9 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     ni = nx, ny         # number of cells
     li = lx, ly         # domain length in x- and y-
     di = @. li / ni     # grid step in x- and -y
-    origin = 0.0, 0.0   # origin coordinates
+    origin = 0.0, 0.0       # origin coordinates
     grid = Geometry(ni, li; origin = origin)
-    (; xci, xvi) = grid # nodes at the center and vertices of the cells
+    (; xci, xvi) = grid           # nodes at the center and vertices of the cells
 
     # Physical properties using GeoParams ----------------
     τ_y = 1.6           # yield stress (cohesion: c*cos(ϕ))
@@ -119,18 +96,13 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     η0 = 1.0            # viscosity
     G0 = 1.0            # elastic shear modulus
     Gi = G0 / 2.0       # softer inclusion
-    εbg_x = 1.0         # background strain-rate in x (shear component)
-    εbg_y = 1.0        # background strain-rate in y (compression component, leaving net 0.05 extension)
+    εbg = 1.0           # background strain-rate in x (shear component)
     η_reg = 1.0e-3      # regularisation "viscosity"
-    dt = η0 / G0 / 8.0 # decreased dt to stabilize transition
+    dt = η0 / G0 / 8.0  # decreased dt to stabilize transition
 
     el_bg = ConstantElasticity(; G = G0, Kb = 4)
     el_inc = ConstantElasticity(; G = Gi, Kb = 4)
     visc = LinearViscous(; η = η0)
-
-    # Enable softening safely across a larger strain interval to avoid overshoot
-    soft_C = LinearSoftening((C / 2, C), (0.0e0, 2.0e0))
-
     # Cap plasticity. mode1 = DP, mode2 = Cap
     pl = DruckerPragerCap(;
         C = C / cosd(ϕ),
@@ -142,15 +114,16 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     )
 
     rheology = (
-        # Low density phase (Matrix)
+        # Low density phase
         SetMaterialParams(;
             Phase = 1,
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((visc, el_bg, pl)),
             Elasticity = el_bg,
+
         ),
-        # High density phase (Inclusion)
+        # High density phase
         SetMaterialParams(;
             Phase = 2,
             Density = ConstantDensity(; ρ = 0.0),
@@ -160,66 +133,83 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
         ),
     )
 
-    # perturbation array for the cohesion
-    perturbation_C = @zeros(ni...)
-
     # Initialize phase ratios -------------------------------
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1
-    origin_c = 0.5, 0.5
-    circle = GGU.Circle(origin_c, radius)
+    origin = 0.5, 0.5
+    circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
+    # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
-    for _ in 1:5
-        compute_ρg!(ρg, phase_ratios, rheology, (T = @zeros(ni .+ 2...), P = stokes.P))
-        compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
-    end
-
-    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
 
     # Rheology
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-    # Boundary conditions - pure shear with slight extension
+    compute_viscosity!(
+        stokes, phase_ratios, args, rheology, (-Inf, Inf)
+    )
+    # Boundary conditions
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend)([ x * εbg_x for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend)([-y * εbg_y for _ in 1:(nx + 2), y in xvi[2]])
-    flow_bcs!(stokes, flow_bcs)
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    @views stokes.V.Vx[2:(end - 1), 2:(end - 1)] .= 0.0e0
+    @views stokes.V.Vy[2:(end - 1), 2:(end - 1)] .= 0.0e0
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
     take(figdir)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
 
     # Time loop
     t, it = 0.0, 0
-    tmax = 5
-    τII = Float64[]
-    sol = Float64[]
-    ttot = Float64[]
+    τII = [0.0e0]
+    sol = [0.0e0]
+    ttot = [0.0e0]
 
-    for _ in 1:20
-        iters = solve!(
-            stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg;
-            kwargs = (verbose = false, iterMax = 50.0e3, nout = 1.0e3, viscosity_cutoff = (-Inf, Inf))
+    for _ in 1:150
+
+        # Stokes solver ----------------
+        iters = solve_DYREL!(
+            stokes,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            kwargs = (;
+                verbose_PH = true,
+                verbose_DR = false,
+                iterMax = 50.0e3,
+                nout = 10,
+                rel_drop = 1.0e-2,
+                λ_relaxation_PH = 1,
+                λ_relaxation_DR = 1,
+                viscosity_relaxation = 1,
+                linear_viscosity = true,
+                viscosity_cutoff = (-Inf, Inf),
+            )
         )
+        tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
-        tensor_invariant!(stokes.τ)
-        push!(τII, maximum(stokes.τ.xx))
 
         it += 1
         t += dt
 
-        push!(sol, solution(εbg_x, t, G0, η0))
+        push!(τII, maximum(stokes.τ.xx))
+        push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
 
         println("it = $it; t = $t \n")
@@ -246,7 +236,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
 
         # ax4 plotting
         cp = tensile_cap_params(sind(ϕ), cosd(ϕ), sind(ψ), C / cosd(ϕ), abs(pl.pT.val))
-        xc_array = range(pl.pT.val, cp.pd; length = 100)
+        xc_array = range(-abs(pl.pT.val), cp.pd; length = 100)
         yc_array = sqrt.(max.(0.0, cp.R^2 .- (collect(xc_array) .- cp.py) .^ 2))
 
         P_pts = vec(Array(stokes.P))
@@ -264,16 +254,16 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
         save(joinpath(figdir, "$(it).png"), fig)
     end
 
+
     return nothing
 end
 
-n = 128
-nx = ny = n
-figdir = "ShearBands2D_DPCap"
+nx = 128
+ny = 128
+figdir = "ShearBands2D_DYREL"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end
-
 @time main(igg; figdir = figdir, nx = nx, ny = ny);

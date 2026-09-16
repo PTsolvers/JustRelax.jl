@@ -123,7 +123,6 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     take(figdir)
     # ----------------------------------------------------
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
     centroid2particle!(pT, thermal.T, particles)
     dt₀ = similar(thermal.T)
 
@@ -141,10 +140,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(
-            T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false
-        )
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
@@ -239,7 +235,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
                     T = Array(T_vertex),
                 )
                 data_c = (;
-                    T = Array(T_buffer),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     P = Array(stokes.P),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
@@ -269,7 +265,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             ax2 = Axis(fig[2, 1], aspect = ar, title = "log10(τII [Pa])")
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(T_buffer[:, slice_j, :]), colormap = :lajolla)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(thermal.T[2:(end - 1), slice_j + 1, 2:(end - 1)]), colormap = :lajolla)
             h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.τ.II[:, slice_j, :])), colormap = :batlow)
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.ε.II[:, slice_j, :])), colormap = :batlow)
             h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])), colormap = :batlow)

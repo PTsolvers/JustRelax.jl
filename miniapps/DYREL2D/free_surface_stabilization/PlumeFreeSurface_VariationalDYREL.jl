@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    CUDA.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -144,7 +144,6 @@ function main(igg, nx, ny)
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, Re = 15π, r = 1.0e0, CFL = 0.98 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -173,29 +172,36 @@ function main(igg, nx, ny)
     # Time loop
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
+    viscosity_cutoff = (-Inf, Inf)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+
     while it < 150
         # Stokes -----------------------
-        solve_VariationalStokes!(
+        result = solve_VariationalDYREL!(
             stokes,
-            pt_stokes,
-            grid,
-            flow_bcs,
             ρg,
+            dyrel,
+            flow_bcs,
             phase_ratios,
             ϕ,
             rheology,
             args,
+            grid,
             dt,
             igg;
             kwargs = (;
                 air_phase = air_phase,
                 iterMax = 100.0e3,
-                nout = 1.0e3,
-                viscosity_cutoff = (-Inf, Inf),
+                total_iterMax = 100.0e3,
+                viscosity_relaxation = 1.0e-2,
+                nout = 2.0e3,
+                viscosity_cutoff = viscosity_cutoff,
                 free_surface = true,
-            )
+            ),
         )
+        result.converged || error("Variational DYREL did not converge (err=$(result.err))")
         dt = compute_dt(stokes, di) * 0.95
+        println("t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)) Kyrs, dt = $(round(dt / (3600 * 24 * 365.25); digits = 3)) yrs")
         # ------------------------------
 
         # Advection --------------------
@@ -210,6 +216,7 @@ function main(igg, nx, ny)
 
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (), ())
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
@@ -236,12 +243,14 @@ function main(igg, nx, ny)
             chain_x = chain.coords[1].data[:] ./ 1.0e3
             chain_y = chain.coords[2].data[:] ./ 1.0e3
 
+            # heatmap!(ax, xci./1e3..., Array(stokes.P), colormap = :romaO)
+
             scatter!(ax, Array(pxv[idxv]), Array(pyv[idxv]), color = Array(clr[idxv]), markersize = 5)
             arrows2d!(
                 ax,
                 xvi[1][1:nt:(end - 1)] ./ 1.0e3, xvi[2][1:nt:(end - 1)] ./ 1.0e3, Array.((Vx_v[1:nt:(end - 1), 1:nt:(end - 1)], Vy_v[1:nt:(end - 1), 1:nt:(end - 1)]))...,
                 lengthscale = 25 / max(maximum(Vx_v), maximum(Vy_v)),
-                color = :gray,
+                color = :red,
             )
             scatter!(ax, Array(chain_x), Array(chain_y), color = :red, markersize = 5)
 

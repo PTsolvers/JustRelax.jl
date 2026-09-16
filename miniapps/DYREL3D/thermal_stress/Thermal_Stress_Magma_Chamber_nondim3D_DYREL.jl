@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate(joinpath(@__DIR__, "..", ".."))
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -35,18 +35,6 @@ using ImplicitGlobalGrid
 using MPI: MPI
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[3]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z, sticky_air)
-    @all(P) = @all(ρg)
-    # @all(P) = abs(@all(ρg) * (@all_j(z) + sticky_air)) * <((@all_j(z) + sticky_air), 0.0)
-    return nothing
-end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom)
     ni = size(phases)
@@ -259,8 +247,14 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend, ni) # initialise thermal arrays and boundary conditions
+    Tsurf = nondimensionalize(273K, CharDim)
+    dTdz = nondimensionalize((723 - 273)K, CharDim) / nondimensionalize(15km, CharDim)
+    Tbot = Tsurf + dTdz * (lz - sticky_air)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
+        constant_value = (
+            left = false, right = false, front = false, back = false, top = Tsurf, bot = Tbot,
+        ),
     )
     @parallel (@idx ni) init_T!(
         thermal.T,
@@ -268,8 +262,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         sticky_air,
         nondimensionalize(0.0e0km, CharDim),
         nondimensionalize(15km, CharDim),
-        nondimensionalize((723 - 273)K, CharDim) / nondimensionalize(15km, CharDim),
-        nondimensionalize(273K, CharDim)
+        dTdz,
+        Tsurf,
     )
     circular_perturbation!(
         thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xci, sticky_air
@@ -289,17 +283,16 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, front = true, back = true, top = true, bot = true),
         no_slip = (left = false, right = false, front = false, back = false, top = false, bot = false),
-        free_surface = true,
+        free_surface = false,
     )
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
-
 
     # Buoyancy force & viscosity
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
+        compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
@@ -346,14 +339,10 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     end
 
     dt₀ = similar(thermal.T)
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
-    Tsurf = thermal.T[1, 1, end]
-    Tbot = thermal.T[1, 1, 1]
-
     dyrel = DYREL(
         backend, stokes, rheology, phase_ratios, grid.di, dt;
         ϵ = 1.0e-4, CFL = 0.99, γfact = 20.0,
@@ -363,8 +352,6 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.T, P = stokes.P, dt = Inf, ΔT = thermal.ΔT)
-        compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
         # Stokes solver -----------------
         solve_DYREL!(
@@ -383,15 +370,17 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 verbose_DR = false,
                 iterMax_DR = 150.0e3,
                 total_iterMax = 150.0e3,
-                nout = 1,
-                rel_drop = 1.0e-2,
+                nout = 100,
+                rel_drop = 0.75,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,
+                free_surface = true,
             )
         )
         tensor_invariant!(stokes.ε)
 
-        dt = compute_dt(stokes, di, dt_diff, igg)
+        dt = compute_dt(stokes, di, igg)
+        # dt = compute_dt(stokes, di, dt_diff, igg)
         # --------------------------------
 
         compute_shear_heating!(
@@ -432,7 +421,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -446,10 +435,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
-        @views thermal.T[:, :, end] .= Tsurf
-        @views thermal.T[:, :, 1] .= Tbot
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told
 
@@ -531,7 +517,7 @@ end
 
 figdir = "Thermal_stresses_around_cooling_magma_3D_DYREL"
 do_vtk = true # set to true to generate VTK files for ParaView
-n = 16
+n  = 32
 nx = n
 ny = n
 nz = n

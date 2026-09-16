@@ -38,17 +38,6 @@ include(joinpath(@__DIR__, "Subduction3D_setup.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -104,8 +93,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
-    # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    compute_lithostatic_pressure!(stokes.P, ρg[3], di[3], igg)
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)

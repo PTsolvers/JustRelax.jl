@@ -26,17 +26,6 @@ include("Shearheating_rheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -99,7 +88,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[3], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[3], xci[3])
+    compute_lithostatic_pressure!(stokes.P, ρg[3], di[3], igg)
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -146,10 +135,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         save(joinpath(figdir, "initial_profile.png"), fig)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
-    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -199,8 +185,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         # ------------------------------
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
 
         compute_shear_heating!(
             thermal,
@@ -235,8 +220,7 @@ function main3D(igg; ar = 8, ny = 16, nx = ny * 8, nz = ny * 8, figdir = "figs3D
         # advect particles in memory
         move_particles!(particles, particle_args)
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios

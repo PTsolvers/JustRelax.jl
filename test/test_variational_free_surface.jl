@@ -18,15 +18,15 @@ using ImplicitGlobalGrid
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDA.CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -53,9 +53,9 @@ end
 # and uploaded; on GPU backends they live in device memory. Uploading through the
 # backend's array constructor (rather than copyto! straight into the pre-allocated
 # device array) is the same host->device path already used elsewhere in this suite
-# for both CUDA and AMDGPU (e.g. test_dyrel_solver_3D.jl's `PTArray(backend_JR)(...)`).
+# for both CUDA and AMDGPU (e.g. test_dyrel_solver_3D.jl's `PTArray(backend)(...)`).
 function setmask!(dst, f, xs, ys)
-    copyto!(dst, PTArray(backend_JR)([f(x, y) for x in xs, y in ys]))
+    copyto!(dst, PTArray(backend)([f(x, y) for x in xs, y in ys]))
     return dst
 end
 
@@ -87,15 +87,15 @@ function build(n, origin, rheology, phasefun)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(
         li, di; ϵ_abs = 1.0e-11, ϵ_rel = 1.0e-11,
         Re = 3π, r = 0.7, CFL = 0.9 / √2.1
     )
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
-    ϕ = RockRatio(backend_JR, ni)
+    ϕ = RockRatio(backend, ni)
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true), free_surface = false
     )
@@ -152,7 +152,7 @@ function rigid(igg, n, U, ω)
     for j in axes(ϕVy, 2), i in axes(ϕVy, 1)
         ϕVy[i, j] > 0 && (vy0[i + 1, j] = ω * (xc[i] - XC0); my[i + 1, j] = true)
     end
-    copyto!(Vx, PTArray(backend_JR)(vx0)); copyto!(Vy, PTArray(backend_JR)(vy0))
+    copyto!(Vx, PTArray(backend)(vx0)); copyto!(Vy, PTArray(backend)(vy0))
     solve!(m, igg; iterMax = 5.0e3)
     vx, vy = Array(Vx), Array(Vy)
     den = dot(vx0[mx], vx0[mx]) + dot(vy0[my], vy0[my])

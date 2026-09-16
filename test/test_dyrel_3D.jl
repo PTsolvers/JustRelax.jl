@@ -8,15 +8,15 @@ using Test
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 @testset "DYREL 3D" begin
@@ -24,7 +24,7 @@ end
         nx, ny, nz = 6, 5, 4
         velocity_sizes = ((nx - 1, ny, nz), (nx, ny - 1, nz), (nx, ny, nz - 1))
         dyrel = JustRelax3D.DYREL(
-            backend_JR, (nx, ny, nz);
+            backend, (nx, ny, nz);
             ϵ = 1.0e-7,
             ϵ_vel = 2.0e-7,
             CFL = 0.6,
@@ -61,7 +61,7 @@ end
             )
         )
 
-        dyrel_forwarded = JustRelax3D.DYREL(backend_JR, nx, ny, nz; CFL = 0.7, γfact = 31.0)
+        dyrel_forwarded = JustRelax3D.DYREL(backend, nx, ny, nz; CFL = 0.7, γfact = 31.0)
         @test size(dyrel_forwarded.Dz) == velocity_sizes[3]
         @test dyrel_forwarded.CFL === 0.7
         @test dyrel_forwarded.γfact === 31.0
@@ -102,7 +102,7 @@ end
     end
 
     @testset "struct wrappers" begin
-        dyrel = JustRelax3D.DYREL(backend_JR, (5, 4, 3); CFL = 0.8)
+        dyrel = JustRelax3D.DYREL(backend, (5, 4, 3); CFL = 0.8)
         dτV = (dyrel.dτVx, dyrel.dτVy, dyrel.dτVz)
         βV = (dyrel.βVx, dyrel.βVy, dyrel.βVz)
         αV = (dyrel.αVx, dyrel.αVy, dyrel.αVz)

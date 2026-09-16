@@ -12,15 +12,15 @@ using ParallelStencil
 using ImplicitGlobalGrid
 import ImplicitGlobalGrid: z_g, nz_g
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 const nx, ny, nz = 3, 2, 8
@@ -53,7 +53,7 @@ end
 
 function global_column()
     ρg = @zeros(nx, ny, nz)
-    ρg .= PTArray(backend_JR)([ρg_global(kg(ρg, k)) for _ in 1:nx, _ in 1:ny, k in 1:nz])
+    ρg .= PTArray(backend)([ρg_global(kg(ρg, k)) for _ in 1:nx, _ in 1:ny, k in 1:nz])
     return ρg
 end
 
@@ -74,7 +74,7 @@ function vertical_split()
     end
 
     @testset "variable cell height" begin
-        dz = PTArray(backend_JR)([dz_global(kg(ρg, k)) for k in 1:nz])
+        dz = PTArray(backend)([dz_global(kg(ρg, k)) for k in 1:nz])
         compute_lithostatic_pressure!(P, ρg, dz, igg)
         P_cpu = Array(P)
         for k in 1:nz

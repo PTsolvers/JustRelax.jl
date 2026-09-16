@@ -11,15 +11,15 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -45,7 +45,7 @@ end
 end
 
 @testset "DYREL 3D solver" begin
-    ni = 8, 4, 8
+    ni = 32, 32, 32
     init_mpi = !JustRelax.MPI.Initialized()
     igg = IGG(init_global_grid(ni...; init_MPI = init_mpi)...)
 
@@ -71,21 +71,21 @@ end
             @parallel (@idx size(ratios)) _init_single_phase_solver_3D!(ratios)
         end
 
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         nx, ny, nz = ni
-        stokes.V.Vx .= PTArray(backend_JR)(
+        stokes.V.Vx .= PTArray(backend)(
             [
                 sinpi((i - 1) / nx) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / (nz + 1))
                     for i in 1:(nx + 1), j in 1:(ny + 2), k in 1:(nz + 2)
             ]
         )
-        stokes.V.Vy .= PTArray(backend_JR)(
+        stokes.V.Vy .= PTArray(backend)(
             [
                 -0.7 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / ny) * sinpi((k - 1) / (nz + 1))
                     for i in 1:(nx + 2), j in 1:(ny + 1), k in 1:(nz + 2)
             ]
         )
-        stokes.V.Vz .= PTArray(backend_JR)(
+        stokes.V.Vz .= PTArray(backend)(
             [
                 0.4 * sinpi((i - 1) / (nx + 1)) * sinpi((j - 1) / (ny + 1)) * sinpi((k - 1) / nz)
                     for i in 1:(nx + 2), j in 1:(ny + 2), k in 1:(nz + 1)
@@ -102,7 +102,7 @@ end
         ρg = ntuple(_ -> @zeros(ni...), Val(3))
         args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
         dyrel = JustRelax3D.DYREL(
-            backend_JR, stokes, rheology, phase_ratios, grid.di, dt;
+            backend, stokes, rheology, phase_ratios, grid.di, dt;
             ϵ = 1.0e-6, CFL = 0.99,
         )
 
@@ -112,8 +112,8 @@ end
                 CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
             ),
         )
-        linear_stokes = StokesArrays(backend_JR, ni)
-        linear_stokes.viscosity.η .= PTArray(backend_JR)(
+        linear_stokes = StokesArrays(backend, ni)
+        linear_stokes.viscosity.η .= PTArray(backend)(
             [
                 j + 2k for _ in 1:nx, j in 1:ny, k in 1:nz
             ]
@@ -121,7 +121,7 @@ end
         linear_stokes.ε.yz .= 1.0
         linear_args = (; T = @zeros(ni .+ 2...), P = linear_stokes.P, dt = dt)
         linear_dyrel = JustRelax3D.DYREL(
-            backend_JR, linear_stokes, linear_rheology, phase_ratios, grid.di, dt
+            backend, linear_stokes, linear_rheology, phase_ratios, grid.di, dt
         )
         θc = copy(linear_dyrel.P_num)
         JR3K.compute_stress_viscosity_DRYEL!(

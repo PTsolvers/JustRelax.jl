@@ -11,15 +11,15 @@ using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 using StaticArrays
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -66,12 +66,12 @@ end
         local_ni = 6, 5, 4
         grid = Geometry(local_ni, (1.0, 1.0, 1.0))
         (; xvi) = grid
-        stokes = StokesArrays(backend_JR, local_ni)
+        stokes = StokesArrays(backend, local_ni)
         a, b, c = 2.0, -0.7, 0.4
         nx, ny, nz = local_ni
-        stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
-        stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
-        stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
+        stokes.V.Vx .= PTArray(backend)([a * x for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
+        stokes.V.Vy .= PTArray(backend)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
+        stokes.V.Vz .= PTArray(backend)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
 
         JR3K.compute_∇V_strain_rate!(stokes, grid._di, local_ni, Val(3))
 
@@ -88,7 +88,7 @@ end
         nx, ny, nz = local_ni
         li = 1.7, 2.9, 5.3
         grid = Geometry(local_ni, li)
-        stokes = StokesArrays(backend_JR, local_ni)
+        stokes = StokesArrays(backend, local_ni)
         ρg = ntuple(_ -> @zeros(local_ni...), Val(3))
 
         foreach(A -> fill!(A, 0.0), (stokes.P, stokes.ΔPψ, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz))
@@ -132,16 +132,16 @@ end
             @parallel (@idx size(ratios)) _init_single_phase_3D!(ratios)
         end
 
-        stokes = StokesArrays(backend_JR, local_ni)
+        stokes = StokesArrays(backend, local_ni)
         args = (; T = @zeros(local_ni .+ 2...), P = stokes.P, dt = local_dt)
         compute_viscosity!(stokes, local_phases, args, local_rheology, (-Inf, Inf))
 
         a, b, c = 1.3, -0.4, 0.2
-        stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
-        stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
-        stokes.V.Vz .= PTArray(backend_JR)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
+        stokes.V.Vx .= PTArray(backend)([a * x for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
+        stokes.V.Vy .= PTArray(backend)([b * y for _ in 1:(nx + 2), y in xvi[2], _ in 1:(nz + 2)])
+        stokes.V.Vz .= PTArray(backend)([c * z for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
 
-        dyrel = JustRelax3D.DYREL(backend_JR, stokes, local_rheology, local_phases, grid.di, local_dt; CFL = 0.61, γfact = 37.0)
+        dyrel = JustRelax3D.DYREL(backend, stokes, local_rheology, local_phases, grid.di, local_dt; CFL = 0.61, γfact = 37.0)
         JR3K.DYREL!(dyrel, stokes, local_rheology, local_phases, grid.di, local_dt)
         @test all(
             pair -> all(Array(pair[1] .^ 2 .* pair[2]) .≈ 4 * dyrel.CFL^2),
@@ -248,7 +248,7 @@ end
 
         foreach(A -> fill!(A, 0.0), (ρg..., stokes.P, stokes.ΔPψ, θc, @stress(stokes)...))
         stokes.V.Vz .= 2.0
-        ρg[3] .= PTArray(backend_JR)(
+        ρg[3] .= PTArray(backend)(
             [
                 k for _ in 1:nx, _ in 1:ny, k in 1:nz
             ]
@@ -317,7 +317,7 @@ end
         @parallel (@idx size(ratios)) _init_single_phase_3D!(ratios)
     end
 
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     stokes.viscosity.η .= 1.0
     stokes.ε.yz .= 1.0
     stokes.ε.xz .= 2.0
@@ -436,7 +436,7 @@ end
         γ_host = [isodd(i + j + k) ? 0.01 : 1000.0 for i in 1:ni[1], j in 1:ni[2], k in 1:ni[3]]
         copyto!(stokes.viscosity.η, η_host)
         grid = Geometry(ni, (1.7, 2.9, 5.3))
-        dyrel = JustRelax3D.DYREL(backend_JR, ni; CFL = 0.99)
+        dyrel = JustRelax3D.DYREL(backend, ni; CFL = 0.99)
         copyto!(dyrel.γ_eff, γ_host)
         gersh_rheology = (
             SetMaterialParams(;
@@ -511,7 +511,7 @@ end
         @test λmax[2][i, j, k] ≈ expected_Cy / expected_Dy
         @test λmax[3][i, j, k] ≈ expected_Cz / expected_Dz
 
-        if backend_JR == CPUBackend
+        if backend == CPUBackend
             @testset "actual operator row sums" begin
                 dyrel.ηb .= Inf
                 stokes.P .= 0.0

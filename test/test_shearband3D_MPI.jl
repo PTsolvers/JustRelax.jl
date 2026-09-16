@@ -12,20 +12,20 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax3D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.CUDABackend
@@ -120,18 +120,18 @@ function main(igg; nx = 64, ny = 64, nz = 64)
 
     # Initialize phase ratios -------------------------------
     nxcell, max_xcell, min_xcell = 125, 150, 75
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     radius = 0.1
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     pPhases, = init_cell_arrays(particles, Val(1))
     # Assign particles phases anomaly
     init_phases!(pPhases, particles, radius)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, Re = 3.0e0, r = 0.7, CFL = 0.9 / √3.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
@@ -146,8 +146,8 @@ function main(igg; nx = 64, ny = 64, nz = 64)
         no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),
     )
 
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
-    stokes.V.Vz .= PTArray(backend_JR)([-z * εbg for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg for x in xvi[1], _ in 1:(ny + 2), _ in 1:(nz + 2)])
+    stokes.V.Vz .= PTArray(backend)([-z * εbg for _ in 1:(nx + 2), _ in 1:(ny + 2), z in xvi[3]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -246,7 +246,7 @@ end
 let
     if CSCS_CI != true
         @suppress begin
-            if backend_JR == CPUBackend
+            if backend == CPUBackend
                 n = 32 + 2
                 nx = n ÷ 2
                 ny = n - 2

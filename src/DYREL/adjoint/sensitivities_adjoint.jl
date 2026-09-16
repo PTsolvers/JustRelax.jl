@@ -27,6 +27,7 @@ function compute_sensitivities!(
         λ_relaxation,
         dt,
         igg,
+        controls = (;),
     )
     igg.me == 0 && @printf("\n######## Calculate Sensitivities ########\n")
 
@@ -51,7 +52,7 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, (dρgx, stokes_ad.ρ), _di, ni
     )
     enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt
+        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, controls
     )
 
     gravity = compute_gravity(first(rheology))

@@ -159,7 +159,7 @@ Differentiate the two-dimensional DYREL constitutive kernel. Stress adjoints in
 toy example.
 """
 function enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;)
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) configcall = compute_stress_DRYEL!(
@@ -184,6 +184,7 @@ function enzyme_compute_stress_DRYEL!(
         phase_ratios.vertex,
         λ_relaxation,
         dt,
+        controls,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_stress_DRYEL!,
@@ -217,6 +218,7 @@ function enzyme_compute_stress_DRYEL!(
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
+        Enzyme.Const(controls),
     )
     return nothing
 end
@@ -231,7 +233,7 @@ viscosity. Stress seeds come from `adjoint.τ`; viscosity sensitivities
 accumulate in `adjoint.viscosity.η` and `adjoint.viscosity.ηv`.
 """
 function enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;)
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) configcall = compute_stress_DRYEL!(
@@ -256,6 +258,7 @@ function enzyme_compute_stress_DRYEL_sensitivity!(
         phase_ratios.vertex,
         λ_relaxation,
         dt,
+        controls,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_stress_DRYEL!,
@@ -286,6 +289,7 @@ function enzyme_compute_stress_DRYEL_sensitivity!(
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
+        Enzyme.Const(controls),
     )
     return nothing
 end

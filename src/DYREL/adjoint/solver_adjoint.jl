@@ -49,6 +49,7 @@ function solve_DYREL_adjoint!(
         linear_viscosity,
         free_surface,
         observation,
+        controls,
         kwargs...,
     ) where {N}
     dim = Val(N)
@@ -118,7 +119,7 @@ function solve_DYREL_adjoint!(
         observation.target[observation.i, observation.j] .= -1.0
 
         enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
-        enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt)
+        enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt, controls)
         enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
         enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
 
@@ -187,7 +188,7 @@ function solve_DYREL_adjoint!(
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
 
             enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
-            enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_DR, dt)
+            enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_DR, dt, controls)
             enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
             enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
 
@@ -248,7 +249,7 @@ function solve_DYREL_adjoint!(
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg
+        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg, controls
     )
 
     # Do not carry adjoint iteration history into the next forward solve.

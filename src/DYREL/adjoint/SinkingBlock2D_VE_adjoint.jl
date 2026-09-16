@@ -117,9 +117,6 @@ function sinking_block2D_VE(
     η_block = 10.0
     gravity = 1.0
     G = 0.1
-    # NOTE: the elastic element has to sit *inside* the `CompositeRheology` tuple. `get_G`
-    # reads the composite, not the `Elasticity` field, so a `MaterialParams` that only sets
-    # `Elasticity` yields G = 0 -> Inf, i.e. a purely viscous model.
     elasticity = ConstantElasticity(; G = G, Kb = 5G)
     rheology = (
         SetMaterialParams(;

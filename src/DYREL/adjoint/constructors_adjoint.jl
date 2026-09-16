@@ -1,3 +1,23 @@
+"""
+    material_controls(CPUBackend, ni, parameters; nphases = 1)
+
+Allocate phase-resolved center and vertex multiplier fields and matching zero-valued
+gradient fields only for the selected material-parameter symbols. Multipliers start at one,
+so selecting a parameter does not change the forward problem.
+"""
+function material_controls(
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol};
+        nphases::Integer = 1,
+    ) where {N, M}
+    multipliers = map(parameters) do _
+        (; center = @ones(nphases, ni...), vertex = @ones(nphases, (ni .+ 1)...))
+    end
+    gradients = map(parameters) do _
+        (; center = @zeros(nphases, ni...), vertex = @zeros(nphases, (ni .+ 1)...))
+    end
+    return NamedTuple{parameters}(multipliers), NamedTuple{parameters}(gradients)
+end
+
 function AdjointStokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
     return AdjointStokesArrays(tuple(ni...))
 end

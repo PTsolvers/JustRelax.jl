@@ -3,14 +3,99 @@ get!(ENV, "JULIA_JUSTRELAX_BACKEND", "CPU")
 using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
+import JustRelax.JustRelax3D as JR3
 using JustPIC
 using ParallelStencil
 
 @init_parallel_stencil(Threads, Float64, 2)
 
+const Enzyme = JustRelax2D.Enzyme
+
 @parallel_indices (i, j) function _init_enzyme_phase!(phase)
     @index phase[1, i, j] = 1.0
     return nothing
+end
+
+@parallel_indices (i, j) function _selected_control_kernel!(yc, yv, xc, xv, controls)
+    @inbounds begin
+        if i <= size(yc, 1) && j <= size(yc, 2)
+            yc[i, j] = xc[i, j] * controls.G.center[1, i, j]
+        end
+        yv[i, j] = xv[i, j] * controls.G.vertex[1, i, j]
+    end
+    return nothing
+end
+
+function _selected_control_sensitivity!(yc, dyc, yv, dyv, xc, xv, controls, dcontrols, n)
+    @parallel (@idx n) configcall = _selected_control_kernel!(yc, yv, xc, xv, controls) ParallelStencil.AD.autodiff_deferred!(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        _selected_control_kernel!,
+        Enzyme.DuplicatedNoNeed(yc, dyc),
+        Enzyme.DuplicatedNoNeed(yv, dyv),
+        Enzyme.Const(xc),
+        Enzyme.Const(xv),
+        Enzyme.DuplicatedNoNeed(controls, dcontrols),
+    )
+    return nothing
+end
+
+function _selected_control_const!(yc, dyc, yv, dyv, xc, dxc, xv, dxv, controls, n)
+    @parallel (@idx n) configcall = _selected_control_kernel!(yc, yv, xc, xv, controls) ParallelStencil.AD.autodiff_deferred!(
+        Enzyme.set_runtime_activity(Enzyme.Reverse),
+        _selected_control_kernel!,
+        Enzyme.DuplicatedNoNeed(yc, dyc),
+        Enzyme.DuplicatedNoNeed(yv, dyv),
+        Enzyme.DuplicatedNoNeed(xc, dxc),
+        Enzyme.DuplicatedNoNeed(xv, dxv),
+        Enzyme.Const(controls),
+    )
+    return nothing
+end
+
+@testset "Selectively active material controls MWE" begin
+    ni = (3, 2)
+    yc = @zeros(ni...)
+    yv = @zeros(ni .+ 1...)
+    xc = @ones(ni...) .* 2.0
+    xv = @ones(ni .+ 1...) .* 3.0
+    controls, dcontrols = material_controls(CPUBackend, ni, (:G,); nphases = 2)
+    empty_controls, empty_gradients = material_controls(CPUBackend, ni, ())
+    controls3D, gradients3D = JR3.material_controls(
+        CPUBackend, (3, 2, 4), (:G, :C); nphases = 2
+    )
+
+    @test keys(controls) == (:G,)
+    @test !haskey(controls, :C)
+    @test isempty(empty_controls)
+    @test isempty(empty_gradients)
+    @test size(controls.G.center) == (2, ni...)
+    @test size(controls.G.vertex) == (2, (ni .+ 1)...)
+    @test all(isone, controls.G.center)
+    @test all(iszero, dcontrols.G.center)
+    @test controls.G.center !== dcontrols.G.center
+    @test keys(controls3D) == (:G, :C)
+    @test size(controls3D.G.center) == (2, 3, 2, 4)
+    @test size(controls3D.C.vertex) == (2, 4, 3, 5)
+    @test controls3D.G.center !== gradients3D.G.center
+
+    @parallel (@idx ni .+ 1) _selected_control_kernel!(yc, yv, xc, xv, controls)
+    dyc = @ones(ni...)
+    dyv = @ones(ni .+ 1...)
+    _selected_control_sensitivity!(yc, dyc, yv, dyv, xc, xv, controls, dcontrols, ni .+ 1)
+    @test dcontrols.G.center[1, :, :] ≈ xc
+    @test dcontrols.G.vertex[1, :, :] ≈ xv
+    @test all(iszero, @view(dcontrols.G.center[2, :, :]))
+    @test all(iszero, @view(dcontrols.G.vertex[2, :, :]))
+
+    dxc = @zeros(ni...)
+    dxv = @zeros(ni .+ 1...)
+    dyc .= 1.0
+    dyv .= 1.0
+    _selected_control_const!(yc, dyc, yv, dyv, xc, dxc, xv, dxv, controls, ni .+ 1)
+    @test dxc ≈ one.(dxc)
+    @test dxv ≈ one.(dxv)
+    @test all(isone, controls.G.center)
+    @test all(isone, controls.G.vertex)
 end
 
 # Minimal working example for reverse-mode differentiation of
@@ -124,12 +209,55 @@ end
     stokes.ε.yy .= -0.1
     stokes.ε.xy .= 0.3
     JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1.0, 1.0)
+    τxx_default = copy(stokes.τ.xx)
+    τxy_default = copy(stokes.τ.xy)
+
+    empty_controls, = material_controls(CPUBackend, ni, ())
+    JustRelax2D.compute_stress_DRYEL!(
+        stokes, rheology, phase_ratios, 1.0, 1.0, empty_controls
+    )
+    @test stokes.τ.xx ≈ τxx_default
+    @test stokes.τ.xy ≈ τxy_default
+
+    controls, = material_controls(CPUBackend, ni, (:G,))
+    JustRelax2D.compute_stress_DRYEL!(
+        stokes, rheology, phase_ratios, 1.0, 1.0, controls
+    )
+    @test stokes.τ.xx ≈ τxx_default
+    @test stokes.τ.xy ≈ τxy_default
+
+    controls.G.center .= 2.0
+    controls.G.vertex .= 2.0
+    JustRelax2D.compute_stress_DRYEL!(
+        stokes, rheology, phase_ratios, 1.0, 1.0, controls
+    )
+    @test stokes.τ.xx ≈ (4 / 3) .* τxx_default
+    @test stokes.τ.xy ≈ (4 / 3) .* τxy_default
+
+    θc = @zeros(ni...)
+    γ_eff = @ones(ni...)
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes,
+        θc,
+        γ_eff,
+        rheology,
+        phase_ratios,
+        1.0,
+        1.0,
+        1.0,
+        (;),
+        (-Inf, Inf),
+        true,
+        controls,
+    )
+    @test stokes.τ.xx ≈ (4 / 3) .* τxx_default
+    @test stokes.τ.xy ≈ (4 / 3) .* τxy_default
 
     adjoint.τ.xx .= 1.0
     adjoint.τ.yy .= 1.0
     adjoint.τ.xy .= 1.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
+        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0, controls
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
@@ -138,7 +266,7 @@ end
     adjoint.τ.yy .= 1.0
     adjoint.τ.xy .= 1.0
     JustRelax2D.enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
+        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0, controls
     )
     @test any(!iszero, adjoint.viscosity.η)
     @test any(!iszero, adjoint.viscosity.ηv)

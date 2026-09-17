@@ -90,7 +90,14 @@ function solVi3D(;
     Kb = @fill(Inf, ni...)
 
     ## Boundary conditions
-    pureshear_bc!(stokes, xci, xvi, εbg, backend)
+    xv, yv, zv = xvi
+    xc, yc, zc = xci
+    stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)] .=
+        PTArray(backend)([εbg * x for x in xv, _ in yc, _ in zc])
+    stokes.V.Vy[2:(end - 1), :, 2:(end - 1)] .=
+        PTArray(backend)([εbg * y for _ in xc, y in yv, _ in zc])
+    stokes.V.Vz[2:(end - 1), 2:(end - 1), :] .=
+        PTArray(backend)([-2 * εbg * z for _ in xc, _ in yc, z in zv])
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true, back = true, front = true),
         no_slip = (left = false, right = false, top = false, bot = false, back = false, front = false),

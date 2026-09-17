@@ -10,19 +10,19 @@ using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.CUDABackend
@@ -133,7 +133,7 @@ function Sinking_Block2D()
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 40, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
@@ -142,13 +142,13 @@ function Sinking_Block2D()
     xc_anomaly = 250.0e3   # origin of thermal anomaly
     yc_anomaly = -(ly - 400.0e3) # origin of thermal anomaly
     r_anomaly = 50.0e3   # radius of perturbation
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, abs(yc_anomaly), r_anomaly)
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-5, CFL = 0.95 / √2.1)
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)

@@ -10,15 +10,15 @@ using LinearAlgebra
 using ParallelStencil
 using Test
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 # Backend trait whose solver methods are loaded in this session.
@@ -213,13 +213,13 @@ end
     # `dt = 0`, the masked momentum residual is exactly the negated ϕ-weighted pressure gradient.
     ni = nx, ny
     grid = Geometry(ni, (nx / dx, ny / dy))
-    ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, ni)
+    ϕ = JustRelax.JustRelax2D.RockRatio(backend, ni)
     copyto!(ϕ.center, wₚ)
     copyto!(ϕ.Vx, wᵤ)
     copyto!(ϕ.Vy, wᵥ)
     fill!(ϕ.vertex, 1.0)
 
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     copyto!(stokes.P, p)
     ρgx, ρgy = @zeros(ni...), @zeros(ni...)
     @parallel (JustRelax.JustRelax2D.@idx ni) JustRelax.JustRelax2D.compute_PH_residual_V!(
@@ -257,7 +257,7 @@ end
         return (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.∇V)
     end
 
-    full_rock() = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, ni)
+    full_rock() = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, ni)
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         ϕ
     end
@@ -267,7 +267,7 @@ end
 
     ω = 1.7
     for ϕ in (full_rock(), ϕ_cut), mode in (:translation, :rotation)
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         if mode === :translation
             fill!(stokes.V.Vx, 2.0)
             fill!(stokes.V.Vy, -3.0)
@@ -295,7 +295,7 @@ end
     ε̇ = 0.35
 
     function strain_rates(ϕ)
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         ghost(c) = (d = c[2] - c[1]; vcat(c[1] - d, c..., c[end] + d))
         # pure shear: εxx = -εyy = ε̇, εxy = 0, ∇V = 0
         copyto!(stokes.V.Vx, [ε̇ * x for x in xvi[1], _ in ghost(xci[2])])
@@ -314,11 +314,11 @@ end
         return stokes
     end
 
-    full = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, ni)
+    full = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, ni)
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         ϕ
     end
-    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, ni)
+    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, ni)
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         set_element!(ϕ.center, 0.25, 2, 2)
         set_element!(ϕ.vertex, 0.25, 2, 2)
@@ -341,7 +341,7 @@ end
     @test JustRelax.JustRelax2D.variational_active(nextfloat(0.0)) == true
     @test JustRelax.JustRelax2D.variational_active(1.0) == true
 
-    ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, (3, 3))
+    ϕ = JustRelax.JustRelax2D.RockRatio(backend, (3, 3))
     fill!(ϕ.center, 0.0)
     fill!(ϕ.Vy, 0.0)
     set_element!(ϕ.center, 1.0, 2, 2)
@@ -350,7 +350,7 @@ end
 end
 
 @testset "Variational Stokes 2D pressure row retention" begin
-    full = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, (3, 3))
+    full = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, (3, 3))
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         ϕ
     end
@@ -360,7 +360,7 @@ end
     # the pressure acts back on that face through the weighted gradient, so a row
     # that keeps it carries a divergence no free velocity can relieve and the
     # Powell-Hestenes penalty drives its pressure without bound.
-    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, (3, 3))
+    cut = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, (3, 3))
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         set_element!(ϕ.center, 0.2, 2, 2)
         set_element!(ϕ.Vy, 0.0, 2, 3)
@@ -369,7 +369,7 @@ end
     @test !isvalid_c_at(cut, 2, 2)
 
     # An empty cell is eliminated whatever its faces carry, ...
-    empty_center = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, (3, 3))
+    empty_center = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, (3, 3))
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         set_element!(ϕ.center, 0.0, 2, 2)
         ϕ
@@ -378,7 +378,7 @@ end
 
     # ... and so is a cell whose four faces are all empty: `∇V` is built from those
     # faces alone, so its continuity row is identically zero.
-    isolated = let ϕ = JustRelax.JustRelax2D.RockRatio(backend_JR, (3, 3))
+    isolated = let ϕ = JustRelax.JustRelax2D.RockRatio(backend, (3, 3))
         foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
         set_element!(ϕ.Vx, 0.0, 2, 2)
         set_element!(ϕ.Vx, 0.0, 3, 2)

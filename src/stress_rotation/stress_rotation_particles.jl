@@ -12,6 +12,9 @@ function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{3})
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di.velocity...
     )
+    # Cell-centered counterparts. The edge components each have their own shape, so anything
+    # that needs the vorticity on one uniform layout — `rotate_stress!` interpolating onto
+    # the particles, for one — reads these instead.
     @parallel (@idx ni) shear2center_kernel!(
         (stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c),
         (stokes.ω.yz, stokes.ω.xz, stokes.ω.xy),
@@ -211,9 +214,10 @@ end
     stress2grid!(stokes, τ_particles::StressParticles, particles)
 
 Interpolate the particle stress in `τ_particles` back onto the old-stress fields
-`stokes.τ_o`, normal components onto the cell centers and shear components onto the
-vertices. Counterpart of [`rotate_stress!`](@ref), and the step that hands the rotated
-stress to the next Stokes solve.
+`stokes.τ_o`: normal components onto the cell centers, and shear components onto the
+vertices in 2D or onto the cell centers and edges in 3D, matching where the stress kernels
+read them from. Counterpart of [`rotate_stress!`](@ref), and the step that hands the
+rotated stress to the next Stokes solve.
 """
 function stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{backend}, particles
@@ -244,7 +248,12 @@ function stress2grid!(stokes, pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, particle
     particle2centroid!(stokes.τ_o.xx, pτxx, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.yy, pτyy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.zz, pτzz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-    # shear components
+    # Shear components. Unlike 2D, where `τ.xy` sits on the vertices, the 3D shear
+    # components are edge-centered and each carries its own shape — `yz` is
+    # `(nx, ny + 1, nz + 1)`, `xz` is `(nx + 1, ny, nz + 1)`, `xy` is `(nx + 1, ny + 1, nz)`
+    # — so `particle2grid!`, which writes a full `(nx + 1, ny + 1, nz + 1)` vertex array,
+    # cannot fill them. Interpolate onto the cell centers, which the stress kernels read
+    # through `@tensor_center(stokes.τ_o)`, and average those out onto the edges.
     particle2centroid!(stokes.τ_o.yz_c, pτyz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.xz_c, pτxz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     particle2centroid!(stokes.τ_o.xy_c, pτxy, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
@@ -295,11 +304,15 @@ function rotate_stress!(
     centroid2particle!(pτxx, stokes.τ.xx, particles)
     centroid2particle!(pτyy, stokes.τ.yy, particles)
     centroid2particle!(pτzz, stokes.τ.zz, particles)
-    # shear components
+    # Shear components. `grid2particle!` indexes the field with the particle cell index and
+    # reads both `F[i]` and `F[i+1]`, so it needs a full vertex extent in every dimension.
+    # The 3D shear components are edge-centered and each is one element short in exactly one
+    # dimension (`yz` in x, `xz` in y, `xy` in z), so they cannot be read that way. Use the
+    # cell-centered counterparts, which the stress kernels keep up to date.
     centroid2particle!(pτyz, stokes.τ.yz_c, particles)
     centroid2particle!(pτxz, stokes.τ.xz_c, particles)
     centroid2particle!(pτxy, stokes.τ.xy_c, particles)
-    # vorticity tensor
+    # vorticity tensor, likewise edge-centered — `compute_vorticity!` fills these centers
     centroid2particle!(pωyz, stokes.ω.yz_c, particles)
     centroid2particle!(pωxz, stokes.ω.xz_c, particles)
     centroid2particle!(pωxy, stokes.ω.xy_c, particles)

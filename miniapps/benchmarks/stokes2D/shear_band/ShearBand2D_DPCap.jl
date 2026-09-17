@@ -98,18 +98,6 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     return nothing
 end
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) #* <(@all_k(z), 0.0)
-    return nothing
-end
-
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
 
@@ -190,7 +178,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:5
         compute_ρg!(ρg, phase_ratios, rheology, (T = @zeros(ni .+ 2...), P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[end], xvi[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
     end
 
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)

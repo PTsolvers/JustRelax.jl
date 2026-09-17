@@ -66,7 +66,7 @@ end
 
         # raise the surface: the air particles left underneath it must be deleted
         y_new = -0.02 * ly
-        fill!(chain.h_vertices, y_new)
+        @fill!(chain.h_vertices, y_new)
         update_phases_given_markerchain!(
             pPhases, chain, particles, origin, grid.di.vertex, air_phase
         )

@@ -49,6 +49,7 @@ function runtests(args)
         delete!(testsuite, "test_variational_operators_2D")
         delete!(testsuite, "test_rheology")
         delete!(testsuite, "test_dyrel_solver_3D")
+        delete!(testsuite, "test_dyrel_taylor_green_MPI")
     end
 
     # Separate MPI tests – always run sequentially via mpiexec

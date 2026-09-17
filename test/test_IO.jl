@@ -1,7 +1,7 @@
 using Test, Suppressor
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-const backend_JR = CPUBackend
+const backend = JustRelax.CPUBackend
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 @init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)
@@ -10,7 +10,7 @@ using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = JustPIC.CPU # Options: CPUBackend, CUDABackend, AMDGPUBackend
+const backend_JP = JustPIC.CPU # Options: CPUBackend, CUDABackend, AMDGPUBackend
 # const backend = CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 
 # Load script dependencies
@@ -35,12 +35,12 @@ using WriteVTK, JLD2
 
         # 2D case
         dst = "test_IO"
-        stokes = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
+        thermal = ThermalArrays(backend, ni)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
-            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+            backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
         )
         # temperature
         pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -198,7 +198,7 @@ using WriteVTK, JLD2
         ## Test save_marker_chain
         nxcell, max_xcell, min_xcell = 100, 150, 75
         initial_elevation = 0.0e0
-        chain = init_markerchain(backend, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
+        chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
 
         save_marker_chain(joinpath(dst, "MarkerChain"), chain.cell_vertices, chain.h_vertices)
         @test isfile(joinpath(dst, "MarkerChain.vtp"))
@@ -222,14 +222,14 @@ using WriteVTK, JLD2
 
         # 3D case
         ni = nx, ny, nz
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
 
-        thermal = ThermalArrays(backend_JR, 4, 4, 4)
-        thermal = ThermalArrays(backend_JR, ni)
+        thermal = ThermalArrays(backend, 4, 4, 4)
+        thermal = ThermalArrays(backend, ni)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
         particles = init_particles(
-            backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+            backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
         )
         # temperature
         pT, pPhases = init_cell_arrays(particles, Val(2))

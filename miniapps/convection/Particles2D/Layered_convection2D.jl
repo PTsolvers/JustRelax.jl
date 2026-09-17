@@ -47,18 +47,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 # Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, y, thick_air)
     depth = -y[j] - thick_air
@@ -171,7 +159,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     # Rheology
@@ -216,8 +204,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v
     if do_vtk
@@ -232,8 +219,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
 
         # Update buoyancy and viscosity -
         args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -292,7 +278,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 

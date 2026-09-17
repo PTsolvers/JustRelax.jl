@@ -276,8 +276,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     ## Plot initial T and P profile
     fig = let
@@ -325,15 +324,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
-        # clamp!(T_buffer, 273e0, 1223e0)
+        particle2centroid!(thermal.T, pT, particles)
+        # clamp!(thermal.T, 273e0, 1223e0)
         if it > 1  && rem(it, 5) == 0
             # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=1), 1e3) == 0.0
             println("Simulation eruption at t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 2)) Kyrs")
             thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
             interval += 1
-            centroid2particle!(pT, T_buffer, particles)
+            centroid2particle!(pT, thermal.T, particles)
         end
         thermal_bcs!(thermal, thermal_bc)
 
@@ -404,7 +402,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -428,7 +426,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
@@ -469,7 +467,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     )
                     data_c = (;
                         P = Array(stokes.P),
-                        T = Array(T_buffer),
+                        T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                         viscosity = Array(η_eff),
                         phases = [argmax(p) for p in Array(phase_ratios.center)],
                         Melt_fraction = Array(ϕ_m),

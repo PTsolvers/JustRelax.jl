@@ -75,17 +75,6 @@ function init_phases!(phases, particles, xc, yc, r)
     return @parallel (@idx ni) init_phases!(phases, particles.coords..., particles.index, xc, yc, r)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z)
-    @all(P) = @all(ρg) * abs(@all_j(z))
-    return nothing
-end
-
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
@@ -149,7 +138,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni .+ 2...), P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     # ----------------------------------------------------
 
     # Viscosity

@@ -39,12 +39,6 @@ include(joinpath(@__DIR__, "Subduction2D_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
         @all(A) = @inn_x(B)
@@ -54,11 +48,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -156,8 +145,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
@@ -170,8 +158,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
 
         # interpolate stress back to the grid
@@ -244,7 +231,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -270,7 +257,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
@@ -294,7 +281,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
                 data_c = (;
                     P = Array(stokes.P),
-                    T = Array(T_buffer),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η_vep = Array(η_vep),
                     η = Array(η),
                 )

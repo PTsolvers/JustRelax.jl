@@ -219,8 +219,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         fig
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     pT0.data .= pT.data
 
     local Vx_v, Vy_v
@@ -301,7 +300,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -337,8 +336,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 1.0e1, figdir = "figs2D", d
         # -------------------------------------------
 
         # 6. Interpolate particle temperature back to the thermal grid.
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         flow_bcs!(stokes, flow_bcs) # apply boundary conditions
 
         # 7. Write snapshots and time-series figures at the requested interval.

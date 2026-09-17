@@ -11,15 +11,15 @@ using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const env_backend = ENV["JULIA_JUSTRELAX_BACKEND"]
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -34,7 +34,7 @@ end
 @testset "RockRatio" begin
     @testset "RockRatio 2D constructor" begin
         nx, ny = 5, 4
-        ϕ = JustRelax2D.RockRatio(backend_JR, nx, ny)
+        ϕ = JustRelax2D.RockRatio(backend, nx, ny)
         @test ϕ isa JustRelax.RockRatio
         @test size(ϕ.center) == (nx, ny)
         @test size(ϕ.vertex) == (nx + 1, ny + 1)
@@ -52,7 +52,7 @@ end
 
     @testset "RockRatio 3D constructor" begin
         nx, ny, nz = 4, 3, 2
-        ϕ = JR3.RockRatio(backend_JR, nx, ny, nz)
+        ϕ = JR3.RockRatio(backend, nx, ny, nz)
         @test ϕ isa JustRelax.RockRatio
         @test size(ϕ.center) == (nx, ny, nz)
         @test size(ϕ.vertex) == (nx + 1, ny + 1, nz + 1)
@@ -66,7 +66,7 @@ end
 
     @testset "size_* accessors" begin
         nx, ny = 5, 4
-        ϕ = JustRelax2D.RockRatio(backend_JR, nx, ny)
+        ϕ = JustRelax2D.RockRatio(backend, nx, ny)
         @test JustRelax2D.size_c(ϕ) == size(ϕ.center)
         @test JustRelax2D.size_v(ϕ) == size(ϕ.vertex)
         @test JustRelax2D.size_vx(ϕ) == size(ϕ.Vx)
@@ -79,8 +79,8 @@ end
 
     @testset "isvalid / isvalid_vx / isvalid_vy" begin
         nx, ny = 4, 4
-        if backend_JR == CPUBackend
-            ϕ = JustRelax2D.RockRatio(backend_JR, nx, ny)
+        if backend == CPUBackend
+            ϕ = JustRelax2D.RockRatio(backend, nx, ny)
 
             # initially everything is zero ⇒ isvalid(ϕ, i, j) == false
             @test JustRelax2D.isvalid(ϕ.center, 1, 1) == false
@@ -125,7 +125,7 @@ end
         air_phase = 2
 
         # rock-side cell: no air ⇒ rock-ratio = 1, air-ratio = 0
-        if backend_JR == CPUBackend
+        if backend == CPUBackend
             @test JustRelax2D.compute_rock_ratio(pr.center, air_phase, 1, 1) ≈ 1.0
             @test JustRelax2D.compute_air_ratio(pr.center, air_phase, 1, 1) ≈ 0.0
             # air-side cell: pure air ⇒ rock-ratio = 0, air-ratio = 1
@@ -238,7 +238,7 @@ end
         p_air = @zeros(nx, ny); p_air[3:4, :] .= 1.0
         JustRelax2D.update_phase_ratios_2D!(pr, (p_rock, p_air), xci, xvi)
 
-        ϕ = JustRelax2D.RockRatio(backend_JR, nx, ny)
+        ϕ = JustRelax2D.RockRatio(backend, nx, ny)
         JustRelax2D.update_rock_ratio!(ϕ, pr, 2)            # air_phase = 2
 
         center_h = Base.Array(ϕ.center)

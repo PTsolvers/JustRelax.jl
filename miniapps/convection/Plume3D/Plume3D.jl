@@ -79,7 +79,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
 
     # STOKES ---------------------------------------------
     stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-4, ϵ_rel = 1.0e-4, Re = 3π, r = 1.0e0, CFL = 0.9 / √3.1)
+    pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-12, ϵ_rel = 1.0e-4, Re = 3π, r = 1.0e0, CFL = 0.9 / √3.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -126,8 +126,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     take(figdir)
     # ----------------------------------------------------
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -143,8 +142,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
@@ -163,14 +161,17 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
                 igg;
                 kwargs = (;
                     iterMax = 100.0e3,
-                    nout = 1.0e3,
+                    nout = 1.0e2,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
         end
+
+
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
         println("   Time/iteration:  $(t_stokes / out.iter) s")
+
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff) * 0.8
         # ------------------------------
@@ -204,7 +205,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
         @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -232,7 +233,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
                     T = Array(T_vertex),
                 )
                 data_c = (;
-                    T = Array(T_buffer),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]),
                     P = Array(stokes.P),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
@@ -259,11 +260,11 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             slice_j = ny >>> 1
             fig = Figure(size = (1400, 1200))
             ax1 = Axis(fig[1, 1], aspect = ar, title = "T [K]  (t=$(t / (1.0e6 * 3600 * 24 * 365.25)) Myrs)")
-            ax2 = Axis(fig[2, 1], aspect = ar, title = "τII [MPa]")
+            ax2 = Axis(fig[2, 1], aspect = ar, title = "log10(τII [Pa])")
             ax3 = Axis(fig[1, 3], aspect = ar, title = "log10(εII)")
             ax4 = Axis(fig[2, 3], aspect = ar, title = "log10(η)")
-            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(T_buffer[:, slice_j, :]), colormap = :lajolla)
-            h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(stokes.τ.II[:, slice_j, :] .* 1.0e-6), colormap = :batlow)
+            h1 = heatmap!(ax1, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(thermal.T[2:(end - 1), slice_j + 1, 2:(end - 1)]), colormap = :lajolla)
+            h2 = heatmap!(ax2, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.τ.II[:, slice_j, :])), colormap = :batlow)
             h3 = heatmap!(ax3, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.ε.II[:, slice_j, :])), colormap = :batlow)
             h4 = heatmap!(ax4, xci[1] .* 1.0e-3, xci[3] .* 1.0e-3, Array(log10.(stokes.viscosity.η_vep[:, slice_j, :])), colormap = :batlow)
             hideydecorations!(ax3)

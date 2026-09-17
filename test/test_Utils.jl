@@ -21,22 +21,22 @@ import JustRelax.JustRelax2D:
     maximum_mpi
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.CUDABackend
@@ -62,14 +62,14 @@ end
 
         # 2D case
         dst = "test_Utils"
-        stokes = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
+        thermal = ThermalArrays(backend, ni)
         take(dst)
         @test isdir(dst)
         rm(dst; recursive = true)
 
         nxcell, max_xcell, min_xcell = 20, 32, 12
-        particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
         # temperature
         pT, pPhases = init_cell_arrays(particles, Val(2))
         time = 1.0
@@ -91,7 +91,7 @@ end
 
         # multi_copy!/assign! kernels — CPU-only (these tuple-of-arrays kernels are
         # known not to compile on GPU backends)
-        if backend_JR === CPUBackend
+        if backend === CPUBackend
             A = @zeros(ni...)
             @parallel (@idx ni) JustRelax2D.multi_copy!((A,), (stokes.P,))
             @test A == stokes.P
@@ -175,8 +175,8 @@ end
 
         # 3D case
         ni = nx, ny, nz
-        stokes = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
+        thermal = ThermalArrays(backend, ni)
 
         stokes.viscosity.η .= @fill(1.0)
         stokes.V.Vy .= @fill(10)
@@ -511,7 +511,7 @@ end
         @test Array(P)[1, end] ≈ 2.0 * dz / 2
 
         # variable density, checked against the definition
-        ρg .= PTArray(backend_JR)([Float64(i + 2j) for i in 1:nx, j in 1:ny])
+        ρg .= PTArray(backend)([Float64(i + 2j) for i in 1:nx, j in 1:ny])
         compute_lithostatic_pressure!(P, ρg, dz)
         ρg_cpu, P_cpu = Array(ρg), Array(P)
         for i in 1:nx, j in 1:ny
@@ -519,7 +519,7 @@ end
         end
 
         # non-uniform cell heights: each cell is weighted by its own height
-        dzs = PTArray(backend_JR)([0.25, 0.5, 1.0, 2.0])
+        dzs = PTArray(backend)([0.25, 0.5, 1.0, 2.0])
         compute_lithostatic_pressure!(P, ρg, dzs)
         dzs_cpu, P_cpu = Array(dzs), Array(P)
         for i in 1:nx, j in 1:ny
@@ -531,7 +531,7 @@ end
         # a constant height reproduces the uniform case
         compute_lithostatic_pressure!(P, ρg, dz)
         P_uniform = copy(Array(P))
-        compute_lithostatic_pressure!(P, ρg, PTArray(backend_JR)(fill(dz, ny)))
+        compute_lithostatic_pressure!(P, ρg, PTArray(backend)(fill(dz, ny)))
         @test Array(P) ≈ P_uniform
 
         # a single rank holds the whole column, so the topology adds nothing to it
@@ -540,7 +540,7 @@ end
         P_mpi = @zeros(nx, ny)
         compute_lithostatic_pressure!(P_mpi, ρg, dz, igg)
         @test Array(P_mpi) == P_uniform
-        compute_lithostatic_pressure!(P_mpi, ρg, PTArray(backend_JR)(fill(dz, ny)), igg)
+        compute_lithostatic_pressure!(P_mpi, ρg, PTArray(backend)(fill(dz, ny)), igg)
         @test Array(P_mpi) ≈ P_uniform
 
         # a column carved out of a wider field is integrated in place
@@ -565,7 +565,7 @@ end
             @zeros(nx, ny), @zeros(nx, ny + 1), dz
         )
         @test_throws "one height per cell" compute_lithostatic_pressure!(
-            P, ρg, PTArray(backend_JR)(fill(dz, ny + 1))
+            P, ρg, PTArray(backend)(fill(dz, ny + 1))
         )
     end
 end

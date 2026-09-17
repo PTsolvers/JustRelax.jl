@@ -1,5 +1,5 @@
 """
-    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5) where N
+    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
 
 Creates a new `DYREL` struct with fields initialized to zero.
 
@@ -11,8 +11,9 @@ Creates a new `DYREL` struct with fields initialized to zero.
 - `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
 - `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
 - `c_fact`: Damping scaling factor. Default: `0.5`.
+- `γfact`: Penalty scaling factor. Default: `20.0`.
 """
-function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny = ni
     # penalty parameter
     γ_eff = @zeros(nx, ny)
@@ -54,13 +55,13 @@ function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
+        Rz0, CFL, γfact, ϵ, ϵ_vel, c_fact
     )
 end
 
-DYREL(nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+DYREL(nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
-function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
+function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny, nz = ni
     # penalty parameter
     γ_eff = @zeros(nx, ny, nz)
@@ -102,15 +103,16 @@ function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact =
     return JustRelax.DYREL{T, F}(
         γ_eff, Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz,
         dVx, dVy, dVz, βVx, βVy, βVz, cVx, cVy, cVz, αVx, αVy, αVz, ηb, P_num, Rx0, Ry0,
-        Rz0, CFL, ϵ, ϵ_vel, c_fact
+        Rz0, CFL, γfact, ϵ, ϵ_vel, c_fact
     )
 end
 
-DYREL(nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+DYREL(nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
 
-DYREL(::Type{CPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N} = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
-DYREL(::Type{CPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+DYREL(::Type{CPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N} = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+DYREL(::Type{CPUBackend}, nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+DYREL(::Type{CPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
 function DYREL(::Type{CPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
@@ -149,31 +151,32 @@ This function:
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
 
     ni = size(stokes.P)
+    dim = Val(length(ni))
 
     # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return dyrel
 end
 
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt; CFL = CFL, γfact = γfact)
     return dyrel
 end
 
 
 """
-    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=0.99, γfact=20.0)
+    DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL=dyrel.CFL, γfact=dyrel.γfact)
 
 Updates the fields of the `DYREL` struct in-place for the current time step.
 
@@ -188,26 +191,28 @@ This function recomputes:
 - `rheology`, `phase_ratios`: Material properties.
 - `di`: Grid spacing.
 - `dt`: Current time step.
-- `CFL`: Courant number (default: 0.99).
-- `γfact`: Penalty factor (default: 20.0).
+- `CFL`: Courant number (default: the value stored in `dyrel`).
+- `γfact`: Penalty factor (default: the value stored in `dyrel`).
 
 Returns `nothing`.
 """
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; CFL = dyrel.CFL, γfact = dyrel.γfact)
+    dim = Val(ndims(stokes.P))
+
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return nothing
 end
 
 # variational version
-function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt, ρgy = nothing; CFL = 0.99, γfact = 20.0)
+function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt, ρgy = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
@@ -215,7 +220,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
-    update_dτV_α_β!(dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy, dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy, CFL)
+    update_dτV_α_β!(dyrel, CFL)
 
     return nothing
 end
@@ -231,7 +236,7 @@ Computes the bulk viscosity `ηb` and the effective penalty parameter `γ_eff`.
    - Otherwise `ηb = Kb * dt`.
 
 2. **Penalty Parameter (`γ_eff`)**: A combination of numerical (`γ_num`) and physical (`γ_phy`) penalty terms.
-   - `γ_num = γfact * η` (local viscosity; falls back to `η_mean` where `η` is infinite)
+   - `γ_num = γfact * η_mean`, with `η_mean` the mean of the finite viscosities
    - `γ_phy = Kb * dt` (or `γ_num` where `Kb` is infinite)
    - `γ_eff = (γ_phy * γ_num) / (γ_phy + γ_num)`
 
@@ -247,24 +252,23 @@ This function parallelizes the computation across grid cells.
 """
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
     return nothing
 end
 
 
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, η_mean, γfact, dt)
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η_mean, γfact, dt)
 
     # bulk viscosity
     ratios = @inbounds @cell phase_ratios_center[I...]
     Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
     ηb[I...] = Kbdt
 
-    # penalty parameter: scaled by the *local* viscosity so that γ_eff/η stays O(γfact)
-    # everywhere. A global mean-viscosity scaling over-penalizes the low-viscosity regions
-    # of high-contrast problems, which stiffens the velocity pseudo-transient solve there
-    # and stalls convergence of the last Powell-Hestenes steps.
-    η_local = η[I...]
-    γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
+    # penalty parameter: scaled by a single global viscosity. A penalty scaled by the local
+    # viscosity cannot relax the pressure of a weak body enclosed by strong material (e.g. a
+    # thermally contracting magma chamber): that pressure mode is resisted by the strong
+    # surroundings, so a step sized by the weak viscosity barely reduces it.
+    γ_num = γfact * η_mean
     γ_phy = isinf(Kbdt) ? γ_num : Kbdt
     γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num)
 

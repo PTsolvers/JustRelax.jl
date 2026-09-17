@@ -44,18 +44,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 function init_phases!(phases, particles)
     ni = size(phases)
 
@@ -163,7 +151,7 @@ function main(igg, nx, ny)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
     # Boundary conditions

@@ -10,15 +10,15 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -121,7 +121,7 @@ function ShearBand2D_DPCap_DYREL()
     init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
 
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
@@ -132,12 +132,12 @@ function ShearBand2D_DPCap_DYREL()
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg_x for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([-y * εbg_y for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg_x for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg_y for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
-    dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
 
     t, it = 0.0, 0
     local iters

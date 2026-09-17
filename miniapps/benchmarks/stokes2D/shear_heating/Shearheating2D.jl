@@ -50,18 +50,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
-
 
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
@@ -125,7 +113,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P)
@@ -147,10 +135,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    Told_buffer = similar(T_buffer)
-    @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     # IO -----------------------------------------------
     # if it does not exist, make folder where figures are stored
@@ -237,15 +222,13 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
 
         # Advection --------------------
         # interpolate fields from centroids to particles
-        @views Told_buffer .= thermal.Told[2:(end - 1), 2:(end - 1)]
-        centroid2particle!(pT, T_buffer, particles)
+        centroid2particle!(pT, thermal.T, particles)
         # advect particles in space
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
         # update phase ratios

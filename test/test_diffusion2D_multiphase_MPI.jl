@@ -13,22 +13,22 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     CUDA.CUDABackend
@@ -118,7 +118,7 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
     args = (; P = P)
 
     # Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     Ttop = 300.0
     Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
@@ -141,10 +141,10 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     pPhases, = init_cell_arrays(particles, Val(1))
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
@@ -152,7 +152,7 @@ function diffusion_2D(igg, figdir; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3,
     # PT coefficients for thermal diffusion
     args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.65 / √2
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.65 / √2
     )
 
     # Time loop
@@ -202,7 +202,7 @@ end
 function run_diffusion2D_multiphase_MPI()
     if CSCS_CI != true
         @suppress begin
-            if backend_JR == CPUBackend
+            if backend == CPUBackend
                 figdir = "MPI_Diffusion2D"
                 n = 32
                 igg = IGG(init_global_grid((n, n)..., 1; init_MPI = true, select_device = false)...) #init MPI

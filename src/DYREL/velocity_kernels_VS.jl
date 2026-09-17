@@ -12,9 +12,10 @@
 # ε.*_c interpolation is likewise skipped in-loop (the stress kernel reads ε.xy at vertices).
 # ϕ selects which entries are written but does not scale ε: the rock fraction reaches the
 # deviatoric term once, in the stress divergence taken by the momentum kernels below.
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, args, do_strain_rate = true)
-    ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
-    melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
+function compute_∇V_strain_rate_RP!(
+        stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, do_strain_rate = true;
+        ΔT = nothing, melt_fraction = nothing, kwargs...,
+    )
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,

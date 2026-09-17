@@ -5,20 +5,20 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     import CUDA
 end
 
-using Test, Suppressor
+using Test
 using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
@@ -79,10 +79,10 @@ end
         (; xvi) = grid
         _di = grid._di
 
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         a, b = 2.0, -0.7
-        stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2)])
-        stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2]])
+        stokes.V.Vx .= PTArray(backend)([a * x for x in xvi[1], _ in 1:(ny + 2)])
+        stokes.V.Vy .= PTArray(backend)([b * y for _ in 1:(nx + 2), y in xvi[2]])
 
         JR2K.compute_∇V_strain_rate!(stokes, _di, ni, Val(2))
 
@@ -97,10 +97,10 @@ end
         nx, ny = 5, 4
         ni = nx, ny
         grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         stokes.V.Vy .= 1.0
         ρgx = @zeros(ni...)
-        ρgy = PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
+        ρgy = PTArray(backend)([3.0 - y for _ in 1:nx, y in 1:ny])
         ητ = @ones(ni...) .* 2.0
         ηdτ = 0.5
         dt = 0.25
@@ -153,22 +153,22 @@ end
         @parallel (@idx ni) _init_single_phase!(phase_ratios.center)
         @parallel (@idx ni .+ 1) _init_single_phase!(phase_ratios.vertex)
 
-        stokes = StokesArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
         args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
         compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
         # analytic pure-strain velocity field ⇒ known divergence a+b
         a, b = 1.3, -0.4
-        stokes.V.Vx .= PTArray(backend_JR)([a * x for x in xvi[1], _ in 1:(ny + 2)])
-        stokes.V.Vy .= PTArray(backend_JR)([b * y for _ in 1:(nx + 2), y in xvi[2]])
+        stokes.V.Vx .= PTArray(backend)([a * x for x in xvi[1], _ in 1:(ny + 2)])
+        stokes.V.Vy .= PTArray(backend)([b * y for _ in 1:(nx + 2), y in xvi[2]])
 
-        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
+        dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ = 1.0e-6)
 
         # --- fused divergence + strain rate + pressure residual ---
         # P0 = P and Q = 0 ⇒ RP = -∇V = -(a+b), independent of ηb
         stokes.P0 .= stokes.P
         stokes.Q .= 0.0
-        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt; args...)
         @test all(Array(stokes.R.RP) .≈ -(a + b))
         @test all(Array(stokes.ε.xx) .≈ a - (a + b) / 3)
 
@@ -191,6 +191,15 @@ end
             stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
             _di.center, _di.vertex,
+        )
+        @test all(isfinite, Array(stokes.R.Rx))
+        @test all(isfinite, Array(stokes.R.Ry))
+
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+            _di.center, _di.vertex, 0.0,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))
@@ -223,7 +232,7 @@ end
 
         # The stabilized residual adds Vy*dt*∂y(ρg), using the same local
         # density-gradient coefficient included in the DYREL diagonal.
-        ρg[2] .= PTArray(backend_JR)([3.0 - y for _ in 1:nx, y in 1:ny])
+        ρg[2] .= PTArray(backend)([3.0 - y for _ in 1:nx, y in 1:ny])
         @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
             stokes.R.Rx, stokes.R.Ry,
             stokes.V.Vx, stokes.V.Vy,

@@ -11,19 +11,19 @@ using JustRelax, JustRelax.JustRelax2D
 import JustRelax.JustRelax2D: interp_Vx∂ρ∂x_on_Vy!, interp_Vx_on_Vy!
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 @testset "Interpolations" begin
-    if backend_JR == CPUBackend
+    if backend == CPUBackend
         # Set up mock data
         # Physical domain ------------------------------------
         ly = 1.0       # domain length in y
@@ -38,8 +38,8 @@ end
 
 
         # 2D case
-        stokes = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
+        thermal = ThermalArrays(backend, ni)
         ρg = @ones(ni)
 
         stokes.viscosity.η .= 1

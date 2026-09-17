@@ -29,7 +29,6 @@ function _solve_VariationalDYREL!(
         total_iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
-        b_width = (4, 4, 0),
         verbose_PH = true,
         verbose_DR = true,
         linear_viscosity = false,
@@ -131,7 +130,7 @@ function _solve_VariationalDYREL!(
         update_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, true)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
         # deviatoric stress, then a separate τII-viscosity refresh. The stress kernel derives the
         # vertex viscosity as harm_clamped(η) — the same convention as the APT variational stress
@@ -225,7 +224,7 @@ function _solve_VariationalDYREL!(
             iszero(iter % nout) && foreach(copyto!, residuals0, residuals)
 
             # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
-            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, true)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
             # deviatoric stress (vertex viscosity via harm_clamped(η)) + separate τII-viscosity
             # refresh, then assemble the small pressure correction θc = γ_eff·RP + ΔPψ
@@ -303,14 +302,14 @@ function _solve_VariationalDYREL!(
 
         # update pressure — refresh RP from the final velocity first (do_strain_rate = false leaves
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
-        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
+        compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
         @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
         # Both the refresh and the relaxation are skipped where the mode carries no correction.
         compliance = volumetric_compliance_total(dyrel.ηb, ϕ, maskP)
         if !iszero(compliance)
-            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args, false)
+            compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
             relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
         end
 

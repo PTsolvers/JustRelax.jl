@@ -57,6 +57,22 @@ Base.@propagate_inbounds @inline _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Int
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer, 2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)
 
+# Neighbour of cell `i` in the direction the momentum row at `i` differences, on an array of `n`
+# cells. Momentum rows run to `i = n` only in a periodic direction, where that last row is the
+# seam face whose forward neighbour is the first cell; otherwise `i < n` and this is `i + 1`.
+Base.@propagate_inbounds @inline wrap_next(i::Integer, n::Integer) = ifelse(i == n, oneunit(i), i + oneunit(i))
+
+# Forward differences and averages of a cell-centred field along a direction that may wrap. They
+# agree with `_d_xa` / `_av_xa` and friends wherever the forward neighbour is in range.
+Base.@propagate_inbounds @inline _d_xa_wrap(A::T, _dx, i, j) where {T <: T2} =
+    (-A[i, j] + A[wrap_next(i, size(A, 1)), j]) * _dx
+Base.@propagate_inbounds @inline _d_ya_wrap(A::T, _dy, i, j) where {T <: T2} =
+    (-A[i, j] + A[i, wrap_next(j, size(A, 2))]) * _dy
+Base.@propagate_inbounds @inline _av_xa_wrap(A::T, i, j) where {T <: T2} =
+    (A[i, j] + A[wrap_next(i, size(A, 1)), j]) * 0.5
+Base.@propagate_inbounds @inline _av_ya_wrap(A::T, i, j) where {T <: T2} =
+    (A[i, j] + A[i, wrap_next(j, size(A, 2))]) * 0.5
+
 # averages
 Base.@propagate_inbounds @inline _av(A::T, i, j) where {T <: T2} =
     0.25 * mysum(A, (i + 1):(i + 2), (j + 1):(j + 2))

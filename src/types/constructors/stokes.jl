@@ -78,8 +78,9 @@ Create the vorticity arrays for the Stokes solver in 2D.
 """
 function Vorticity(nx::Integer, ny::Integer)
     xy = @zeros(nx + 1, ny + 1)
+    xy_c = @zeros(nx, ny)
 
-    return JustRelax.Vorticity(nothing, nothing, xy)
+    return JustRelax.Vorticity(nothing, nothing, xy, nothing, nothing, xy_c)
 end
 
 """
@@ -218,43 +219,66 @@ function SymmetricTensor(nx::Integer, ny::Integer, nz::Integer)
 end
 
 ## Residual type
-"""
-    Residual(nx::Integer, ny::Integer)
 
-Create the residual arrays for the Stokes solver in 2D.
-## Fields
-- `Rx`: Residual for the x-momentum equation
-- `Ry`: Residual for the y-momentum equation
-- `RP`: Residual for the continuity equation
 """
-function Residual(nx::Integer, ny::Integer)
-    Rx = @zeros(nx - 1, ny)
-    Ry = @zeros(nx, ny - 1)
-    RP = @zeros(nx, ny)
+    momentum_rows(ni::NTuple{N,Integer}, periodic::NTuple{N,Bool}, d)
+
+Shape of the momentum residual of direction `d` on a grid of `ni` cells.
+
+A non-periodic direction has `ni[d] - 1` interior faces to solve, the two boundary faces being
+prescribed. A periodic direction has `ni[d]`: its two boundary faces are the same plane, so they
+form one extra unknown, stored as the last row of the residual and mapped to the upper face.
+"""
+@inline function momentum_rows(ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}, d) where {N}
+    return ntuple(i -> i == d ? ni[i] - !periodic[d] : ni[i], Val(N))
+end
+
+"""
+    Residual(nx::Integer, ny::Integer[, nz::Integer])
+    Residual(ni::NTuple{N,Integer}, periodic::NTuple{N,Bool})
+
+Create the residual arrays for the Stokes solver.
+
+## Fields
+- `Rx`, `Ry`[, `Rz`]: Residuals for the momentum equations
+- `RP`: Residual for the continuity equation
+
+`periodic` marks the directions whose two boundary faces are the same plane; each of those gains
+one momentum row (see [`momentum_rows`](@ref)). It defaults to all-`false`.
+"""
+function Residual(ni::NTuple{2, Integer}, periodic::NTuple{2, Bool})
+    Rx = @zeros(momentum_rows(ni, periodic, 1)...)
+    Ry = @zeros(momentum_rows(ni, periodic, 2)...)
+    RP = @zeros(ni...)
     return JustRelax.Residual(RP, Rx, Ry)
 end
 
-"""
-    Residual(nx::Integer, ny::Integer, nz::Integer)
-
-Create the residual arrays for the Stokes solver in 3D.
-## Fields
-- `Rx`: Residual for the x-momentum equation
-- `Ry`: Residual for the y-momentum equation
-- `Rz`: Residual for the z-momentum equation
-- `RP`: Residual for the continuity equation
-"""
-function Residual(nx::Integer, ny::Integer, nz::Integer)
-    Rx = @zeros(nx - 1, ny, nz)
-    Ry = @zeros(nx, ny - 1, nz)
-    Rz = @zeros(nx, ny, nz - 1)
-    RP = @zeros(nx, ny, nz)
+function Residual(ni::NTuple{3, Integer}, periodic::NTuple{3, Bool})
+    # The 3D momentum kernels do not wrap their stencils, so an extra row would be read out of
+    # bounds rather than solved. Refuse the allocation instead of deferring to the solver.
+    any(periodic) && error(
+        "Periodic boundary conditions are not implemented in 3D: the momentum row of the \
+        periodic seam has no wrapped stencil to solve it."
+    )
+    Rx = @zeros(momentum_rows(ni, periodic, 1)...)
+    Ry = @zeros(momentum_rows(ni, periodic, 2)...)
+    Rz = @zeros(momentum_rows(ni, periodic, 3)...)
+    RP = @zeros(ni...)
     return JustRelax.Residual(RP, Rx, Ry, Rz)
 end
+
+Residual(nx::Integer, ny::Integer) = Residual((nx, ny), (false, false))
+Residual(nx::Integer, ny::Integer, nz::Integer) = Residual((nx, ny, nz), (false, false, false))
 
 ## StokesArrays type
 function StokesArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
+end
+
+function StokesArrays(
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, bcs::AbstractFlowBoundaryConditions
+    ) where {N}
+    return StokesArrays(ni, bcs)
 end
 
 stokes_vertex_λ_shear(::NTuple{2, Integer}) = (nothing, nothing, nothing)
@@ -265,8 +289,15 @@ end
 
 """
     StokesArrays(ni::NTuple{N,Integer}) where {N}
+    StokesArrays(ni::NTuple{N,Integer}, bcs::AbstractFlowBoundaryConditions)
+    StokesArrays(ni::NTuple{N,Integer}, periodic::NTuple{N,Bool})
 
 Create the Stokes arrays object in 2D or 3D.
+
+Passing the flow boundary conditions sizes the momentum residuals for the periodic directions they
+declare, which is what gives a periodic seam a momentum row; without them every direction is taken
+to be non-periodic. The solvers check the two against each other, so the boundary conditions have
+to be built first.
 
 ## Fields
 - `P`: Pressure field
@@ -290,7 +321,15 @@ Create the Stokes arrays object in 2D or 3D.
 - `λv_yz`, `λv_xz`, `λv_xy` : 3D plastic multiplier on shear staggered grids
 - `ΔPψ` : pressure correction in dilatant case
 """
-function StokesArrays(ni::NTuple{N, Integer}) where {N}
+StokesArrays(ni::NTuple{N, Integer}) where {N} = StokesArrays(ni, ntuple(_ -> false, Val(N)))
+
+function StokesArrays(
+        ni::NTuple{N, Integer}, bcs::AbstractFlowBoundaryConditions
+    ) where {N}
+    return StokesArrays(ni, periodic_dims(bcs))
+end
+
+function StokesArrays(ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}) where {N}
     P = @zeros(ni...)
     P0 = @zeros(ni...)
     ∇V = @zeros(ni...)
@@ -306,7 +345,7 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     EVol_pl = @zeros(ni...)  # accumulated volumetric plastic strain
     ε_vol_pl = @zeros(ni...)  # volumetric plastic strain rate (current step)
     viscosity = Viscosity(ni)
-    R = Residual(ni...)
+    R = Residual(ni, periodic)
     Δε = SymmetricTensor(ni...)
     ∇U = @zeros(ni...)
     λ = @zeros(ni...)

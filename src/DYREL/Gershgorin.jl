@@ -99,10 +99,14 @@ end
         c43 = 4 / 3
         c23 = 2 / 3
 
-        phase = phase_center[i + 1, j]
+        # `Dx` reaches `i = size(η, 1)` only when the x-direction is periodic; that row belongs to
+        # the seam face, whose eastern cell is the first one. The vertex reads above are already
+        # right there -- `ηv[size(η, 1) + 1, :]` is the seam vertex.
+        iE = wrap_next(i, size(η, 1))
+        phase = phase_center[iE, j]
         GE = fn_ratio(get_shear_modulus, rheology, phase)
-        ηE = η[i + 1, j]
-        γE = γ_eff[i + 1, j]
+        ηE = η[iE, j]
+        γE = γ_eff[iE, j]
         # effective viscoelastic viscosity
         # Equivalent to `inv(inv(η) + inv(G * dt))`, while preserving the
         # `G == Inf` limit (`ηve == η`) without producing `Inf / Inf`.
@@ -162,11 +166,13 @@ end
         c43 = 4 / 3
         c23 = 2 / 3
 
-        phase = phase_center[i, j + 1]
+        # Counterpart of `iE` in the x-block: the northern cell of the y seam face is the first.
+        jN = wrap_next(j, size(η, 2))
+        phase = phase_center[i, jN]
         GN = fn_ratio(get_shear_modulus, rheology, phase)
 
-        ηN = η[i, j + 1]
-        γN = γ_eff[i, j + 1]
+        ηN = η[i, jN]
+        γN = γ_eff[i, jN]
         # effective viscoelastic viscosity
         ηN = ηN / @muladd(1 + ηN * inv(GN * dt))
         ηS = ηS / @muladd(1 + ηS * inv(GS * dt))
@@ -424,6 +430,12 @@ end
     return nothing
 end
 
+# Smallest launch range covering every array in `A`. The per-face arrays have different shapes --
+# and a periodic direction makes one of them a row longer -- so the range has to be taken over all
+# of them; each kernel guards its own component against the excess.
+@inline covering_size(A::NTuple{N, AbstractArray{T, N}}) where {N, T} =
+    ntuple(d -> maximum(Aᵢ -> size(Aᵢ, d), A), Val(N))
+
 """
     update_α_β!(βV, αV, dτV, cV)
 
@@ -444,7 +456,7 @@ function update_α_β!(
         dτV::NTuple{N, AbstractArray{T, N}},
         cV::NTuple{N, AbstractArray{T, N}}
     ) where {N, T}
-    ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
+    ni = covering_size(βV)
     @parallel (@idx ni) _update_α_β!(βV, αV, dτV, cV)
     return nothing
 end
@@ -493,7 +505,7 @@ function update_dτV_α_β!(
         λmaxV::NTuple{N, AbstractArray{T, N}},
         CFL_v::Real
     ) where {N, T}
-    ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
+    ni = covering_size(βV)
     @parallel (@idx ni) _update_dτV_α_β!(dτV, βV, αV, cV, λmaxV, CFL_v)
     return nothing
 end

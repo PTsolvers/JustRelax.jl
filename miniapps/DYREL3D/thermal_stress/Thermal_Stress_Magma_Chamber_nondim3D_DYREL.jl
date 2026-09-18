@@ -223,8 +223,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     cutoff_visc = nondimensionalize((1.0e16Pa * s, 1.0e24Pa * s), CharDim)
     κ = (4 / (rheology[1].HeatCapacity[1].Cp * rheology[1].Density[1].ρ0))
     dt = dt_diff = (0.5 * min(di...)^2 / κ / 2.01)         # diffusive CFL timestep limiter
-    dt = nondimensionalize(10e3yr, CharDim) # initial timestep
-    dt_max = nondimensionalize(25e3yr, CharDim) # initial timestep
+    dt = nondimensionalize(10.0e3yr, CharDim) # initial timestep
+    dt_max = nondimensionalize(25.0e3yr, CharDim) # initial timestep
 
     # Initialize particles -------------------------------
     nxcell = 20
@@ -373,7 +373,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 iterMax_DR = 150.0e3,
                 total_iterMax = 150.0e3,
                 nout = 100,
-                rel_drop = 1e-3,
+                rel_drop = 1.0e-3,
                 viscosity_relaxation = 1.0e-2,
                 viscosity_cutoff = cutoff_visc,
                 free_surface = false,
@@ -519,7 +519,7 @@ end
 
 figdir = "Thermal_stresses_around_cooling_magma_3D_DYREL"
 do_vtk = true # set to true to generate VTK files for ParaView
-n  = 32
+n = 32
 nx = n
 ny = n
 nz = n

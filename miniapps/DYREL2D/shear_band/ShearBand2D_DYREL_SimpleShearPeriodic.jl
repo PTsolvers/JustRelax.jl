@@ -233,7 +233,7 @@ end
 
 n = 64
 nx = n
-ny = n * 2
+ny = n 
 figdir = "ShearBands2D_DYREL_SimpleShearPeriodic"
 igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; periodx = true, init_MPI = true)...)

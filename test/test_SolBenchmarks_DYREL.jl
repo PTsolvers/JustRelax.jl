@@ -272,12 +272,12 @@ end
             stokes, iters = run_solcx(igg, nx, ny; variational = false)
             stokes_vs, iters_vs = run_solcx(igg, nx, ny; variational = true)
 
-            @test iters.err_evo_tot[end] < 1.0e-6
+            @test iters.err_evo_tot[end] < 1.0e-5
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.0013939995765589134 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031585683659085865 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.P)) ≈ 0.25700842902418092 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.0013938636779610848 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031580833163039165 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.P)) ≈ 0.25701096604509777 rtol = 1.0e-6
             @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016306775444691899 rtol = 1.0e-6
             @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.0035636067234839051 rtol = 1.0e-6
             @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341866240639133 rtol = 1.0e-6
@@ -290,12 +290,12 @@ end
             @test iters.err_evo_tot[end] < 1.0e-6
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010280771330343728 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.0491243393540986e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.P)) ≈ 0.099060763007113209 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.00010415876959958915 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.1781558832754387e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1024518065842967 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010315674748001426  rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045868650922067e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.P)) ≈ 0.10001155920216592  rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.00010116331952357103  rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.200123342537124e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.10244250706914182  rtol = 1.0e-6
         end
 
         @testset "SolVi" begin

@@ -254,12 +254,6 @@ function Residual(ni::NTuple{2, Integer}, periodic::NTuple{2, Bool})
 end
 
 function Residual(ni::NTuple{3, Integer}, periodic::NTuple{3, Bool})
-    # The 3D momentum kernels do not wrap their stencils, so an extra row would be read out of
-    # bounds rather than solved. Refuse the allocation instead of deferring to the solver.
-    any(periodic) && error(
-        "Periodic boundary conditions are not implemented in 3D: the momentum row of the \
-        periodic seam has no wrapped stencil to solve it."
-    )
     Rx = @zeros(momentum_rows(ni, periodic, 1)...)
     Ry = @zeros(momentum_rows(ni, periodic, 2)...)
     Rz = @zeros(momentum_rows(ni, periodic, 3)...)

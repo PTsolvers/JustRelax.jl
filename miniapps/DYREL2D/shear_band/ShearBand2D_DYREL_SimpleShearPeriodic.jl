@@ -125,9 +125,21 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 30)
     circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
 
+    # Simple shear: periodic in x, driven by the two y boundaries sliding past each other. Those
+    # two faces carry no condition at all, which is how `VelocityBoundaryConditions` lets the
+    # caller prescribe a velocity by hand: `flow_bcs!` leaves such faces untouched and the solver
+    # only writes the interior, so the profile stored on them below survives every iteration.
+    # They are built before the containers because `StokesArrays` sizes the momentum residuals
+    # from them: a periodic direction needs one extra row for the seam face.
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = false, right = false, top = false, bot = false),
+        no_slip = (left = false, right = false, top = false, bot = false),
+        periodic = (left = true, right = true, top = false, bot = false),
+    )
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend, ni)
+    stokes = StokesArrays(backend, ni, flow_bcs)
 
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
@@ -137,17 +149,16 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 30)
     compute_viscosity!(
         stokes, phase_ratios, args, rheology, (-Inf, Inf)
     )
-    # Simple shear: periodic in x, with opposite tangential velocities at y boundaries.
-    flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = false, right = false, top = false, bot = false),
-        no_slip = (left = false, right = false, top = false, bot = false),
-        periodic = (left = true, right = true, top = false, bot = false),
-    )
+    # Simple shear: Vx varies linearly with y. `yVx` includes the two ghost rows that sit half a
+    # cell outside the box, so evaluating the exact linear profile on them puts the plate velocity
+    # ∓εbg·ly right on the walls (averaging a linear function is exact).
     yVx = grid.xi_vel[1][2]
     stokes.V.Vx .= PTArray(backend)([2 * (y - ly / 2) * εbg for _ in xvi[1], y in yVx])
     fill!(stokes.V.Vy, 0.0)
-    @views stokes.V.Vx[2:(end - 1), 2:(end - 1)] .= 0.0e0
-    @views stokes.V.Vy[2:(end - 1), 2:(end - 1)] .= 0.0e0
+    # Wipe the interior so the solver has to reconstruct it. Only the y-range is trimmed: the two
+    # y-boundary rows carry no boundary condition and so keep the prescribed plate velocity, while
+    # `Vx[1, :]` and `Vx[end, :]` are the two faces of the periodic seam, which the solver owns.
+    @views stokes.V.Vx[:, 2:(end - 1)] .= 0.0e0
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 
@@ -201,27 +212,24 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 30)
 
         println("it = $it; t = $t \n")
 
-        # visualisation
-        th = 0:(pi / 50):(3 * pi)
-        xunit = @. radius * cos(th) + 0.5
-        yunit = @. radius * sin(th) + 0.5
+        # visualisation. The titles name what is actually drawn: the effective
+        # viscoelastoplastic viscosity and the accumulated plastic strain rate localise the shear
+        # band, and the bottom-right panel checks τxy against the analytic viscoelastic buildup.
         fig = Figure(size = (1600, 1600), title = "t = $t")
-        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
-        ax3 = Axis(fig[1, 3], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
-        ax4 = Axis(fig[2, 3], aspect = 1)
+        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\log_{10}(\eta_{vep})", titlesize = 35)
+        ax2 = Axis(fig[2, 1], aspect = 1, title = "convergence", titlesize = 35)
+        ax3 = Axis(fig[1, 3], aspect = 1, title = L"\log_{10}(\dot{\varepsilon}^{pl}_{II})", titlesize = 35)
+        ax4 = Axis(fig[2, 3], aspect = 1, title = L"\tau_{xy}", titlesize = 35)
         h11 = heatmap!(ax1, xci..., Array(log10.(stokes.viscosity.η_vep)), colormap = :batlow)
-        # h21 = heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
-        h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_V), linewidth = 3, label = "V")
-        h21 = lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_P), linewidth = 3, label = "P")
+        lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_V), linewidth = 3, label = "V")
+        lines!(ax2, iters.err_evo_it / nx, log10.(iters.err_evo_P), linewidth = 3, label = "P")
         ε_pl_floor = eps(eltype(stokes.ε_pl.II))
         h22 = heatmap!(ax3, xci..., Array(log10.(max.(stokes.ε_pl.II, ε_pl_floor))), colormap = :batlow)
-        # lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
-        lines!(ax4, ttot, τII, color = :black)
-        lines!(ax4, ttot, sol, color = :red)
+        lines!(ax4, ttot, τII, color = :black, label = "numerical")
+        lines!(ax4, ttot, sol, color = :red, label = "viscoelastic")
         Colorbar(fig[1, 2], h11)
         axislegend(ax2)
-        # Colorbar(fig[2, 2], h21)
+        axislegend(ax4; position = :rb)
         Colorbar(fig[2, 4], h22)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
@@ -233,10 +241,16 @@ end
 
 n = 64
 nx = n
-ny = n 
+ny = n
 figdir = "ShearBands2D_DYREL_SimpleShearPeriodic"
+# NOTE: the global grid is deliberately *not* declared periodic. The x-periodicity of this model
+# is carried entirely by the velocity boundary conditions, which give the seam face its own
+# momentum row. Passing `periodx` to `init_global_grid` instead makes ImplicitGlobalGrid report a
+# global grid shrunk by the halo overlap (`nx_g() == nx - 2`), which is what `velocity_dofs` and
+# `pressure_dof` normalise the residual norms by - so the reported convergence is measured against
+# the wrong number of unknowns. This miniapp runs on a single rank.
 igg = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; periodx = true, init_MPI = true)...)
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
 end

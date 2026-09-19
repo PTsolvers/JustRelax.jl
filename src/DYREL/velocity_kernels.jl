@@ -409,12 +409,16 @@ end
         Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
@@ -456,12 +460,16 @@ end
         Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
@@ -490,7 +498,7 @@ end
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_center, k)
 
-        k_T = min(k + 1, size(ρgz, 3))
+        k_T = wrap_next(k, size(ρgz, 3))
         ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
         ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
         Rz[i, j, k] =
@@ -529,12 +537,16 @@ end
         _di_vertex,
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
@@ -749,12 +761,16 @@ end
         dt,
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     @inbounds begin
         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
@@ -797,7 +813,7 @@ end
             _dx = @dx(_di_vertex, i)
             _dy = @dy(_di_vertex, j)
             _dz = @dz(_di_center, k)
-            k_T = min(k + 1, size(ρgz, 3))
+            k_T = wrap_next(k, size(ρgz, 3))
             ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
             ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
             Rz_ijk =

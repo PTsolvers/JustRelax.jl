@@ -267,17 +267,12 @@ Throw unless the periodic directions of `bcs` are ones the solver can actually s
 
 The momentum row of a periodic seam only exists if `stokes` was allocated for it, which is what
 `StokesArrays(backend, ni, bcs)` does; a `stokes` built without the boundary conditions leaves that
-row out and the seam velocity is then frozen at its initial value. The remaining two conditions
-mark combinations that are not implemented rather than ones that are wrong in principle.
+row out and the seam velocity is then frozen at its initial value. The other two conditions mark
+combinations that are not implemented rather than ones that are wrong in principle.
 """
 function check_periodic_bcs(stokes, bcs::AbstractFlowBoundaryConditions, igg, di_center)
     bc_periodic = periodic_dims(bcs)
     any(bc_periodic) || return nothing
-
-    ndims(stokes.P) == 2 || error(
-        "Periodic boundary conditions are only implemented in 2D: the 3D momentum kernels have no \
-        wrapped stencil for the seam face."
-    )
 
     array_periodic = periodic_dims(stokes)
     bc_periodic == array_periodic || error(
@@ -315,13 +310,13 @@ end
 
 Throw if `bcs` asks for a periodic direction, naming the `solver` that does not implement it.
 
-Only the 2D DYREL solver writes the momentum row for a periodic seam. Every other path would
+Only the DYREL solver writes the momentum row for a periodic seam. Every other path would
 leave that row unsolved and silently return a field pinned to its initial guess at the seam.
 """
 function reject_periodic_bcs(bcs::AbstractFlowBoundaryConditions, solver)
     any(periodic_dims(bcs)) && error(
         "Periodic boundary conditions are not implemented for $solver: the momentum row of the \
-        periodic seam would be left unsolved. Use `solve_DYREL!` in 2D."
+        periodic seam would be left unsolved. Use `solve_DYREL!`."
     )
     return nothing
 end

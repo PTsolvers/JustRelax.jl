@@ -83,8 +83,14 @@ check the two against each other and throw if they disagree, so the boundary
 conditions have to be constructed first.
 
 Periodic flow boundaries are currently implemented for `solve_DYREL!` in 2D and
-3D. `solve!`, `solve_VariationalStokes!` and `solve_VariationalDYREL!` reject
-them rather than silently leaving the seam unsolved.
+3D, and for `solve_VariationalDYREL!` in 2D. `solve!` and
+`solve_VariationalStokes!` reject them rather than silently leaving the seam
+unsolved.
+
+For the variational solver the volume fractions have to be periodic too: on the
+`Vx` and `vertex` arrays of a `RockRatio`, index `1` and index `end` along a
+periodic direction are the same plane and must carry the same fraction,
+otherwise the reduced space itself is not periodic.
 
 Two further restrictions are checked at solve time: the periodic direction must
 have uniform grid spacing (the seam face spans the wrap, so one spacing value has

@@ -310,13 +310,15 @@ end
 
 Throw if `bcs` asks for a periodic direction, naming the `solver` that does not implement it.
 
-Only the DYREL solver writes the momentum row for a periodic seam. Every other path would
-leave that row unsolved and silently return a field pinned to its initial guess at the seam.
+Only the DYREL solvers write the momentum row for a periodic seam: `solve_DYREL!` in 2D and 3D,
+and `solve_VariationalDYREL!` in 2D. Every other path would leave that row unsolved and silently
+return a field pinned to its initial guess at the seam.
 """
 function reject_periodic_bcs(bcs::AbstractFlowBoundaryConditions, solver)
     any(periodic_dims(bcs)) && error(
         "Periodic boundary conditions are not implemented for $solver: the momentum row of the \
-        periodic seam would be left unsolved. Use `solve_DYREL!`."
+        periodic seam would be left unsolved. Use `solve_DYREL!`, or \
+        `solve_VariationalDYREL!` in 2D."
     )
     return nothing
 end

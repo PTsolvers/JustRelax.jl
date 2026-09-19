@@ -166,4 +166,117 @@ _linear_phase(η) = SetMaterialParams(;
         @test a.εxy[1, :] ≈ a.εxy[end, :]
         @test a.τxy[1, :] ≈ a.τxy[end, :]
     end
+
+    @testset "variational solver" begin
+        # Same two checks for `solve_VariationalDYREL!`, once with the domain fully rock and once
+        # with a volume fraction that varies in x and wraps across the seam, which is what
+        # exercises the ϕ-weighted wrapped stencils.
+        n, m = 24, 7
+        ni = n, n
+        li = 1.0, 1.0
+        εbg, ly = 1.0, li[2]
+        grid = Geometry(ni, li; origin = (0.0, 0.0))
+        dt = Inf
+
+        # ϕ varying in x only and exactly periodic across the seam: on the x-vertex arrays index
+        # 1 and index end are the same plane, so they must carry the same fraction. Bounded well
+        # away from zero so every row stays in the reduced space and the comparison is not just
+        # matching eliminated rows.
+        function fill_phi!(ϕ, shift, cut)
+            if !cut
+                foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+                return ϕ
+            end
+            f(ix) = 0.5 + 0.5 * _periodic_frac(mod(ix - shift, n), n)
+            for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
+                ϕ.center[i, j] = f(i - 0.5)
+            end
+            for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
+                ϕ.vertex[i, j] = f(i - 1)
+            end
+            for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
+                ϕ.Vx[i, j] = f(i - 1)
+            end
+            for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
+                ϕ.Vy[i, j] = f(i - 0.5)
+            end
+            return ϕ
+        end
+
+        function solve_variational(shift; contrast = true, cut = false)
+            rheology = contrast ? (_linear_phase(1.0), _linear_phase(100.0)) :
+                (_linear_phase(1.0), _linear_phase(1.0))
+            phase_ratios = PhaseRatios(backend_JP, 2, ni)
+            @parallel (@idx size(phase_ratios.center)) _init_x_center_phases_2D!(
+                phase_ratios.center, n, shift
+            )
+            @parallel (@idx size(phase_ratios.vertex)) _init_x_vertex_phases_2D!(
+                phase_ratios.vertex, n, shift
+            )
+
+            flow_bcs = _periodic_flow_bcs()
+            stokes = StokesArrays(backend, ni, flow_bcs)
+            args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+            compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+            ϕ = RockRatio(backend, ni)
+            fill_phi!(ϕ, shift, cut)
+
+            yVx = grid.xi_vel[1][2]
+            stokes.V.Vx .= PTArray(backend)(
+                [2 * εbg * (y - ly / 2) for _i in 1:(n + 1), y in yVx]
+            )
+            @views stokes.V.Vx[:, 2:(end - 1)] .= 0.0
+            fill!(stokes.V.Vy, 0.0)
+            flow_bcs!(stokes, flow_bcs)
+            update_halo!(@velocity(stokes)...)
+
+            ρg = @zeros(ni...), @zeros(ni...)
+            dyrel = JustRelax2D.DYREL(
+                backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-10
+            )
+            out = solve_VariationalDYREL!(
+                stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
+                kwargs = (;
+                    verbose_PH = false, verbose_DR = false, iterMax = 100.0e3,
+                    total_iterMax = 200.0e3, nout = 50, rel_drop = 1.0e-3,
+                    linear_viscosity = true, viscosity_cutoff = (-Inf, Inf),
+                )
+            )
+            return (
+                Vx = Array(stokes.V.Vx), Vy = Array(stokes.V.Vy),
+                η = Array(stokes.viscosity.η),
+                τxy = Array(stokes.τ.xy), εxy = Array(stokes.ε.xy),
+                converged = out.converged,
+            )
+        end
+
+        # uniform viscosity over a full-rock domain reproduces the exact simple shear
+        uniform = solve_variational(0; contrast = false)
+        @test uniform.converged
+        yVx = grid.xi_vel[1][2]
+        exact = [2 * εbg * (y - ly / 2) for _i in 1:(n + 1), y in yVx]
+        @test maximum(abs, uniform.Vx .- exact) / (εbg * ly) < 1.0e-6
+        @test uniform.Vx[1, :] ≈ uniform.Vx[end, :]
+
+        unwrap_vertex(A) = A[1:(end - 1), :]
+        unwrap_ghosted(A) = A[2:(end - 1), :]
+
+        for cut in (false, true)
+            a = solve_variational(0; cut = cut)
+            b = solve_variational(m; cut = cut)
+            @test a.converged && b.converged
+            @test circshift(a.η, (m, 0)) ≈ b.η
+
+            scale = maximum(abs, a.Vx)
+            @test maximum(
+                abs, circshift(unwrap_vertex(a.Vx), (m, 0)) .- unwrap_vertex(b.Vx)
+            ) / scale < 1.0e-10
+            @test maximum(
+                abs, circshift(unwrap_ghosted(a.Vy), (m, 0)) .- unwrap_ghosted(b.Vy)
+            ) / scale < 1.0e-10
+            @test a.εxy[1, :] ≈ a.εxy[end, :]
+            @test a.τxy[1, :] ≈ a.τxy[end, :]
+        end
+    end
 end

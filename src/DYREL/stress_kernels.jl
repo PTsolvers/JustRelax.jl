@@ -825,7 +825,8 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
+        periodic_dims(stokes),
     )
     return nothing
 end
@@ -847,7 +848,8 @@ end
         η_vep,
         ΔPψ,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
+        periodic,
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -857,7 +859,10 @@ end
     @inbounds begin
         ## VERTEX CALCULATION
         @inbounds if isvalid_v(ϕ, I...)
-            Ic = clamped_indices(ni, I...)
+            # The cell stencil of a vertex wraps across a periodic seam instead of degenerating
+            # onto the cells on one side of it, so both copies of the seam plane see the same
+            # material.
+            Ic = clamped_indices(ni, periodic, I...)
             τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
             εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
             λvij = λv[I...]

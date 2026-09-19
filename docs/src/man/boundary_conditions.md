@@ -65,9 +65,45 @@ the constructor throws otherwise. A periodic top face is also incompatible with
 `flow_bcs!`, which is how a prescribed velocity or displacement is imposed: the
 caller writes those boundary and ghost values itself.
 
-For a distributed run, configure the same directions in ImplicitGlobalGrid
-(`periodx`, `periody`, `periodz`) and update the velocity halos after applying
-the boundary conditions.
+### Periodic boundaries in the Stokes solvers
+
+The two coincident faces of a periodic direction are a single physical plane, so
+they share one momentum unknown. That extra unknown only exists if the
+containers are built from the boundary conditions, which is what the `bcs`
+argument of `StokesArrays` is for:
+
+```julia
+bcs    = VelocityBoundaryConditions(; periodic = (left = true, right = true, top = false, bot = false))
+stokes = StokesArrays(backend, ni, bcs)   # NOT StokesArrays(backend, ni)
+```
+
+Building `stokes` without them leaves the seam out of the momentum residual, and
+its velocity stays pinned to whatever the initial guess put there. The solvers
+check the two against each other and throw if they disagree, so the boundary
+conditions have to be constructed first.
+
+Periodic flow boundaries are currently implemented for `solve_DYREL!` in 2D and
+3D, and for `solve_VariationalDYREL!` in 2D. `solve!` and
+`solve_VariationalStokes!` reject them rather than silently leaving the seam
+unsolved.
+
+For the variational solver the volume fractions have to be periodic too: on the
+`Vx` and `vertex` arrays of a `RockRatio`, index `1` and index `end` along a
+periodic direction are the same plane and must carry the same fraction,
+otherwise the reduced space itself is not periodic.
+
+Two further restrictions are checked at solve time: the periodic direction must
+have uniform grid spacing (the seam face spans the wrap, so one spacing value has
+to describe it), and the run must be on a single MPI rank. In particular, do
+*not* pass `periodx`/`periody`/`periodz` to `init_global_grid` for these models:
+ImplicitGlobalGrid then reports a global grid shrunk by the halo overlap, which
+is the count the residual norms are normalised by. The periodicity is carried
+entirely by the velocity boundary conditions.
+
+For a *thermal* periodic model there is no momentum row involved: configure the
+faces on `TemperatureBoundaryConditions` as shown below and, for a distributed
+run, mirror the directions in ImplicitGlobalGrid (`periodx`, `periody`,
+`periodz`) and update the halos after applying the boundary conditions.
 
 ## Prescribing the velocity/displacement boundary conditions
 Normally, one would prescribe the velocity/displacement boundary conditions by setting the velocity/displacement field at the boundary through the application of a background strain rate `εbg`.

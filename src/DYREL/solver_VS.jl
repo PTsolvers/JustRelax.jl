@@ -36,10 +36,13 @@ function _solve_VariationalDYREL!(
         kwargs...,
     ) where {N}
 
+    check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+
     dim = Val(N)
     _di = grid._di
     lx = grid.max_li
     ni = size(stokes.P)
+    periodic = periodic_dims(stokes)
 
     residuals = @residuals(stokes.R)
     fields = dyrel_fields(dyrel, dim)
@@ -48,24 +51,36 @@ function _solve_VariationalDYREL!(
     # element type a `Bool`, not a `Bit`: the kernels below write single entries from concurrent
     # threads, and `BitArray` `setindex!` is a non-atomic read-modify-write of a whole 64-bit
     # chunk, so neighbouring columns would race.
+    # Shaped like the momentum residual, so a periodic direction carries the seam row here too.
     maskV = (
-        similar(ϕ.Vx, Bool, (size(ϕ.Vx, 1) - 2, size(ϕ.Vx, 2))),
-        similar(ϕ.Vy, Bool, (size(ϕ.Vy, 1), size(ϕ.Vy, 2) - 2)),
+        similar(ϕ.Vx, Bool, momentum_rows(ni, periodic, 1)),
+        similar(ϕ.Vy, Bool, momentum_rows(ni, periodic, 2)),
     )
     maskP = similar(ϕ.center, Bool)
     @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
     @parallel (@idx ni) update_valid_v_masks!(maskV..., ϕ)
     # velocity interiors, which is what maskV is shaped like; views alias the parent, so these
-    # stay current for the whole solve
-    Vi = ntuple(d -> @views(@velocity(stokes)[d][2:(end - 1), 2:(end - 1)]), dim)
+    # stay current for the whole solve. Momentum row `i` of direction `d` drives `V[d][i + 1]`
+    # along `d`, so that axis runs to `1 + size(maskV[d], d)` -- one further when `d` is periodic
+    # and the seam face is an unknown. The transverse axes are always the ghosted interior.
+    Vi = ntuple(
+        d -> @views(
+            @velocity(stokes)[d][
+                ntuple(k -> k == d ? (2:(1 + size(maskV[d], k))) : (2:(size(@velocity(stokes)[d], k) - 1)), dim)...,
+            ]
+        ), dim
+    )
     # Momentum-residual norms run over the interior only, so that a boundary-condition row cannot
     # set the residual scale; the continuity residual is not trimmed. Trimming mask, residual and
-    # preconditioner diagonal identically keeps them index-aligned.
-    maskRi = ntuple(d -> @views(maskV[d][2:(end - 1), 2:(end - 1)]), dim)
-    Ri = ntuple(d -> @views(residuals[d][2:(end - 1), 2:(end - 1)]), dim)
-    R0i = ntuple(d -> @views(fields.R0[d][2:(end - 1), 2:(end - 1)]), dim)
-    dVi = ntuple(d -> @views(fields.dV[d][2:(end - 1), 2:(end - 1)]), dim)
-    Di = ntuple(d -> @views(fields.D[d][2:(end - 1), 2:(end - 1)]), dim)
+    # preconditioner diagonal identically keeps them index-aligned. A periodic axis has no
+    # boundary row to exclude -- every row of it, the seam included, is a genuine unknown -- so it
+    # is left whole.
+    norm_trim(A) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - 1)), dim)...]
+    maskRi = ntuple(d -> norm_trim(maskV[d]), dim)
+    Ri = ntuple(d -> norm_trim(residuals[d]), dim)
+    R0i = ntuple(d -> norm_trim(fields.R0[d]), dim)
+    dVi = ntuple(d -> norm_trim(fields.dV[d]), dim)
+    Di = ntuple(d -> norm_trim(fields.D[d]), dim)
     # Divisors that turn the masked L2 norms into RMS values: the number of entries actually
     # summed. The global grid DOF count would instead scale the residual by the rock fraction,
     # which — unlike the boundary trim — does not tend to 1 as the resolution grows, so ϵ would
@@ -82,7 +97,7 @@ function _solve_VariationalDYREL!(
     # modal damping coefficients belong to the old operator and are not valid after a topology
     # change. Resetting every call is cheap, deterministic, and equivalent when the mask is fixed.
     @parallel (@idx ni) project_reduced_state!(
-        stokes.P, stokes.P0, stokes.ΔPψ, stokes.λ, @velocity(stokes)..., ϕ
+        stokes.P, stokes.P0, stokes.ΔPψ, stokes.λ, @velocity(stokes)..., ϕ, maskV...
     )
     foreach(A -> fill!(A, zero(eltype(A))), (fields.dVdτ..., fields.dV..., fields.R0..., fields.cV...))
     flow_bcs!(stokes, flow_bcs)

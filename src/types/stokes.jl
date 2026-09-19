@@ -49,15 +49,15 @@ struct Vorticity{T}
     # where `xy` is already a vertex array that can be interpolated directly.
     yz_c::Union{T, Nothing}
     xz_c::Union{T, Nothing}
-    xy_c::Union{T, Nothing}
+    xy_c::T
 
     function Vorticity(
             yz::Union{T, Nothing},
             xz::Union{T, Nothing},
             xy::T,
-            yz_c::Union{T, Nothing} = nothing,
-            xz_c::Union{T, Nothing} = nothing,
-            xy_c::Union{T, Nothing} = nothing,
+            yz_c::Union{T, Nothing},
+            xz_c::Union{T, Nothing},
+            xy_c::T,
         ) where {T}
         return new{T}(yz, xz, xy, yz_c, xz_c, xy_c)
     end

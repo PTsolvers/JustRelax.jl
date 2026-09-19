@@ -452,11 +452,12 @@ end
         )
 
         phases = map(x -> Array(x), (phase_ratios.center, phase_ratios.yz, phase_ratios.xz, phase_ratios.xy))
+        nonperiodic = (false, false, false)
         center, yz, xz, xy = phases
         ηc(i, j, k) = JustRelax.JustRelax3D._ηve_center(η_host, center, gersh_rheology, dt, i, j, k)
-        ηyz(i, j, k) = JustRelax.JustRelax3D._ηve_yz(η_host, yz, gersh_rheology, dt, ni, i, j, k)
-        ηxz(i, j, k) = JustRelax.JustRelax3D._ηve_xz(η_host, xz, gersh_rheology, dt, ni, i, j, k)
-        ηxy(i, j, k) = JustRelax.JustRelax3D._ηve_xy(η_host, xy, gersh_rheology, dt, ni, i, j, k)
+        ηyz(i, j, k) = JustRelax.JustRelax3D._ηve_yz(η_host, yz, gersh_rheology, dt, ni, nonperiodic, i, j, k)
+        ηxz(i, j, k) = JustRelax.JustRelax3D._ηve_xz(η_host, xz, gersh_rheology, dt, ni, nonperiodic, i, j, k)
+        ηxy(i, j, k) = JustRelax.JustRelax3D._ηve_xy(η_host, xy, gersh_rheology, dt, ni, nonperiodic, i, j, k)
         i, j, k = 2, 2, 3
         _dx, _dy, _dz = grid._di.center
         _dx2, _dy2, _dz2 = _dx^2, _dy^2, _dz^2

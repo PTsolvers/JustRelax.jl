@@ -3,9 +3,11 @@ using StaticArrays
 # Vorticity tensor
 
 function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{2})
-    return @parallel (@idx ni .+ 1) compute_vorticity!(
+    @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., _di.velocity...
     )
+    vertex2center!(stokes.ω.xy_c, stokes.ω.xy)
+    return nothing
 end
 
 function compute_vorticity!(stokes::JustRelax.StokesArrays, _di, ni, ::Val{3})

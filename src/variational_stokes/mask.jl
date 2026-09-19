@@ -320,17 +320,21 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ::JustRelax.RockRatio)
+@parallel_indices (i, j) function project_reduced_state!(P, P0, ΔPψ, λ, Vx, Vy, ϕ::JustRelax.RockRatio, maskVx, maskVy)
     if i ≤ size(P, 1) && j ≤ size(P, 2) && !isvalid_c(ϕ, i, j)
         P[i, j] = zero(eltype(P))
         P0[i, j] = zero(eltype(P0))
         ΔPψ[i, j] = zero(eltype(ΔPψ))
         λ[i, j] = zero(eltype(λ))
     end
-    if i ≤ size(Vx, 1) - 2 && j ≤ size(Vx, 2) - 2 && !isvalid_vx(ϕ, i + 1, j)
+    # The velocity masks are shaped like the momentum residual and already hold
+    # `isvalid_vx(ϕ, i + 1, j)` / `isvalid_vy(ϕ, i, j + 1)`, so they give both the row bound and
+    # the validity. Deriving the bound from `size(Vx)` instead would miss the seam row of a
+    # periodic direction, which is an unknown and so has to be projected like any other.
+    if i ≤ size(maskVx, 1) && j ≤ size(maskVx, 2) && !maskVx[i, j]
         Vx[i + 1, j + 1] = zero(eltype(Vx))
     end
-    if i ≤ size(Vy, 1) - 2 && j ≤ size(Vy, 2) - 2 && !isvalid_vy(ϕ, i, j + 1)
+    if i ≤ size(maskVy, 1) && j ≤ size(maskVy, 2) && !maskVy[i, j]
         Vy[i + 1, j + 1] = zero(eltype(Vy))
     end
     return nothing

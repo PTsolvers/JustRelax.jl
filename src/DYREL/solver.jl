@@ -135,10 +135,12 @@ function _solve_DYREL!(
         kwargs...,
     ) where {N}
 
+    check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+
     @copy stokes.P0 stokes.P
 
     dim = Val(N)
-    v_dofs = velocity_dofs(dim)
+    v_dofs = velocity_dofs(dim, periodic_dims(stokes))
     p_dof = pressure_dof(dim)
     di = grid.di
     _di = grid._di
@@ -494,13 +496,19 @@ end
 
 @inline pressure_dof(N) = prod(global_grid_size(N))
 
-function velocity_dofs(::Val{N}) where {N}
+# Number of momentum unknowns per direction, used to turn the residual norms into per-degree-of-
+# freedom quantities. `global_grid_size` counts vertices, so a direction of `n` cells contributes
+# its `n - 1` interior faces, or all `n` of them when it is periodic and the two boundary faces
+# collapse onto a single unknown.
+function velocity_dofs(::Val{N}, periodic::NTuple{N, Bool}) where {N}
     global_size = global_grid_size(Val(N))
     return ntuple(Val(N)) do d
         @inline
-        prod(i -> i == d ? global_size[i] - 2 : global_size[i] - 1, 1:N)
+        prod(i -> i == d ? global_size[i] - 2 + periodic[d] : global_size[i] - 1, 1:N)
     end
 end
+
+velocity_dofs(::Val{N}) where {N} = velocity_dofs(Val(N), ntuple(_ -> false, Val(N)))
 
 function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)

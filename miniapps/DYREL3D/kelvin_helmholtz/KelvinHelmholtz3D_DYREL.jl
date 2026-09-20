@@ -153,8 +153,21 @@ function main3D(igg; nx = 64, ny = 16, nz = 16, figdir = "KelvinHelmholtz3D", do
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
+    # Boundary conditions --------------------------------
+    # Periodic in x and y. The top and bottom faces carry no condition at all, which is how
+    # `VelocityBoundaryConditions` lets the caller prescribe a velocity by hand: `flow_bcs!`
+    # leaves such faces untouched and `compute_V!` only writes the interior, so whatever we
+    # store on those planes here survives every pseudo-transient iteration.
+    # They are built before the containers because `StokesArrays` sizes the momentum residuals
+    # from them: a periodic direction needs one extra row for the seam face.
+    flow_bcs = VelocityBoundaryConditions(;
+        free_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
+        no_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
+        periodic = (left = true, right = true, top = false, bot = false, front = true, back = true),
+    )
+
     # STOKES ---------------------------------------------
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend_JR, ni, flow_bcs)
     # purely viscous, so there is no elastic timestep in the rheology
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     viscosity_cutoff = (1.0e19, 1.0e23)
@@ -169,17 +182,6 @@ function main3D(igg; nx = 64, ny = 16, nz = 16, figdir = "KelvinHelmholtz3D", do
     # on - see the note on the convergence test at the top of the file.
     compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
     compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
-
-    # Boundary conditions --------------------------------
-    # Periodic in x and y. The top and bottom faces carry no condition at all, which is how
-    # `VelocityBoundaryConditions` lets the caller prescribe a velocity by hand: `flow_bcs!`
-    # leaves such faces untouched and `compute_V!` only writes the interior, so whatever we
-    # store on those planes here survives every pseudo-transient iteration.
-    flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
-        no_slip = (left = false, right = false, top = false, bot = false, front = false, back = false),
-        periodic = (left = true, right = true, top = false, bot = false, front = true, back = true),
-    )
 
     # Simple shear: Vx varies linearly with z. `zVx` includes the two ghost planes that sit
     # half a cell outside the box, so evaluating the exact linear profile on them puts the

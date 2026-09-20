@@ -53,6 +53,7 @@ the sixth argument also accepts, for simpler/benchmark setups:
 Dispatches on the CPU/CUDA/AMDGPU backend selected by `stokes`.
 """
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    reject_periodic_bcs(flow_bcs_of(args), "the 3D `solve!` pseudo-transient solver")
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 

@@ -99,10 +99,14 @@ end
         c43 = 4 / 3
         c23 = 2 / 3
 
-        phase = phase_center[i + 1, j]
+        # `Dx` reaches `i = size(η, 1)` only when the x-direction is periodic; that row belongs to
+        # the seam face, whose eastern cell is the first one. The vertex reads above are already
+        # right there -- `ηv[size(η, 1) + 1, :]` is the seam vertex.
+        iE = wrap_next(i, size(η, 1))
+        phase = phase_center[iE, j]
         GE = fn_ratio(get_shear_modulus, rheology, phase)
-        ηE = η[i + 1, j]
-        γE = γ_eff[i + 1, j]
+        ηE = η[iE, j]
+        γE = γ_eff[iE, j]
         # effective viscoelastic viscosity
         # Equivalent to `inv(inv(η) + inv(G * dt))`, while preserving the
         # `G == Inf` limit (`ηve == η`) without producing `Inf / Inf`.
@@ -162,11 +166,13 @@ end
         c43 = 4 / 3
         c23 = 2 / 3
 
-        phase = phase_center[i, j + 1]
+        # Counterpart of `iE` in the x-block: the northern cell of the y seam face is the first.
+        jN = wrap_next(j, size(η, 2))
+        phase = phase_center[i, jN]
         GN = fn_ratio(get_shear_modulus, rheology, phase)
 
-        ηN = η[i, j + 1]
-        γN = γ_eff[i, j + 1]
+        ηN = η[i, jN]
+        γN = γ_eff[i, jN]
         # effective viscoelastic viscosity
         ηN = ηN / @muladd(1 + ηN * inv(GN * dt))
         ηS = ηS / @muladd(1 + ηS * inv(GS * dt))
@@ -252,18 +258,20 @@ end
 Base.@propagate_inbounds @inline _ηve_center(η, phase_center, rheology, dt, i, j, k) =
     _ηve(η[i, j, k], rheology, phase_center[i, j, k], dt)
 
-Base.@propagate_inbounds @inline function _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k)
-    Ic = clamped_indices(ni, i, j, k)
+# `periodic` is threaded through so these averages use the same wrapped cell stencil as the stress
+# kernel does; the Gershgorin bound only holds for the operator it is actually built from.
+Base.@propagate_inbounds @inline function _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j, k)
+    Ic = clamped_indices(ni, periodic, i, j, k)
     return _ηve(harm_clamped_yz(η, Ic...), rheology, phase_yz[i, j, k], dt)
 end
 
-Base.@propagate_inbounds @inline function _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k)
-    Ic = clamped_indices(ni, i, j, k)
+Base.@propagate_inbounds @inline function _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i, j, k)
+    Ic = clamped_indices(ni, periodic, i, j, k)
     return _ηve(harm_clamped_xz(η, Ic...), rheology, phase_xz[i, j, k], dt)
 end
 
-Base.@propagate_inbounds @inline function _ηve_xy(η, phase_xy, rheology, dt, ni, i, j, k)
-    Ic = clamped_indices(ni, i, j, k)
+Base.@propagate_inbounds @inline function _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i, j, k)
+    Ic = clamped_indices(ni, periodic, i, j, k)
     return _ηve(harm_clamped_xy(η, Ic...), rheology, phase_xy[i, j, k], dt)
 end
 
@@ -273,6 +281,9 @@ end
     )
 
     ni = size(η)
+    # A direction is periodic exactly when its momentum block carries a row per cell rather than
+    # one per interior face, so the shapes of `Dx`/`Dy`/`Dz` are the flags -- no extra argument.
+    periodic = (size(Dx, 1) == ni[1], size(Dy, 2) == ni[2], size(Dz, 3) == ni[3])
     c23 = 2 / 3
     c43 = 4 / 3
     ηC = _ηve_center(η, phase_center, rheology, dt, i, j, k)
@@ -289,14 +300,18 @@ end
         _dxdy = _dx * _dy
         _dxdz = _dx * _dz
 
+        # `Dx` reaches `i = ni[1]` only when the x-direction is periodic; that row belongs to the
+        # seam face, whose eastern cell is the first one. The shear reads above are already right
+        # there -- index `ni[1] + 1` is the seam plane of the `xy`/`xz` vertex arrays.
+        iE = wrap_next(i, ni[1])
         ηW = ηC
-        ηE = _ηve_center(η, phase_center, rheology, dt, i + 1, j, k)
-        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j, k)
-        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
-        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k)
-        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
+        ηE = _ηve_center(η, phase_center, rheology, dt, iE, j, k)
+        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j, k)
+        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
+        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k)
+        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
         γW = γC
-        γE = γ_eff[i + 1, j, k]
+        γE = γ_eff[iE, j, k]
         γηW = γW + c43 * ηW
         γηE = γE + c43 * ηE
         γτW = γW - c23 * ηW
@@ -337,14 +352,16 @@ end
         _dxdy = _dx * _dy
         _dydz = _dy * _dz
 
-        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, i, j + 1, k)
-        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, i + 1, j + 1, k)
+        # Counterpart of `iE` in the x-block: the northern cell of the y seam face is the first.
+        jN = wrap_next(j, ni[2])
+        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i, j + 1, k)
+        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
         ηS = ηC
-        ηN = _ηve_center(η, phase_center, rheology, dt, i, j + 1, k)
-        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k)
-        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
+        ηN = _ηve_center(η, phase_center, rheology, dt, i, jN, k)
+        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k)
+        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
         γS = γC
-        γN = γ_eff[i, j + 1, k]
+        γN = γ_eff[i, jN, k]
         γηS = γS + c43 * ηS
         γηN = γN + c43 * ηN
         γτS = γS - c23 * ηS
@@ -384,14 +401,16 @@ end
         _dxdz = _dx * _dz
         _dydz = _dy * _dz
 
-        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, i, j, k + 1)
-        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, i + 1, j, k + 1)
-        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j, k + 1)
-        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, i, j + 1, k + 1)
+        # Counterpart of `iE` in the x-block: the front cell of the z seam face is the first.
+        kF = wrap_next(k, ni[3])
+        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i, j, k + 1)
+        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
+        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j, k + 1)
+        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
         ηB = ηC
-        ηF = _ηve_center(η, phase_center, rheology, dt, i, j, k + 1)
+        ηF = _ηve_center(η, phase_center, rheology, dt, i, j, kF)
         γB = γC
-        γF = γ_eff[i, j, k + 1]
+        γF = γ_eff[i, j, kF]
         γηB = γB + c43 * ηB
         γηF = γF + c43 * ηF
         γτB = γB - c23 * ηB
@@ -424,6 +443,12 @@ end
     return nothing
 end
 
+# Smallest launch range covering every array in `A`. The per-face arrays have different shapes --
+# and a periodic direction makes one of them a row longer -- so the range has to be taken over all
+# of them; each kernel guards its own component against the excess.
+@inline covering_size(A::NTuple{N, AbstractArray{T, N}}) where {N, T} =
+    ntuple(d -> maximum(Aᵢ -> size(Aᵢ, d), A), Val(N))
+
 """
     update_α_β!(βV, αV, dτV, cV)
 
@@ -444,7 +469,7 @@ function update_α_β!(
         dτV::NTuple{N, AbstractArray{T, N}},
         cV::NTuple{N, AbstractArray{T, N}}
     ) where {N, T}
-    ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
+    ni = covering_size(βV)
     @parallel (@idx ni) _update_α_β!(βV, αV, dτV, cV)
     return nothing
 end
@@ -493,7 +518,7 @@ function update_dτV_α_β!(
         λmaxV::NTuple{N, AbstractArray{T, N}},
         CFL_v::Real
     ) where {N, T}
-    ni = size(βV[1]) .+ ntuple(i -> i == 1 ? 1 : 0, Val(N))
+    ni = covering_size(βV)
     @parallel (@idx ni) _update_dτV_α_β!(dτV, βV, αV, cV, λmaxV, CFL_v)
     return nothing
 end

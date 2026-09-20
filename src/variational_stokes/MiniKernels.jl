@@ -26,6 +26,26 @@ Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) 
 Base.@propagate_inbounds @inline _d_zi(A::T, ϕ::T, _dz, I::Vararg{Integer, N}) where {N, T} =
     (-top(A, ϕ, I...) + next(A, ϕ, I...)) * _dz
 
+# Masked counterparts of `_d_xa_wrap` / `_av_xa_wrap` and friends: the forward neighbour along a
+# direction that may wrap, with both the field and its volume fraction taken at that neighbour.
+# `A` and `ϕ` are the same shape here (both cell-centred), so they wrap together. They agree with
+# the unwrapped versions wherever the forward neighbour is in range.
+Base.@propagate_inbounds @inline _masked_next_wrap(
+    A::T, ϕ::T, ::Val{d}, I::NTuple{N, Integer}
+) where {T, N, d} = _next_wrap(A, Val(d), I) * _next_wrap(ϕ, Val(d), I)
+
+Base.@propagate_inbounds @inline _d_xa_wrap(A::T, ϕ::T, _dx, I::Vararg{Integer, N}) where {N, T} =
+    (-center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(1), I)) * _dx
+
+Base.@propagate_inbounds @inline _d_ya_wrap(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) where {N, T} =
+    (-center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(2), I)) * _dy
+
+Base.@propagate_inbounds @inline _av_xa_wrap(A::T, ϕ::T, I::Vararg{Integer, N}) where {N, T} =
+    (center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(1), I)) * 0.5
+
+Base.@propagate_inbounds @inline _av_ya_wrap(A::T, ϕ::T, I::Vararg{Integer, N}) where {N, T} =
+    (center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(2), I)) * 0.5
+
 # averages 2D
 Base.@propagate_inbounds @inline _av(A::T, ϕ::T, i, j) where {T <: T2} =
     0.25 * mymaskedsum(A, ϕ, (i + 1):(i + 2), (j + 1):(j + 2))

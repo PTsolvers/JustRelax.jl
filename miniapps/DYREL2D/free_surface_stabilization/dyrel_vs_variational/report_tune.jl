@@ -32,10 +32,10 @@ function load(dir)
     data, _ = readdlm(path, ',', header = true)
     return [
         Row(
-                string(data[i, 1]), Int(data[i, 2]), Float64(data[i, 3]), Int(data[i, 4]),
-                Int(data[i, 5]), Float64(data[i, 6]), Int(data[i, 8]), Int(data[i, 9]),
-                Float64(data[i, 10]), string(data[i, 11]),
-            ) for i in axes(data, 1)
+            string(data[i, 1]), Int(data[i, 2]), Float64(data[i, 3]), Int(data[i, 4]),
+            Int(data[i, 5]), Float64(data[i, 6]), Int(data[i, 8]), Int(data[i, 9]),
+            Float64(data[i, 10]), string(data[i, 11]),
+        ) for i in axes(data, 1)
     ]
 end
 

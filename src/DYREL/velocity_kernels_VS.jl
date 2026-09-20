@@ -141,15 +141,19 @@ end
         _di_vertex,
         dt,
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. Vertex reads (`τxy`, `ϕ.vertex`) need no wrap -- index `nx + 1`
+    # is the seam plane of those arrays already.
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa_wrap(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya_wrap(A, ϕ, i, j)
 
     ny = size(ρgy, 2)
     @inbounds begin
         if all((i, j) .≤ size(Rx))
             _dx_c = @dx(_di_center, i)
             _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
                 d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
@@ -160,13 +164,13 @@ end
         if all((i, j) .≤ size(Ry))
             _dy_c = @dy(_di_center, j)
             _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
-                j_N = min(j + 1, ny)
+                j_N = wrap_next(j, ny)
                 ρg_S = center(ρgy, ϕ.center, i, j)
                 ρg_N = center(ρgy, ϕ.center, i, j_N)
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
@@ -210,15 +214,19 @@ end
         _di_vertex,
         dt,
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa(A, ϕ, i, j)
-    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya(A, ϕ, i, j)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. Vertex reads (`τxy`, `ϕ.vertex`) need no wrap -- index `nx + 1`
+    # is the seam plane of those arrays already.
+    Base.@propagate_inbounds @inline av_xa(A, ϕ) = _av_xa_wrap(A, ϕ, i, j)
+    Base.@propagate_inbounds @inline av_ya(A, ϕ) = _av_ya_wrap(A, ϕ, i, j)
 
     ny = size(ρgy, 2)
     @inbounds begin
         if all((i, j) .≤ size(Rx))
             _dx_c = @dx(_di_center, i)
             _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             if isvalid_vx(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
@@ -235,13 +243,13 @@ end
         if all((i, j) .≤ size(Ry))
             _dy_c = @dy(_di_center, j)
             _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             if isvalid_vy(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
-                j_N = min(j + 1, ny)
+                j_N = wrap_next(j, ny)
                 ρg_S = center(ρgy, ϕ.center, i, j)
                 ρg_N = center(ρgy, ϕ.center, i, j_N)
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c

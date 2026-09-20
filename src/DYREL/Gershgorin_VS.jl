@@ -56,8 +56,8 @@ end
 # vertex stress from the harmonic mean of the four surrounding center viscosities, clamped
 # at the domain border, so the Gershgorin bound must sample that same combination for the
 # preconditioner to describe the operator being iterated.
-Base.@propagate_inbounds @inline function η_vertex(η, ni, i, j)
-    return harm_clamped(η, clamped_indices(ni, i, j)...)
+Base.@propagate_inbounds @inline function η_vertex(η, ni, periodic, i, j)
+    return harm_clamped(η, clamped_indices(ni, periodic, i, j)...)
 end
 
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
@@ -87,6 +87,9 @@ end
     )
 
     ni = size(η)
+    # A direction is periodic exactly when its momentum block carries a row per cell rather than
+    # one per interior face, so the shapes of `Dx`/`Dy` are the flags -- no extra argument.
+    periodic = (size(Dx, 1) == ni[1], size(Dy, 2) == ni[2])
 
     # @inbounds begin
     phase = phase_vertex[i + 1, j + 1]
@@ -97,8 +100,8 @@ end
     GW = fn_ratio(get_shear_modulus, rheology, phase)
 
 
-    ηN = η_vertex(η, ni, i + 1, j + 1)
-    ηS = η_vertex(η, ni, i + 1, j)
+    ηN = η_vertex(η, ni, periodic, i + 1, j + 1)
+    ηS = η_vertex(η, ni, periodic, i + 1, j)
     ηW = η[i, j]
 
     # Powell-Hestenes penalty coefficient using the same effective weighting as the
@@ -119,15 +122,19 @@ end
             c43 = 4 / 3
             c23 = 2 / 3
 
-            phase = phase_center[i + 1, j]
+            # `Dx` reaches `i = ni[1]` only when x is periodic; that row is the seam face, whose
+            # eastern cell is the first one. The vertex reads need no wrap -- `ni[1] + 1` is
+            # already the seam plane of the vertex arrays.
+            iE = wrap_next(i, ni[1])
+            phase = phase_center[iE, j]
             GE = fn_ratio(get_shear_modulus, rheology, phase)
-            ηE = η[i + 1, j]
-            γE = γ_eff[i + 1, j] * ϕ.center[i + 1, j]
+            ηE = η[iE, j]
+            γE = γ_eff[iE, j] * ϕ.center[iE, j]
             # effective viscoelastic viscosity, ϕ-weighted after the combine
             ηN = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηN, GN, dt)
             ηS = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j], ηS, GS, dt)
             ηW = ϕ_weighted_harmonic(ϕ.center[i, j], ηW, GW, dt)
-            ηE = ϕ_weighted_harmonic(ϕ.center[i + 1, j], ηE, GE, dt)
+            ηE = ϕ_weighted_harmonic(ϕ.center[iE, j], ηE, GE, dt)
 
             # Precompute common terms
             ηN_dy = ηN * _dy
@@ -164,8 +171,8 @@ end
     GE = GN # reuse cached value
 
     ηS = η[i, j]
-    ηW = η_vertex(η, ni, i, j + 1)
-    ηE = η_vertex(η, ni, i + 1, j + 1)
+    ηW = η_vertex(η, ni, periodic, i, j + 1)
+    ηE = η_vertex(η, ni, periodic, i + 1, j + 1)
     # Powell-Hestenes penalty coupling; γW already carries the ϕ.center[i, j] weights.
     γS = γW # reuse cached value
 
@@ -182,13 +189,16 @@ end
             c43 = 4 / 3
             c23 = 2 / 3
 
-            phase = phase_center[i, j + 1]
+            # Counterpart of `iE` in the Vx block: the northern cell of the y seam face is the
+            # first one.
+            jN = wrap_next(j, ni[2])
+            phase = phase_center[i, jN]
             GN = fn_ratio(get_shear_modulus, rheology, phase)
 
-            ηN = η[i, j + 1]
-            γN = γ_eff[i, j + 1] * ϕ.center[i, j + 1]
+            ηN = η[i, jN]
+            γN = γ_eff[i, jN] * ϕ.center[i, jN]
             # effective viscoelastic viscosity, ϕ-weighted after the combine (see Vx block)
-            ηN = ϕ_weighted_harmonic(ϕ.center[i, j + 1], ηN, GN, dt)
+            ηN = ϕ_weighted_harmonic(ϕ.center[i, jN], ηN, GN, dt)
             ηS = ϕ_weighted_harmonic(ϕ.center[i, j], ηS, GS, dt)
             ηW = ϕ_weighted_harmonic(ϕ.vertex[i, j + 1], ηW, GW, dt)
             ηE = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηE, GE, dt)

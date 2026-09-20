@@ -1,10 +1,13 @@
 """
-    DYREL(ni::NTuple{N, Integer}; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
+    DYREL(ni::NTuple{N, Integer}[, periodic]; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
 
 Creates a new `DYREL` struct with fields initialized to zero.
 
 # Arguments
 - `ni`: Tuple containing the grid dimensions `(nx, ny)` for 2D or `(nx, ny, nz)` for 3D.
+- `periodic`: `N`-tuple marking the periodic directions, which each carry one extra momentum row
+  (see [`momentum_rows`](@ref)). Defaults to all-`false`. The `StokesArrays` method below reads it
+  off the containers instead, so the two cannot disagree.
 
 # Keyword arguments
 - `ϵ`: General convergence tolerance. Default: `1.0e-6`.
@@ -13,41 +16,45 @@ Creates a new `DYREL` struct with fields initialized to zero.
 - `c_fact`: Damping scaling factor. Default: `0.5`.
 - `γfact`: Penalty scaling factor. Default: `20.0`.
 """
-function DYREL(ni::NTuple{2}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+function DYREL(ni::NTuple{2}, periodic::NTuple{2, Bool} = (false, false); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny = ni
+    # Every per-face array is indexed by the momentum row it belongs to, so they all share the
+    # residual's shape -- one row longer in a periodic direction, which carries the seam face.
+    nVx = momentum_rows(ni, periodic, 1)
+    nVy = momentum_rows(ni, periodic, 2)
     # penalty parameter
     γ_eff = @zeros(nx, ny)
     # bulk viscosity
     ηb = @zeros(nx, ny)
     # Diagonal preconditioner arrays
-    Dx = @zeros(nx - 1, ny)
-    Dy = @zeros(nx, ny - 1)
+    Dx = @zeros(nVx...)
+    Dy = @zeros(nVy...)
     Dz = @zeros(1, 1)  # dummy for 2D
     # maximum eigenvalue estimates
-    λmaxVx = @zeros(nx - 1, ny)
-    λmaxVy = @zeros(nx, ny - 1)
+    λmaxVx = @zeros(nVx...)
+    λmaxVy = @zeros(nVy...)
     λmaxVz = @zeros(1, 1)  # dummy for 2D
-    dVxdτ = @zeros(nx - 1, ny)
-    dVydτ = @zeros(nx, ny - 1)
+    dVxdτ = @zeros(nVx...)
+    dVydτ = @zeros(nVy...)
     dVzdτ = @zeros(1, 1)  # dummy for 2D
-    dτVx = @zeros(nx - 1, ny)
-    dτVy = @zeros(nx, ny - 1)
+    dτVx = @zeros(nVx...)
+    dτVy = @zeros(nVy...)
     dτVz = @zeros(1, 1)  # dummy for 2D
-    dVx = @zeros(nx - 1, ny)
-    dVy = @zeros(nx, ny - 1)
+    dVx = @zeros(nVx...)
+    dVy = @zeros(nVy...)
     dVz = @zeros(1, 1)  # dummy for 2D
-    βVx = @zeros(nx - 1, ny)
-    βVy = @zeros(nx, ny - 1)
+    βVx = @zeros(nVx...)
+    βVy = @zeros(nVy...)
     βVz = @zeros(1, 1)  # dummy for 2D
-    cVx = @zeros(nx - 1, ny)
-    cVy = @zeros(nx, ny - 1)
+    cVx = @zeros(nVx...)
+    cVy = @zeros(nVy...)
     cVz = @zeros(1, 1)  # dummy for 2D
-    αVx = @zeros(nx - 1, ny)
-    αVy = @zeros(nx, ny - 1)
+    αVx = @zeros(nVx...)
+    αVy = @zeros(nVy...)
     αVz = @zeros(1, 1)  # dummy for 2D
     P_num = @zeros(nx, ny)
-    Rx0 = @zeros(nx - 1, ny)
-    Ry0 = @zeros(nx, ny - 1)
+    Rx0 = @zeros(nVx...)
+    Ry0 = @zeros(nVy...)
     Rz0 = @zeros(1, 1)  # dummy for 2D
 
     T = typeof(γ_eff)
@@ -61,42 +68,47 @@ end
 
 DYREL(nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
-function DYREL(ni::NTuple{3}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+function DYREL(ni::NTuple{3}, periodic::NTuple{3, Bool} = (false, false, false); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     nx, ny, nz = ni
+    # Every per-face array is indexed by the momentum row it belongs to, so they all share the
+    # residual's shape -- one row longer in a periodic direction, which carries the seam face.
+    nVx = momentum_rows(ni, periodic, 1)
+    nVy = momentum_rows(ni, periodic, 2)
+    nVz = momentum_rows(ni, periodic, 3)
     # penalty parameter
     γ_eff = @zeros(nx, ny, nz)
     # bulk viscosity
     ηb = @zeros(nx, ny, nz)
     # Diagonal preconditioner arrays
-    Dx = @zeros(nx - 1, ny, nz)
-    Dy = @zeros(nx, ny - 1, nz)
-    Dz = @zeros(nx, ny, nz - 1)
+    Dx = @zeros(nVx...)
+    Dy = @zeros(nVy...)
+    Dz = @zeros(nVz...)
     # maximum eigenvalue estimates
-    λmaxVx = @zeros(nx - 1, ny, nz)
-    λmaxVy = @zeros(nx, ny - 1, nz)
-    λmaxVz = @zeros(nx, ny, nz - 1)
-    dVxdτ = @zeros(nx - 1, ny, nz)
-    dVydτ = @zeros(nx, ny - 1, nz)
-    dVzdτ = @zeros(nx, ny, nz - 1)
-    dτVx = @zeros(nx - 1, ny, nz)
-    dτVy = @zeros(nx, ny - 1, nz)
-    dτVz = @zeros(nx, ny, nz - 1)
-    dVx = @zeros(nx - 1, ny, nz)
-    dVy = @zeros(nx, ny - 1, nz)
-    dVz = @zeros(nx, ny, nz - 1)
-    βVx = @zeros(nx - 1, ny, nz)
-    βVy = @zeros(nx, ny - 1, nz)
-    βVz = @zeros(nx, ny, nz - 1)
-    cVx = @zeros(nx - 1, ny, nz)
-    cVy = @zeros(nx, ny - 1, nz)
-    cVz = @zeros(nx, ny, nz - 1)
-    αVx = @zeros(nx - 1, ny, nz)
-    αVy = @zeros(nx, ny - 1, nz)
-    αVz = @zeros(nx, ny, nz - 1)
+    λmaxVx = @zeros(nVx...)
+    λmaxVy = @zeros(nVy...)
+    λmaxVz = @zeros(nVz...)
+    dVxdτ = @zeros(nVx...)
+    dVydτ = @zeros(nVy...)
+    dVzdτ = @zeros(nVz...)
+    dτVx = @zeros(nVx...)
+    dτVy = @zeros(nVy...)
+    dτVz = @zeros(nVz...)
+    dVx = @zeros(nVx...)
+    dVy = @zeros(nVy...)
+    dVz = @zeros(nVz...)
+    βVx = @zeros(nVx...)
+    βVy = @zeros(nVy...)
+    βVz = @zeros(nVz...)
+    cVx = @zeros(nVx...)
+    cVy = @zeros(nVy...)
+    cVz = @zeros(nVz...)
+    αVx = @zeros(nVx...)
+    αVy = @zeros(nVy...)
+    αVz = @zeros(nVz...)
     P_num = @zeros(nx, ny, nz)
-    Rx0 = @zeros(nx - 1, ny, nz)
-    Ry0 = @zeros(nx, ny - 1, nz)
-    Rz0 = @zeros(nx, ny, nz - 1)
+    Rx0 = @zeros(nVx...)
+    Ry0 = @zeros(nVy...)
+    Rz0 = @zeros(nVz...)
 
     T = typeof(γ_eff)
     F = typeof(CFL)
@@ -110,7 +122,7 @@ end
 DYREL(nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
 
-DYREL(::Type{CPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N} = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+DYREL(::Type{CPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool} = ntuple(_ -> false, Val(N)); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N} = DYREL(ni, periodic; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 DYREL(::Type{CPUBackend}, nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 DYREL(::Type{CPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) = DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
@@ -154,7 +166,7 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     dim = Val(length(ni))
 
     # instantiate DYREL object
-    dyrel = DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    dyrel = DYREL(ni, periodic_dims(stokes); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
@@ -169,7 +181,7 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
 end
 
 function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    dyrel = DYREL(size(stokes.P); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+    dyrel = DYREL(size(stokes.P), periodic_dims(stokes); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt; CFL = CFL, γfact = γfact)
     return dyrel
 end

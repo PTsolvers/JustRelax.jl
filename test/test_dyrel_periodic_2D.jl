@@ -188,18 +188,16 @@ _linear_phase(η) = SetMaterialParams(;
                 return ϕ
             end
             f(ix) = 0.5 + 0.5 * _periodic_frac(mod(ix - shift, n), n)
-            for j in axes(ϕ.center, 2), i in axes(ϕ.center, 1)
-                ϕ.center[i, j] = f(i - 0.5)
+            # Built on the host and assigned as a whole: writing a device array element by element
+            # is scalar indexing, which the GPU backends disallow.
+            function assign!(A, x0)
+                A .= PTArray(backend)([f(i - x0) for i in axes(A, 1), _j in axes(A, 2)])
+                return A
             end
-            for j in axes(ϕ.vertex, 2), i in axes(ϕ.vertex, 1)
-                ϕ.vertex[i, j] = f(i - 1)
-            end
-            for j in axes(ϕ.Vx, 2), i in axes(ϕ.Vx, 1)
-                ϕ.Vx[i, j] = f(i - 1)
-            end
-            for j in axes(ϕ.Vy, 2), i in axes(ϕ.Vy, 1)
-                ϕ.Vy[i, j] = f(i - 0.5)
-            end
+            assign!(ϕ.center, 0.5)
+            assign!(ϕ.vertex, 1)
+            assign!(ϕ.Vx, 1)
+            assign!(ϕ.Vy, 0.5)
             return ϕ
         end
 

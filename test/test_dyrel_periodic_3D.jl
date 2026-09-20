@@ -83,8 +83,13 @@ _linear_phase(η) = SetMaterialParams(;
 )
 
 @testset "DYREL 3D periodic" begin
+    # Kept small on purpose. ParallelStencil sizes a GPU block to the range it launches over, and
+    # on a cubic range around 12^3 that comes out at 338 threads (ceil(256/13) rows, then ceil(256/169)
+    # layers) -- above the 256 the register-heavy fused stress kernel can launch with. A range of
+    # at most 256 cells is a single block of exactly that size, so it always fits.
+    nx, ny, nz = ni = 6, 5, 4
     init_mpi = !JustRelax.MPI.Initialized()
-    igg = IGG(init_global_grid(12, 12, 12; init_MPI = init_mpi)...)
+    igg = IGG(init_global_grid(nx, ny, nz; init_MPI = init_mpi)...)
 
     @testset "periodic directions get a momentum row" begin
         ni = 6, 5, 4
@@ -113,8 +118,6 @@ _linear_phase(η) = SetMaterialParams(;
     end
 
     @testset "uniform viscosity recovers exact simple shear" begin
-        n = 12
-        ni = n, n, n
         li = 1.0, 1.0, 1.0
         εbg, lz = 1.0, li[3]
         grid = Geometry(ni, li; origin = (0.0, 0.0, 0.0))
@@ -152,7 +155,7 @@ _linear_phase(η) = SetMaterialParams(;
 
         Vx = Array(stokes.V.Vx)
         zVx = grid.xi_vel[1][3]
-        exact = [2 * εbg * (z - lz / 2) for _i in 1:(n + 1), _j in 1:(n + 2), z in zVx]
+        exact = [2 * εbg * (z - lz / 2) for _i in 1:(nx + 1), _j in 1:(ny + 2), z in zVx]
         @test maximum(abs, Vx .- exact) / (εbg * lz) < 1.0e-6
         # the two x-seam planes are the same unknown
         @test Vx[1, :, :] ≈ Vx[end, :, :]
@@ -161,8 +164,7 @@ _linear_phase(η) = SetMaterialParams(;
     @testset "shift invariance across the seam" begin
         # A material field that varies in x, translated by `m` cells, must translate the solution
         # by `m` cells. Any stencil that special-cases the seam instead of wrapping breaks this.
-        n, m = 12, 5
-        ni = n, n, n
+        m = 2
         li = 1.0, 1.0, 1.0
         εbg, lz = 1.0, li[3]
         grid = Geometry(ni, li; origin = (0.0, 0.0, 0.0))
@@ -173,10 +175,10 @@ _linear_phase(η) = SetMaterialParams(;
             phase_ratios = PhaseRatios(backend_JP, 2, ni)
             # `center` and `yz` sit at cell centres in x; `vertex`, `xz`, `xy` at x-vertices
             for ratios in (phase_ratios.center, phase_ratios.yz)
-                @parallel (@idx size(ratios)) _init_x_center_phases_3D!(ratios, n, shift)
+                @parallel (@idx size(ratios)) _init_x_center_phases_3D!(ratios, nx, shift)
             end
             for ratios in (phase_ratios.vertex, phase_ratios.xz, phase_ratios.xy)
-                @parallel (@idx size(ratios)) _init_x_vertex_phases_3D!(ratios, n, shift)
+                @parallel (@idx size(ratios)) _init_x_vertex_phases_3D!(ratios, nx, shift)
             end
 
             flow_bcs = _periodic_flow_bcs()

@@ -32,7 +32,11 @@ import JustRelax:
     VelocityBoundaryConditions,
     apply_dirichlet,
     apply_dirichlet!,
-    isdirichlet
+    isdirichlet,
+    periodic_dims,
+    flow_bcs_of,
+    check_periodic_bcs,
+    reject_periodic_bcs
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
 import JustRelax: @dxi, @dx, @dy, @dz

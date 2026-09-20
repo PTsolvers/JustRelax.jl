@@ -100,6 +100,10 @@ ImplicitGlobalGrid then reports a global grid shrunk by the halo overlap, which
 is the count the residual norms are normalised by. The periodicity is carried
 entirely by the velocity boundary conditions.
 
+For what a periodic direction changes inside the solver — the seam momentum row,
+the wrapping stencils, and the preconditioner — see
+[Periodic boundaries in the Stokes solvers: implementation notes](@ref).
+
 For a *thermal* periodic model there is no momentum row involved: configure the
 faces on `TemperatureBoundaryConditions` as shown below and, for a distributed
 run, mirror the directions in ImplicitGlobalGrid (`periodx`, `periody`,

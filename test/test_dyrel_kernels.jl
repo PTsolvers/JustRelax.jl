@@ -175,7 +175,7 @@ end
         # --- fused stress + τII viscosity refresh (nonlinear branch) ---
         θc = copy(dyrel.P_num)
         η_before = copy(stokes.viscosity.η)
-        JR2K.compute_stress_viscosity_DRYEL!(
+        JR2K.compute_stress_viscosity_DYREL!(
             stokes, θc, dyrel.γ_eff, rheology, phase_ratios,
             1.0, dt, 1.0, args, (-Inf, Inf), false,
         )

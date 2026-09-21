@@ -54,7 +54,8 @@ end
 
     @testset "update_phases_given_markerchain!" begin
         nxcell, max_xcell, min_xcell = 12, 24, 6
-        particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+        xi_vel_cpu = map(x -> map(Array, x), grid.xi_vel)
+        particles = init_particles(backend, nxcell, max_xcell, min_xcell, xi_vel_cpu...)
         pPhases, = init_cell_arrays(particles, Val(1))
         air_phase = 2
 

@@ -25,9 +25,9 @@ function solvi_viscosity(ni, di, li, rc, η0, ηi)
     η = @fill(η0, ni...)
     Rad2 = [
         sqrt.(
-                ((ix - 1) * dx + 0.5 * dx - 0.5 * lx)^2 +
+            ((ix - 1) * dx + 0.5 * dx - 0.5 * lx)^2 +
                 ((iy - 1) * dy + 0.5 * dy - 0.5 * ly)^2,
-            ) for ix in 1:ni[1], iy in 1:ni[2]
+        ) for ix in 1:ni[1], iy in 1:ni[2]
     ]
     η[Rad2 .< rc] .= ηi
 

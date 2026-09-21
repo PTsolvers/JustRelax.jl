@@ -61,6 +61,7 @@ Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    reject_periodic_bcs(flow_bcs_of(args), "`solve_VariationalStokes!`")
     return solve_VariationalStokes!(
         backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
     )

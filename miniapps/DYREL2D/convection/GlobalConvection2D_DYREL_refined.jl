@@ -201,16 +201,16 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     thermal.T[2:(end - 1), 2:(end - 1)] .= PTArray(backend)(
         [
             nondimensionalize(
-                    T_field(
-                        x,
-                        - @dimstrip(z, km, CharDim);
-                        Lx = @dimstrip(grid.li[1], km, CharDim),
-                        Lz = @dimstrip(grid.li[2], km, CharDim),
-                        w_t = 2.5,
-                        w_b = 2.5
-                    ) * K,
-                    CharDim
-                )
+                T_field(
+                    x,
+                    - @dimstrip(z, km, CharDim);
+                    Lx = @dimstrip(grid.li[1], km, CharDim),
+                    Lz = @dimstrip(grid.li[2], km, CharDim),
+                    w_t = 2.5,
+                    w_b = 2.5
+                ) * K,
+                CharDim
+            )
                 for x in Array(grid.xci[1]), z in Array(grid.xci[2])
         ]
     )

@@ -751,32 +751,20 @@ end
     εII = second_invariant(εij_eff)
 
     # early return if there is no deformation
-    iszero(εII) && return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
+    iszero(εII) && !has_tensile_cap(rheology.CompositeRheology[1].elements) &&
+        return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
 
     # trial stress
     τij = @. 2 * η_ve * εij_eff
     τII = second_invariant(τij)
 
-    # F + gradients at trial stress via GeoParams (DP cone, DPCap cone+cap, ...)
-    elements = rheology.CompositeRheology[1].elements
-    args = (; P = P, τII = τII, EII = EII)
-    F = _yieldfunction_elements(elements, args)
-    dQdτ, dQdP, dFdP = _plastic_grad_elements(elements, τij, args)
-    # dQdτ is already in tensor convention (shear slots halved inside _plastic_grad_primitive)
-
-    λ, ε_vol_pl = if ispl && F ≥ 0
-        bulk_plastic = isinf(Kb) ? zero(η_ve) : Kb * dt * dFdP * dQdP
-        λ_new = F / (η_ve + η_reg + bulk_plastic)
-        λ = λ_relaxation * λ_new + (1 - λ_relaxation) * λ
-        # Volumetric plastic strain rate
-        ε_vol_pl = -λ * dQdP
-        λ, ε_vol_pl
-    else
-        0.0, 0.0
-    end
+    λ, dQdτ, dQdP = plastic_correction(
+        (rheology,), 1, τij, P, EII, η_ve, Kb * dt, η_reg, λ, λ_relaxation, ispl,
+    )
+    ε_vol_pl = -λ * dQdP
 
     # Update stress and plastic strain rate
-    τij, τII, εij_pl, ΔPψ = if λ > 0
+    τij, τII, εij_pl, ΔPψ = if !iszero(λ)
         εij_pl = @. λ * dQdτ
         τij = @. τij - 2.0 * η_ve * εij_pl
         τII = second_invariant(τij)

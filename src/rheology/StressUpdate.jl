@@ -471,6 +471,16 @@ elastic-only phases.
     return dQdτ, GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
 end
 
+# Older GeoParams tensor wrappers drop state keywords. The scalar cap interface
+# preserves pressure and returns Aτ, the physical tensor-flow coefficient.
+@inline function _plastic_grad_primitive(v::DruckerPragerCap, τij::NTuple{N, T}, args::NamedTuple) where {N, T}
+    s = second_invariant(τij)
+    Aτ = GeoParams.∂Q∂τII(v, s; args...)
+    factor = iszero(s) ? zero(T) : Aτ / s
+    return ntuple(i -> factor * τij[i], Val(N)),
+        GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
+end
+
 @generated function _plastic_grad_elements(elements::Tuple, τij, args::NamedTuple)
     N = length(elements.parameters)
     return quote

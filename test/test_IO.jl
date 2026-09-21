@@ -211,6 +211,10 @@ using WriteVTK, JLD2
         @test isfile(joinpath(dst, "MarkerChainPVD.vtp"))
         @test isfile(joinpath(dst, "markerchain_pvd.pvd"))
 
+        # the `MarkerChain` method has to move the chain to the host on a GPU backend
+        save_marker_chain(joinpath(dst, "MarkerChainObject"), chain; t = 1.0)
+        @test isfile(joinpath(dst, "MarkerChainObject.vtp"))
+
         save_vtk(joinpath(dst, "vtk_default_t"), xci, data_c, velocity_c)
         @test isfile(joinpath(dst, "vtk_default_t.vti"))
 

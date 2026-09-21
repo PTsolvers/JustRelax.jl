@@ -49,6 +49,7 @@ Dispatches on the CPU/CUDA/AMDGPU backend selected by `stokes`.
 """
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
     reject_periodic_bcs(flow_bcs_of(args), "the 2D `solve!` pseudo-transient solver")
+    reject_incompressible_cap(rheology_of(args), "the 2D `solve!` pseudo-transient solver")
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
@@ -485,6 +486,7 @@ function _solve!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
                 stokes.P,
                 θ,
                 η,
@@ -582,6 +584,7 @@ function _solve!(
     shear2center!(stokes.Δε)
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -893,6 +896,8 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
+    stokes.λv .= λv
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

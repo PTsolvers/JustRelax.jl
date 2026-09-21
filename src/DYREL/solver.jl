@@ -43,6 +43,7 @@ Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    reject_incompressible_cap(rheology_of(args), "`solve_DYREL!`")
     return solve_DYREL!(backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs))
 end
 
@@ -97,6 +98,7 @@ Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalDYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    reject_incompressible_cap(rheology_of(args), "`solve_VariationalDYREL!`")
     return solve_VariationalDYREL!(
         backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
     )

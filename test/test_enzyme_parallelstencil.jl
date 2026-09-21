@@ -23,6 +23,12 @@ end
     return nothing
 end
 
+@parallel_indices (i, j) function _init_α_gradient_phases!(phase)
+    @index phase[1, i, j] = i == 1 ? 1.0 : 0.25
+    @index phase[2, i, j] = i == 1 ? 0.0 : 0.75
+    return nothing
+end
+
 function _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
     JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt, controls)
     @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
@@ -180,6 +186,109 @@ end
     @test dxv ≈ one.(dxv)
     @test all(isone, controls.G.center)
     @test all(isone, controls.G.vertex)
+end
+
+@testset "Spatial GeoParams density-parameter sensitivities" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 2.0
+    parameters = (
+        (; ρ0 = 2.0, α = 0.1, β = 0.2, T0 = 1.0, P0 = 0.3),
+        (; ρ0 = 3.0, α = 0.0, T0 = 0.5),
+    )
+    models = (PT_Density(; parameters[1]...), T_Density(; parameters[2]...))
+    rheology = ntuple(2) do p
+        SetMaterialParams(;
+            Phase = p,
+            Density = models[p],
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+        )
+    end
+    phases = PhaseRatios(JustPIC.CPU, 2, ni)
+    @parallel (@idx ni) _init_α_gradient_phases!(phases.center)
+    @parallel (@idx ni .+ 1) _init_α_gradient_phases!(phases.vertex)
+    names = (:ρ0, :α, :β, :T0, :P0)
+    controls, gradients = material_controls(CPUBackend, ni, names; nphases = 2)
+    @test isempty(controls)
+    @test keys(gradients) == names
+    @test all(g -> keys(g) == (:center,) && size(g.center) == (2, ni...), values(gradients))
+    @test_throws ArgumentError material_controls(CPUBackend, ni, (:α,))
+    @test_throws ArgumentError material_controls(CPUBackend, ni, (:α,); nphases = 0)
+
+    ρg = (@zeros(ni...), @zeros(ni...))
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    dyrel = DYREL(CPUBackend, ni)
+    dyrel.ηb .= 1.0
+    stokes.viscosity.η .= 1.0
+    stokes.viscosity.ηv .= 1.0
+    stokes.P .= 0.7
+    adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
+    adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
+    adjoint.λP .= reshape(sin.(1:length(adjoint.λP)), size(adjoint.λP))
+    temperature = reshape(collect(1.0:20.0), ni .+ 2) ./ 10
+    for thermal in (false, true)
+        args = (; T = temperature, P = stokes.P)
+        thermal && (args = merge(args, (; ΔT = fill(0.8, ni .+ 2))))
+        # A local perturbation replaces just one phase's model at one cell.
+        # The finite difference uses the original GeoParams calls, not the AD wrapper.
+        objective = function (p = 1, I = CartesianIndex(1, 1), perturbed = models[p])
+            compute_ρg!(ρg, phases, rheology, args)
+            JustRelax2D.compute_∇V_strain_rate_RP!(
+                stokes, dyrel, rheology, phases, grid._di, ni, dt, args, false
+            )
+            local_args = JustRelax2D.getindex_NamedTuple(args, Tuple(I)...)
+            ratio = phases.center[I][p]
+            ρg[2][I] += ratio * (
+                compute_density(perturbed, local_args) - compute_density(models[p], local_args)
+            )
+            if thermal
+                stokes.R.RP[I] += ratio * (
+                    JustRelax2D.get_thermal_expansion(perturbed) -
+                        JustRelax2D.get_thermal_expansion(models[p])
+                ) * args.ΔT[Tuple(I + CartesianIndex(1, 1))...] / dt
+            end
+            @parallel (@idx ni) JustRelax2D.compute_PH_residual_V!(
+                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
+                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+                grid._di.center, grid._di.vertex,
+            )
+            return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
+                sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)])) -
+                sum(stokes.R.RP .* adjoint.λP)
+        end
+        objective()
+        JustRelax2D.compute_sensitivities!(
+            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+            (; me = 0), controls, gradients, args,
+        )
+        density_gradient = copy(adjoint.ρ)
+        for p in eachindex(models), name in names, I in CartesianIndices(stokes.P)
+            if haskey(parameters[p], name)
+                h = 1.0e-6
+                plus = merge(parameters[p], NamedTuple{(name,)}((parameters[p][name] + h,)))
+                minus = merge(parameters[p], NamedTuple{(name,)}((parameters[p][name] - h,)))
+                make_model = p == 1 ? PT_Density : T_Density
+                fd = (objective(p, I, make_model(; plus...)) - objective(p, I, make_model(; minus...))) / (2h)
+                @test gradients[name].center[p, Tuple(I)...] ≈ fd rtol = 1.0e-6 atol = 1.0e-8
+            else
+                @test iszero(gradients[name].center[p, Tuple(I)...])
+            end
+        end
+        # The density VJP must remain available; material differentiation must not consume it.
+        @test adjoint.ρ == density_gradient
+        saved = deepcopy(gradients)
+        for g in values(gradients)
+            g.center .= 123.0
+        end
+        objective()
+        JustRelax2D.compute_sensitivities!(
+            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+            (; me = 0), controls, gradients, args,
+        )
+        @test all(name -> gradients[name].center ≈ saved[name].center, names)
+    end
 end
 
 # Minimal working example for reverse-mode differentiation of

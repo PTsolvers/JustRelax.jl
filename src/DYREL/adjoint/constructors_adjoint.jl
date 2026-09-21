@@ -1,29 +1,39 @@
 """
-    material_controls(CPUBackend, ni, parameters)
+    material_controls(CPUBackend, ni, parameters; nphases=nothing)
 
-Allocate center and vertex multiplier fields and matching zero-valued gradient fields only
-for the selected material-parameter symbols. Multipliers start at one, so selecting a
-parameter does not change the forward problem. Each field differentiates the complete
-multiphase constitutive expression; there is no separate control per material phase.
+Allocate only the requested material fields. `:G` retains its center/vertex multipliers
+and gradient buffers. Density parameters (`:ρ0`, `:α`, `:β`, `:T0`, `:P0`, `:ρ`)
+allocate gradient outputs only, of size `(nphases, ni...)`; no input multipliers are needed.
 
-Pass both returned named tuples as `controls` and `gradients` to
-`solve_DYREL!(...; adjoint = true, controls, gradients, ...)`. Currently `:G` is
-supported for material sensitivities in the 2D adjoint solver. After the solve,
-`gradients.G.center` contains the full derivative with respect to a center-based local
-shear modulus, including the vertex contribution. `gradients.G.vertex` retains the raw
-vertex contribution for diagnostics. Calls without `gradients` leave controls inactive
-in the sensitivity pass.
+Pass the returned `controls, gradients` to `solve_DYREL!`. Density gradients are
+derivatives with respect to the numeric GeoParams parameter values, including buoyancy
+and thermal pressure-residual contributions, with previous-step state held fixed.
+A parameter absent from a phase's density model has zero gradient for that phase.
+The direct path supports scalar GeoUnit fields of Enzyme-compatible density models;
+nested parameter selection is not yet supported.
 """
+is_density_parameter(name) = name in (:ρ0, :α, :β, :T0, :P0, :ρ)
+
 function material_controls(
-        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol}
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol};
+        nphases = nothing,
     ) where {N, M}
-    multipliers = map(parameters) do _
+    if any(is_density_parameter, parameters)
+        nphases isa Integer && nphases > 0 ||
+            throw(ArgumentError("a positive nphases is required for density gradients"))
+    end
+    control_names = filter(name -> !is_density_parameter(name), parameters)
+    multipliers = map(control_names) do _
         (; center = @ones(ni...), vertex = @ones(ni .+ 1...))
     end
-    gradients = map(parameters) do _
-        (; center = @zeros(ni...), vertex = @zeros(ni .+ 1...))
+    gradients = map(parameters) do parameter
+        if is_density_parameter(parameter)
+            (; center = @zeros(nphases, ni...))
+        else
+            (; center = @zeros(ni...), vertex = @zeros(ni .+ 1...))
+        end
     end
-    return NamedTuple{parameters}(multipliers), NamedTuple{parameters}(gradients)
+    return NamedTuple{control_names}(multipliers), NamedTuple{parameters}(gradients)
 end
 
 function AdjointStokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}

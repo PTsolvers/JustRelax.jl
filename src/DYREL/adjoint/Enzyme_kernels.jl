@@ -111,40 +111,55 @@ function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
     return nothing
 end
 
-"""
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
+# A distinct pressure array is a prescribed input, not the Stokes unknown.
+function buoyancy_uses_stokes_pressure(stokes, args)
+    P = get(args, :P, nothing)
+    P === stokes.P && return true
+    if P isa AbstractArray && Base.mightalias(P, stokes.P)
+        throw(ArgumentError("pass stokes.P directly in args.P for the buoyancy pressure adjoint; overlapping views are not supported"))
+    end
+    return false
+end
 
-Differentiate the momentum residual with respect to pressure, stress, and the
-two buoyancy-force arrays. The residual seeds are read from `adjoint.R`;
-sensitivities accumulate in `adjoint.P`, `adjoint.τ`, and `dρg`.
 """
-function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
-    @parallel (@idx ni) configcall = compute_PH_residual_V!(
-        stokes.R.Rx,
-        stokes.R.Ry,
-        stokes.P,
-        stokes.ΔPψ,
-        stokes.τ.xx,
-        stokes.τ.yy,
-        stokes.τ.xy,
-        ρg...,
-        _di.center,
-        _di.vertex,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_PH_residual_V!,
-        Enzyme.DuplicatedNoNeed(stokes.R.Rx, adjoint.R.Rx),
-        Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
-        Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
-        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
-        Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
-        Enzyme.DuplicatedNoNeed(ρg[1], dρg[1]),
-        Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
-        Enzyme.Const(_di.center),
-        Enzyme.Const(_di.vertex),
+    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni, rheology, phases, args, dρg)
+
+Reverse the momentum residual and its pressure-dependent buoyancy. The reusable
+`dρg` buffers are supplied when `args.P === stokes.P`; `nothing` retains the fixed
+buoyancy path. Accumulate the additional pressure derivative before either the
+outer residual check or the inner Schur-complement correction.
+"""
+function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni, rheology, phases, args, dρg)
+    isnothing(dρg) && return enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+    foreach(A -> fill!(A, 0.0), dρg)
+    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
+    @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
+        adjoint.P, dρg, phases.center, rheology, args
     )
+    return nothing
+end
+
+@inline function density_at_pressure(P, rheology, ratio, args)
+    return fn_ratio(compute_density, rheology, ratio, merge(args, (; P)))
+end
+
+@parallel_indices (I...) function buoyancy_pressure_adjoint_kernel!(dP, dρg, phases, rheology, args)
+    local_args = getindex_NamedTuple(args, I...)
+    ratio = @cell phases[I...]
+    dρdP = Enzyme.autodiff_deferred(
+        Enzyme.Reverse,
+        Enzyme.Const(density_at_pressure),
+        Enzyme.Active,
+        Enzyme.Active(local_args.P),
+        Enzyme.Const(rheology),
+        Enzyme.Const(ratio),
+        Enzyme.Const(local_args),
+    )[1][1]
+    gravity = compute_gravity(first(rheology))
+    gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
+    # Momentum -> buoyancy -> density -> pressure. Add to the direct pressure
+    # gradient and any objective seed already present in dP.
+    dP[I...] += dρdP * (gx * dρg[1][I...] + gy * dρg[2][I...])
     return nothing
 end
 
@@ -219,79 +234,6 @@ function enzyme_compute_stress_DRYEL!(
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
         Enzyme.Const(controls),
-    )
-    return nothing
-end
-
-"""
-    enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing,
-    )
-
-Differentiate the constitutive kernel with respect to center and vertex
-viscosity. Stress seeds come from `adjoint.τ`; viscosity sensitivities
-accumulate in `adjoint.viscosity.η` and `adjoint.viscosity.ηv`.
-When `gradients` is supplied, also accumulate derivatives with respect to the
-selected multipliers. `compute_sensitivities!` converts these to material derivatives.
-"""
-function enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing
-    )
-    ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) configcall = compute_stress_DRYEL!(
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
-        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
-        stokes.τ.II,
-        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
-        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),
-        stokes.EII_pl,
-        stokes.ε_vol_pl,
-        stokes.P,
-        stokes.λ,
-        stokes.λv,
-        stokes.viscosity.η,
-        stokes.viscosity.ηv,
-        stokes.viscosity.η_vep,
-        stokes.ΔPψ,
-        rheology,
-        phase_ratios.center,
-        phase_ratios.vertex,
-        λ_relaxation,
-        dt,
-        controls,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_stress_DRYEL!,
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-        ),
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-        ),
-        Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
-        Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
-        Enzyme.Const(stokes.τ.II),
-        Enzyme.Const((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy)),
-        Enzyme.Const((stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)),
-        Enzyme.Const(stokes.EII_pl),
-        Enzyme.Const(stokes.ε_vol_pl),
-        Enzyme.Const(stokes.P),
-        Enzyme.Const(stokes.λ),
-        Enzyme.Const(stokes.λv),
-        Enzyme.DuplicatedNoNeed(stokes.viscosity.η, adjoint.viscosity.η),
-        Enzyme.DuplicatedNoNeed(stokes.viscosity.ηv, adjoint.viscosity.ηv),
-        Enzyme.Const(stokes.viscosity.η_vep),
-        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
-        Enzyme.Const(rheology),
-        Enzyme.Const(phase_ratios.center),
-        Enzyme.Const(phase_ratios.vertex),
-        Enzyme.Const(λ_relaxation),
-        Enzyme.Const(dt),
-        isnothing(gradients) ? Enzyme.Const(controls) : Enzyme.Duplicated(controls, gradients),
     )
     return nothing
 end

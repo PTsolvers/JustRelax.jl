@@ -169,7 +169,7 @@ function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di
         ΔT,
         melt_fraction,
         dt,
-        do_strain_rate
+        do_strain_rate,
     )
     # NB: no vertex→center shear-strain interpolation here — ε.*_c is not read inside the DYREL
     # loop (stress reads ε.xy at vertices; τII viscosity reads τ.xy_c). The center strain arrays
@@ -196,7 +196,7 @@ end
         ΔT,
         melt_fraction,
         dt,
-        do_strain_rate
+        do_strain_rate,
     ) where {T}
 
     third = T(1) / T(3)

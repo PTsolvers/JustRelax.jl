@@ -39,8 +39,9 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   They start at one, so the selected parameters retain their rheology values. Default: an
   empty named tuple.
 - `gradients`: Optional matching buffers from `material_controls`, filled by the adjoint
-  solve with derivatives with respect to the actual material parameters (currently a
-  center-based `G` field). Default: `nothing`.
+  solve with derivatives with respect to the actual material parameters. `G` is returned
+  on the center grid; phase-specific density-parameter gradients have size `(nphases, ni...)`. Default:
+  `nothing`.
 - `η_multiplier`: Optional cell-wise viscosity scaling, given as a named tuple
   `(; center, vertex)` of arrays matching `stokes.viscosity.η` and `.ηv`. Applied right after
   the rheology-driven `compute_viscosity!` and before the DYREL coefficients are built, so
@@ -325,19 +326,14 @@ function _solve_DYREL!(
             grid,
             dt,
             igg;
-            viscosity_cutoff,
-            viscosity_relaxation,
             λ_relaxation_DR,
             λ_relaxation_PH,
             iterMax,
             total_iterMax,
             nout,
             rel_drop,
-            b_width,
             verbose_PH,
             verbose_DR,
-            linear_viscosity,
-            free_surface,
             observation,
             controls,
             gradients,

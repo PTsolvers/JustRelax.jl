@@ -350,9 +350,9 @@ function sinking_block2D_VE(
 end
 
 # Define NO_AUTORUN before including this file to run a smaller verification case.
-if !@isdefined(NO_AUTORUN)
+# if !@isdefined(NO_AUTORUN)
     ar = 1 # aspect ratio
-    n = 1
+    n = 4
     nx = 32 * n
     ny = 32 * n
     figdir = "SinkingBlock2D_VE_adjoint_G"
@@ -361,4 +361,4 @@ if !@isdefined(NO_AUTORUN)
     ImplicitGlobalGrid.grid_is_initialized() && finalize_global_grid(; finalize_MPI = false)
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = !JustRelax.MPI.Initialized())...)
     sinking_block2D_VE(igg; ar = ar, nx = nx, ny = ny, figdir = figdir)
-end
+# end

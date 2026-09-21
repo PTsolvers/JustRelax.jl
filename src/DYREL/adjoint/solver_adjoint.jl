@@ -35,19 +35,14 @@ function solve_DYREL_adjoint!(
         grid::Geometry{N},
         dt,
         igg;
-        viscosity_cutoff,
-        viscosity_relaxation,
         λ_relaxation_DR,
         λ_relaxation_PH,
         iterMax,
         total_iterMax,
         nout,
         rel_drop,
-        b_width,
         verbose_PH,
         verbose_DR,
-        linear_viscosity,
-        free_surface,
         observation,
         controls,
         gradients = nothing,
@@ -56,51 +51,36 @@ function solve_DYREL_adjoint!(
     dim = Val(N)
     v_dofs = velocity_dofs(dim)
     p_dof = pressure_dof(dim)
-    di = grid.di
     _di = grid._di
-    di_center = di.center
     ni = size(stokes.P)
 
     igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (DYREL) ########\n")
-
-    residuals = @residuals(stokes.R)
-    fields = dyrel_fields(dyrel, dim)
 
     # Reuse the forward DYREL parameters, but not its iteration history.
     dyrel.dVxdτ .= 0
     dyrel.dVydτ .= 0
 
-    # errors
-    err = 1.0
-    iter = 0
-
     # Iteration loop
     err_min = Inf
-    err = 1.0
     errV0 = ntuple(_ -> 1.0, dim)
     errPt0 = 1.0
     errV00 = ntuple(_ -> 1.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
-    err_evo_tot = Float64[]
-    err_evo_V = Float64[]
-    err_evo_P = Float64[]
-    err_evo_it = Float64[]
-    itg = 0
 
     nx, ny = ni
     x_pen = @zeros(nx - 1, ny)
     y_pen = @zeros(nx, ny - 1)
+    # Reuse the density sensitivity as vertical buoyancy scratch during iterations.
+    # The final sensitivity pass clears and recomputes it.
+    dρg = buoyancy_uses_stokes_pressure(stokes, args) ? (@zeros(ni...), stokes_ad.ρ) : nothing
 
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
 
     for itPH in 1:1000
 
-        stokes_ad.R.Rx .= 0.0
-        stokes_ad.R.Ry .= 0.0
-        stokes_ad.R.RP .= 0.0
         stokes_ad.P .= 0.0
         stokes_ad.V.Vx .= 0.0
         stokes_ad.V.Vy .= 0.0
@@ -119,7 +99,7 @@ function solve_DYREL_adjoint!(
         # Init observation points
         observation.target[observation.i, observation.j] .= -1.0
 
-        enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
+        enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args, dρg)
         enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt, controls)
         enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
         enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
@@ -164,12 +144,8 @@ function solve_DYREL_adjoint!(
         itPT = 0
         while (err > ϵ_vel && itPT ≤ iterMax)
             itPT += 1
-            itg += 1
             iter += 1
 
-            stokes_ad.R.Rx .= 0.0
-            stokes_ad.R.Ry .= 0.0
-            stokes_ad.R.RP .= 0.0
             stokes_ad.P .= 0.0
             stokes_ad.V.Vx .= 0.0
             stokes_ad.V.Vy .= 0.0
@@ -188,7 +164,7 @@ function solve_DYREL_adjoint!(
             # Init observation points
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
 
-            enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
+            enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args, dρg)
             enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_DR, dt, controls)
             enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
             enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
@@ -231,11 +207,6 @@ function solve_DYREL_adjoint!(
                 err = maximum(errV_ratio)
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
-                push!(err_evo_tot, err)
-                push!(err_evo_V, maximum(errV_ratio))
-                push!(err_evo_P, errPt / errPt0)
-                push!(err_evo_it, iter)
-
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
                 end
@@ -250,7 +221,7 @@ function solve_DYREL_adjoint!(
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg, controls, gradients
+        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg, controls, gradients, args
     )
 
     # Do not carry adjoint iteration history into the next forward solve.

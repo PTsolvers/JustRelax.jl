@@ -270,6 +270,7 @@ end
         ε,     # @ vertices
         ε_pl,  # @ centers
         EII,   # accumulated plastic strain rate @ centers
+        ε_vol_pl, # volumetric plastic strain rate @ centers
         P,
         θ,
         η,
@@ -296,12 +297,19 @@ end
     volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
-    _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
-    )
-
-    # augmented pressure with plastic volumetric strain over pressure
-    θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+    if has_tensile_cap(rheology, 1)
+        θ[I...], ε_vol_pl[I...] = update_cap_stress!(
+            τ, τII, τ_old, ε, ε_pl, η_vep, λ, rheology, 1,
+            P[I...], EII[I...], ηij, dτ_r, _Gdt, K * dt, η_reg, I...,
+        )
+    else
+        _compute_τ_nonlinear!(
+            τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        )
+        # ε_vol_pl = -λ dQ/dP = λ sinψ, the rate the augmented pressure below is built from
+        ε_vol_pl[I...] = λ[I...] * sinψ
+        θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * ε_vol_pl[I...])
+    end
 
     return nothing
 end
@@ -341,11 +349,17 @@ end
     volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ
     plastic_parameters = (; is_pl, C, sinϕ, cosϕ, η_reg, volume)
 
-    _compute_τ_nonlinear!(
-        τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
-    )
-    # augmented pressure with plastic volumetric strain over pressure
-    @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+    if has_tensile_cap(rheology, phase)
+        θ[I...], ε_vol_pl[I...] = update_cap_stress!(
+            τ, τII, τ_old, ε, ε_pl, η_vep, λ, rheology, phase,
+            P[I...], EII[I...], ηij, dτ_r, _Gdt, K * dt, η_reg, I...,
+        )
+    else
+        _compute_τ_nonlinear!(
+            τ, τII, τ_old, ε, ε_pl, P, ηij, η_vep, λ, dτ_r, _Gdt, plastic_parameters, I...
+        )
+        @inbounds θ[I...] = P[I...] + (isinf(K) ? 0.0 : K * dt * λ[I...] * sinψ)
+    end
 
     return nothing
 end
@@ -770,21 +784,13 @@ end
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
-        # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-        τij_trialv = τijv .+ dτijv
-        dQdτijv, dQdPv, dFdPv = compute_plastic_gradients_phase(
-            rheology, phase, τij_trialv; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λv[1][I...], dQdτijv, dQdPv = plastic_correction(
+            rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[1][I...], relλ, is_pl,
         )
-        volumev = isinf(Kv) ? 0.0 : Kv * dt * dFdPv * dQdPv
 
-        # yield function @ vertex
-        Fv = compute_yieldfunction_phase(rheology, phase; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij)
-
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
-            # stress correction @ vertex
-            λv[1][I...] =
-                (1.0 - relλ) * λv[1][I...] +
-                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+        if !iszero(λv[1][I...])
 
             ε_plyzv_ij = λv[1][I...] * dQdτijv[4]   # slot 4 = yz
             τyzv[I...] += @muladd dτyzv - 2.0 * ηv_ij * ε_plyzv_ij * dτ_rv
@@ -841,21 +847,13 @@ end
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
-        # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-        τij_trialv = τijv .+ dτijv
-        dQdτijv, dQdPv, dFdPv = compute_plastic_gradients_phase(
-            rheology, phase, τij_trialv; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λv[2][I...], dQdτijv, dQdPv = plastic_correction(
+            rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[2][I...], relλ, is_pl,
         )
-        volumev = isinf(Kv) ? 0.0 : Kv * dt * dFdPv * dQdPv
 
-        # yield function @ vertex
-        Fv = compute_yieldfunction_phase(rheology, phase; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij)
-
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
-            # stress correction @ vertex
-            λv[2][I...] =
-                (1.0 - relλ) * λv[2][I...] +
-                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+        if !iszero(λv[2][I...])
 
             ε_plxzv_ij = λv[2][I...] * dQdτijv[5]   # slot 5 = xz
             τxzv[I...] += @muladd dτxzv - 2.0 * ηv_ij * ε_plxzv_ij * dτ_rv
@@ -913,21 +911,13 @@ end
         τijv = τxxv_ij, τyyv_ij, τzzv_ij, τyzv_ij, τxzv_ij, τxyv_ij
         τIIv_ij = second_invariant(τijv .+ dτijv)
 
-        # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-        τij_trialv = τijv .+ dτijv
-        dQdτijv, dQdPv, dFdPv = compute_plastic_gradients_phase(
-            rheology, phase, τij_trialv; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λv[3][I...], dQdτijv, dQdPv = plastic_correction(
+            rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[3][I...], relλ, is_pl,
         )
-        volumev = isinf(Kv) ? 0.0 : Kv * dt * dFdPv * dQdPv
 
-        # yield function @ vertex
-        Fv = compute_yieldfunction_phase(rheology, phase; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij)
-
-        if is_pl && !iszero(τIIv_ij) && Fv > 0
-            # stress correction @ vertex
-            λv[3][I...] =
-                (1.0 - relλ) * λv[3][I...] +
-                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+        if !iszero(λv[3][I...])
 
             ε_plxyv_ij = λv[3][I...] * dQdτijv[6]   # slot 6 = xy
             τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * ε_plxyv_ij * dτ_rv
@@ -960,21 +950,13 @@ end
         dτij = @. (-(τij - τij_o) * ηij * _Gdt - τij + 2.0 * ηij * εij) * dτ_r
         τII_ij = second_invariant(dτij .+ τij)
 
-        # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-        τij_trial = τij .+ dτij
-        dQdτij, dQdP, dFdP = compute_plastic_gradients_phase(
-            rheology, phase, τij_trial; P = Pr[I...], τII = τII_ij, EII = EII_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λ[I...], dQdτij, dQdP = plastic_correction(
+            rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
+            ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl,
         )
-        volume = isinf(K) ? 0.0 : K * dt * dFdP * dQdP
 
-        # yield function @ center
-        F = compute_yieldfunction_phase(rheology, phase; P = Pr[I...], τII = τII_ij, EII = EII_ij)
-
-        τII_ij = if is_pl && !iszero(τII_ij) && F > 0
-            # stress correction @ center
-            λ[I...] =
-                (1.0 - relλ) * λ[I...] +
-                relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+        τII_ij = if !iszero(λ[I...])
             εij_pl = λ[I...] .* dQdτij
             dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
@@ -1067,22 +1049,13 @@ end
     dτijv = dτxxv, dτyyv, dτxyv
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
-    # plastic gradients at trial stress
-    τij_trialv = τijv .+ dτijv
-    dQdτijv, dQdPv, dFdPv = compute_plastic_gradients_phase(
-        rheology, phase, τij_trialv; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij,
+    # Solve the cap return map; retain the analytical DP correction.
+    λv[I...], dQdτijv, dQdPv = plastic_correction(
+        rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
+        ηv_ij * dτ_rv, Kv * dt, η_regv, λv[I...], relλ, is_pl,
     )
-    # plastic volumetric closure: Kv dt dFdP dQdP  (≡ Kv dt sinϕ sinψ for DP)
-    volumev = isinf(Kv) ? 0.0 : Kv * dt * dFdPv * dQdPv
 
-    # yield function @ vertex
-    Fv = compute_yieldfunction_phase(rheology, phase; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij)
-
-    @inbounds if is_pl && !iszero(τIIv_ij)  && Fv > 0
-        # stress correction @ vertex
-        λv[I...] =
-            @muladd (1.0 - relλ) * λv[I...] +
-            relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
+    @inbounds if !iszero(λv[I...])
         εij_plv = λv[I...] * dQdτijv[3]
         τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * εij_plv * dτ_rv
         ε_pl[3][I...] = εij_plv
@@ -1113,22 +1086,13 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, εij, _Gdt, dτ_r)
         τII_ij = second_invariant(dτij .+ τij)
 
-        # plastic gradients at trial stress
-        τij_trial = τij .+ dτij
-        dQdτij, dQdP, dFdP = compute_plastic_gradients_phase(
-            rheology, phase, τij_trial; P = Pr[I...], τII = τII_ij, EII = EII_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λ[I...], dQdτij, dQdP = plastic_correction(
+            rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
+            ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl,
         )
-        # plastic volumetric closure: K dt dFdP dQdP  (≡ K dt sinϕ sinψ for DP)
-        volume = isinf(K) ? 0.0 : K * dt * dFdP * dQdP
 
-        # yield function @ center
-        F = compute_yieldfunction_phase(rheology, phase; P = Pr[I...], τII = τII_ij, EII = EII_ij)
-
-        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
-            # stress correction @ center
-            λ[I...] =
-                @muladd (1.0 - relλ) * λ[I...] +
-                relλ * (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
+        τII_ij = @inbounds if !iszero(λ[I...])
             εij_pl = λ[I...] .* dQdτij
             dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
             τij = dτij .+ τij
@@ -1227,21 +1191,13 @@ end
     dτijv = dτxxv, dτyyv, dτxyv
     τIIv_ij = second_invariant(dτijv .+ τijv)
 
-    # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-    τij_trialv = τijv .+ dτijv
-    dQdτijv, dQdPv, dFdPv = compute_plastic_gradients_phase(
-        rheology, phase, τij_trialv; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij,
+    # Solve the cap return map; retain the analytical DP correction.
+    λv[I...], dQdτijv, dQdPv = plastic_correction(
+        rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
+        ηv_ij * dτ_rv * dt, Kv * dt, η_regv, λv[I...], relλ, is_pl,
     )
-    volumev = isinf(Kv) ? 0.0 : Kv * dt * dFdPv * dQdPv
 
-    # yield function @ vertex
-    Fv = compute_yieldfunction_phase(rheology, phase; P = Pv_ij, τII = τIIv_ij, EII = EIIv_ij)
-
-    @inbounds if is_pl && !iszero(τIIv_ij) && Fv > 0
-        # stress correction @ vertex
-        λv[I...] =
-            @muladd (1.0 - relλ) * λv[I...] +
-            relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
+    @inbounds if !iszero(λv[I...])
         εij_plv = λv[I...] * dQdτijv[3]   # slot 3 = xy
         τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_plv * dτ_rv
         ε_pl[3][I...] = εij_plv
@@ -1273,21 +1229,13 @@ end
         dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _G, dτ_r, dt)
         τII_ij = second_invariant(dτij .+ τij)
 
-        # plastic gradients at trial stress + volume closure (DP cone / DPCap cap)
-        τij_trial = τij .+ dτij
-        dQdτij, dQdP, dFdP = compute_plastic_gradients_phase(
-            rheology, phase, τij_trial; P = Pr[I...], τII = τII_ij, EII = EII_ij,
+        # Solve the cap return map; retain the analytical DP correction.
+        λ[I...], dQdτij, dQdP = plastic_correction(
+            rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
+            ηij * dτ_r * dt, K * dt, η_reg, λ[I...], relλ, is_pl,
         )
-        volume = isinf(K) ? 0.0 : K * dt * dFdP * dQdP
 
-        # yield function @ center
-        F = compute_yieldfunction_phase(rheology, phase; P = Pr[I...], τII = τII_ij, EII = EII_ij)
-
-        τII_ij = @inbounds if is_pl && !iszero(τII_ij) && F > 0
-            # stress correction @ center
-            λ[I...] =
-                @muladd (1.0 - relλ) * λ[I...] +
-                relλ * (max(F, 0.0) / (η[I...] * dτ_r * dt + η_reg + volume))
+        τII_ij = @inbounds if !iszero(λ[I...])
             εij_pl = λ[I...] .* dQdτij
             dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
             τij = dτij .+ τij

@@ -62,6 +62,7 @@ Options may be passed either as plain keywords or bundled as a single
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
     reject_periodic_bcs(flow_bcs_of(args), "`solve_VariationalStokes!`")
+    reject_incompressible_cap(rheology_of(args), "`solve_VariationalStokes!`")
     return solve_VariationalStokes!(
         backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
     )
@@ -356,6 +357,8 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
+    stokes.λv .= λv
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

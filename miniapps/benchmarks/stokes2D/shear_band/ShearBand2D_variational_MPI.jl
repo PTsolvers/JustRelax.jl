@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -207,6 +207,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 50.0e3,
                 nout = 2.0e3,
                 viscosity_cutoff = (-Inf, Inf),

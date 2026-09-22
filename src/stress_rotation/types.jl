@@ -21,6 +21,12 @@ struct StressParticles{backend, nNormal, nShear, T}
     end
 end
 
+"""
+    unwrap(x::StressParticles)
+
+Flatten `x` into a single tuple `(τ_normal..., τ_shear..., ω...)` of its underlying
+particle cell arrays.
+"""
 @inline unwrap(x::StressParticles) = tuple(x.τ_normal..., x.τ_shear..., x.ω...)
 @inline normal_stress(x::StressParticles) = x.τ_normal
 @inline shear_stress(x::StressParticles) = x.τ_shear

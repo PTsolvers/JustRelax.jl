@@ -1,4 +1,16 @@
+"""
+    AbstractBoundaryConditions
+
+Supertype for all boundary condition types, e.g. [`TemperatureBoundaryConditions`](@ref).
+"""
 abstract type AbstractBoundaryConditions end
+
+"""
+    AbstractFlowBoundaryConditions
+
+Supertype for velocity/displacement boundary condition types
+([`VelocityBoundaryConditions`](@ref), [`DisplacementBoundaryConditions`](@ref)).
+"""
 abstract type AbstractFlowBoundaryConditions <: AbstractBoundaryConditions end
 
 @inline _bc_value(bc, key::Symbol) = hasproperty(bc, key) ? getproperty(bc, key) : false
@@ -216,3 +228,99 @@ function check_periodic_conflicts(periodic, conditions...)
     end
     return
 end
+
+"""
+    periodic_dims(bcs::AbstractFlowBoundaryConditions)
+    periodic_dims(stokes::StokesArrays)
+
+Periodicity of each spatial direction, as an `N`-tuple of `Bool`s ordered `(x, y[, z])`.
+
+A boundary-condition object reports what the caller asked for. A `StokesArrays` reports what its
+momentum residuals were allocated for: in a periodic direction the two coincident boundary faces
+are a single unknown, so that direction carries one residual row per cell rather than one per
+interior face. `check_periodic_bcs` requires the two to agree.
+"""
+function periodic_dims end
+
+@inline periodic_dims(bcs::VelocityBoundaryConditions{T, nD}) where {T, nD} =
+    _periodic_dims(bcs.periodic, Val(nD))
+@inline periodic_dims(bcs::DisplacementBoundaryConditions{T, nD}) where {T, nD} =
+    _periodic_dims(bcs.periodic, Val(nD))
+
+# `check_periodic_pairs` requires both faces of a direction to agree, so the lower face decides.
+@inline _periodic_dims(periodic, ::Val{2}) = (periodic.left, periodic.bot)
+@inline _periodic_dims(periodic, ::Val{3}) = (periodic.left, periodic.front, periodic.bot)
+
+@inline momentum_residuals(R::Residual, ::Val{2}) = (R.Rx, R.Ry)
+@inline momentum_residuals(R::Residual, ::Val{3}) = (R.Rx, R.Ry, R.Rz)
+
+@inline function periodic_dims(stokes::StokesArrays)
+    dim = static_dims(stokes)
+    R = momentum_residuals(stokes.R, dim)
+    return ntuple(d -> size(R[d], d) == size(stokes.P, d), dim)
+end
+
+"""
+    check_periodic_bcs(stokes, bcs, igg, di_center)
+
+Throw unless the periodic directions of `bcs` are ones the solver can actually solve.
+
+The momentum row of a periodic seam only exists if `stokes` was allocated for it, which is what
+`StokesArrays(backend, ni, bcs)` does; a `stokes` built without the boundary conditions leaves that
+row out and the seam velocity is then frozen at its initial value. The other two conditions mark
+combinations that are not implemented rather than ones that are wrong in principle.
+"""
+function check_periodic_bcs(stokes, bcs::AbstractFlowBoundaryConditions, igg, di_center)
+    bc_periodic = periodic_dims(bcs)
+    any(bc_periodic) || return nothing
+
+    array_periodic = periodic_dims(stokes)
+    bc_periodic == array_periodic || error(
+        "Periodic directions $(bc_periodic) do not match the StokesArrays allocation \
+        $(array_periodic). Build the containers from the boundary conditions, \
+        `StokesArrays(backend, ni, bcs)`, so the periodic seams get a momentum row."
+    )
+
+    igg.nprocs == 1 || error(
+        "Periodic boundary conditions are only supported on a single MPI rank. \
+        `init_global_grid` with `periodx`/`periody` rescales the global grid against the \
+        overlap, which does not match the `Geometry` the solver is given."
+    )
+
+    for (d, isperiodic) in enumerate(bc_periodic)
+        isperiodic && di_center[d] isa AbstractVector && error(
+            "Periodic boundary conditions require uniform grid spacing in the periodic \
+            direction; direction $d has a variable cell-center spacing. The seam face spans the \
+            wrap, so a single spacing value has to describe it."
+        )
+    end
+    return nothing
+end
+
+# The flow boundary conditions sit at a different position in each `solve!` signature, so the
+# guards below pick them out of the argument tuple by type. `nothing` means the call has none,
+# which is not this check's business.
+@inline flow_bcs_of(args::Tuple) = _flow_bcs_of(args...)
+@inline _flow_bcs_of(bcs::AbstractFlowBoundaryConditions, rest...) = bcs
+@inline _flow_bcs_of(_, rest...) = _flow_bcs_of(rest...)
+@inline _flow_bcs_of() = nothing
+
+"""
+    reject_periodic_bcs(bcs, solver)
+
+Throw if `bcs` asks for a periodic direction, naming the `solver` that does not implement it.
+
+Only the DYREL solvers write the momentum row for a periodic seam: `solve_DYREL!` in 2D and 3D,
+and `solve_VariationalDYREL!` in 2D. Every other path would leave that row unsolved and silently
+return a field pinned to its initial guess at the seam.
+"""
+function reject_periodic_bcs(bcs::AbstractFlowBoundaryConditions, solver)
+    any(periodic_dims(bcs)) && error(
+        "Periodic boundary conditions are not implemented for $solver: the momentum row of the \
+        periodic seam would be left unsolved. Use `solve_DYREL!`, or \
+        `solve_VariationalDYREL!` in 2D."
+    )
+    return nothing
+end
+
+reject_periodic_bcs(::Nothing, solver) = nothing

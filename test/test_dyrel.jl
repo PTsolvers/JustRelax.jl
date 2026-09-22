@@ -1,29 +1,28 @@
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 using Test
 using JustRelax, JustRelax.JustRelax2D
-import JustRelax.JustRelax3D as JR3
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 @testset "DYREL" begin
     @testset "DYREL 2D allocator" begin
         # NTuple constructor
         nx, ny = 8, 6
-        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25)
+        dyrel = JustRelax2D.DYREL(backend, (nx, ny); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.5, c_fact = 0.25, γfact = 31.0)
         @test dyrel isa JustRelax.DYREL
         @test size(dyrel.γ_eff) == (nx, ny)
         @test size(dyrel.ηb) == (nx, ny)
@@ -42,6 +41,7 @@ end
         @test size(dyrel.Ry0) == (nx, ny - 1)
         @test size(dyrel.Rz0) == (1, 1)
         @test dyrel.CFL === 0.5
+        @test dyrel.γfact === 31.0
         @test dyrel.ϵ === 1.0e-7
         @test dyrel.ϵ_vel === 2.0e-7
         @test dyrel.c_fact === 0.25
@@ -49,42 +49,11 @@ end
         @test all(iszero.(dyrel.P_num))
         @test all(iszero.(dyrel.Dx)) && all(iszero.(dyrel.Dy))
         @test all(iszero.(dyrel.λmaxVx)) && all(iszero.(dyrel.λmaxVy))
-    end
 
-    @testset "DYREL 3D allocator" begin
-        nx, ny, nz = 6, 5, 4
-        dyrel = JR3.DYREL(backend_JR, (nx, ny, nz); ϵ = 1.0e-7, ϵ_vel = 2.0e-7, CFL = 0.6, c_fact = 0.3)
-        @test dyrel isa JustRelax.DYREL
-        @test size(dyrel.γ_eff) == (nx, ny, nz)
-        @test size(dyrel.ηb) == (nx, ny, nz)
-        @test size(dyrel.Dx) == (nx - 1, ny, nz)
-        @test size(dyrel.Dy) == (nx, ny - 1, nz)
-        @test size(dyrel.Dz) == (nx, ny, nz - 1)
-        @test size(dyrel.λmaxVx) == (nx - 1, ny, nz)
-        @test size(dyrel.λmaxVy) == (nx, ny - 1, nz)
-        @test size(dyrel.λmaxVz) == (nx, ny, nz - 1)
-        @test size(dyrel.dVxdτ) == (nx - 1, ny, nz)
-        @test size(dyrel.dVydτ) == (nx, ny - 1, nz)
-        @test size(dyrel.dVzdτ) == (nx, ny, nz - 1)
-        @test size(dyrel.βVx) == (nx - 1, ny, nz)
-        @test size(dyrel.αVy) == (nx, ny - 1, nz)
-        @test size(dyrel.cVz) == (nx, ny, nz - 1)
-        @test size(dyrel.P_num) == (nx, ny, nz)
-        @test size(dyrel.Rx0) == (nx - 1, ny, nz)
-        @test size(dyrel.Ry0) == (nx, ny - 1, nz)
-        @test size(dyrel.Rz0) == (nx, ny, nz - 1)
-        @test dyrel.CFL === 0.6
-        @test dyrel.ϵ === 1.0e-7
-        @test dyrel.ϵ_vel === 2.0e-7
-        @test dyrel.c_fact === 0.3
-        @test all(iszero.(dyrel.γ_eff))
-        @test all(iszero.(dyrel.P_num))
-        @test all(iszero.(dyrel.Dz)) && all(iszero.(dyrel.λmaxVz))
-
-        # 3-int forwarder
-        dyrel2 = JR3.DYREL(backend_JR, nx, ny, nz; CFL = 0.7)
-        @test size(dyrel2.Dz) == (nx, ny, nz - 1)
-        @test dyrel2.CFL === 0.7
+        dyrel_forwarded = JustRelax2D.DYREL(backend, nx, ny; CFL = 0.7, γfact = 31.0)
+        @test size(dyrel_forwarded.Dy) == (nx, ny - 1)
+        @test dyrel_forwarded.CFL === 0.7
+        @test dyrel_forwarded.γfact === 31.0
     end
 
     @testset "update_α_β! 2D" begin
@@ -162,7 +131,7 @@ end
         # update_α_β!(dyrel) and update_dτV_α_β!(dyrel) drive the kernels off the
         # DYREL fields directly.
         nx, ny = 5, 4
-        dyrel = JustRelax2D.DYREL(backend_JR, (nx, ny); CFL = 0.8)
+        dyrel = JustRelax2D.DYREL(backend, (nx, ny); CFL = 0.8)
         dyrel.dτVx .= 0.5
         dyrel.dτVy .= 0.5
         dyrel.cVx .= 0.1

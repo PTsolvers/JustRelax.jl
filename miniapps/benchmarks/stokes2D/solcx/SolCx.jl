@@ -1,7 +1,7 @@
 using ParallelStencil.FiniteDifferences2D # this is needed because the viscosity and density functions live outside JustRelax scope
 
 # include plotting and error related functions
-include("vizSolCx.jl")
+include(joinpath(@__DIR__, "vizSolCx.jl"))
 
 @parallel function smooth!(
         A2::AbstractArray{T, 2}, A::AbstractArray{T, 2}, fact::Real

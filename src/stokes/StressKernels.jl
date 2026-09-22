@@ -603,19 +603,39 @@ end
 
 #####
 
-Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{3, Integer}, i, j, k)
+"""
+    clamped_indices(ni, [periodic,] I...)
+
+Cell indices of the stencil around vertex `I` on a grid of `ni` cells, kept in range.
+
+Outside a periodic direction an index that falls off the grid is clamped onto its in-range
+neighbour, so a vertex-centred average degenerates to the one-sided average of the cells that
+do exist. A direction listed in `periodic` has no edge: the cell on the far side of the seam is
+a real neighbour, so the index wraps onto it and both copies of the seam plane see the same
+stencil. Omitting `periodic` clamps every direction.
+"""
+Base.@propagate_inbounds @inline _clamped_index(i, n, periodic::Bool) =
+    ifelse(periodic, mod1(i, n), clamp(i, 1, n))
+
+Base.@propagate_inbounds @inline function clamped_indices(
+        ni::NTuple{3, Integer}, periodic::NTuple{3, Bool}, i, j, k
+    )
     nx, ny, nz = ni
-    i0 = clamp(i - 1, 1, nx)
-    ic = clamp(i, 1, nx)
-    i1 = clamp(i + 1, 1, nx)
-    j0 = clamp(j - 1, 1, ny)
-    jc = clamp(j, 1, ny)
-    j1 = clamp(j + 1, 1, ny)
-    k0 = clamp(k - 1, 1, nz)
-    kc = clamp(k, 1, nz)
-    k1 = clamp(k + 1, 1, nz)
+    px, py, pz = periodic
+    i0 = _clamped_index(i - 1, nx, px)
+    ic = _clamped_index(i, nx, px)
+    i1 = _clamped_index(i + 1, nx, px)
+    j0 = _clamped_index(j - 1, ny, py)
+    jc = _clamped_index(j, ny, py)
+    j1 = _clamped_index(j + 1, ny, py)
+    k0 = _clamped_index(k - 1, nz, pz)
+    kc = _clamped_index(k, nz, pz)
+    k1 = _clamped_index(k + 1, nz, pz)
     return i0, j0, k0, ic, jc, kc, i1, j1, k1
 end
+
+Base.@propagate_inbounds @inline clamped_indices(ni::NTuple{3, Integer}, i, j, k) =
+    clamped_indices(ni, (false, false, false), i, j, k)
 
 Base.@propagate_inbounds @inline function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
     return 0.25 * (A[ic, j0, k0] + A[ic, jc, k0] + A[ic, j0, kc] + A[ic, jc, kc])
@@ -1301,14 +1321,20 @@ end
     return nothing
 end
 
-Base.@propagate_inbounds @inline function clamped_indices(ni::NTuple{2, Integer}, i, j)
+Base.@propagate_inbounds @inline function clamped_indices(
+        ni::NTuple{2, Integer}, periodic::NTuple{2, Bool}, i, j
+    )
     nx, ny = ni
-    i0 = clamp(i - 1, 1, nx)
-    ic = clamp(i, 1, nx)
-    j0 = clamp(j - 1, 1, ny)
-    jc = clamp(j, 1, ny)
+    px, py = periodic
+    i0 = _clamped_index(i - 1, nx, px)
+    ic = _clamped_index(i, nx, px)
+    j0 = _clamped_index(j - 1, ny, py)
+    jc = _clamped_index(j, ny, py)
     return i0, j0, ic, jc
 end
+
+Base.@propagate_inbounds @inline clamped_indices(ni::NTuple{2, Integer}, i, j) =
+    clamped_indices(ni, (false, false), i, j)
 
 Base.@propagate_inbounds @inline function av_clamped(A, i0, j0, ic, jc)
     return 0.25 * (A[i0, j0] + A[ic, jc] + A[i0, jc] + A[ic, j0])

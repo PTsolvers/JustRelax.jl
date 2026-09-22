@@ -4,7 +4,7 @@ using Test, Suppressor
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 # Benchmark of Duretz et al. 2014
@@ -12,25 +12,25 @@ end
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -88,7 +88,7 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 50, 75, 25
-    particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
+    particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pPhases)
@@ -97,19 +97,19 @@ function Shearheating2D(; nx = 32, ny = 32)
     xc_anomaly = lx / 2 # origin of thermal anomaly
     yc_anomaly = 40.0e3   # origin of thermal anomaly
     r_anomaly = 3.0e3    # radius of perturbation
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, xc_anomaly, yc_anomaly, r_anomaly)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-5, ϵ_rel = 1.0e-5, CFL = 0.9 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = true, right = true, top = 273.0 + 400, bot = 273.0 + 400),
@@ -130,7 +130,7 @@ function Shearheating2D(; nx = 32, ny = 32)
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1 / √2.1
     )
 
     # Boundary conditions
@@ -139,8 +139,8 @@ function Shearheating2D(; nx = 32, ny = 32)
     )
     ## Compression and not extension - fix this
     εbg = 5.0e-14
-    stokes.V.Vx .= PTArray(backend_JR)([ -(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([ (ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ -(x - lx / 2) * εbg for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([ (ly - abs(y)) * εbg for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     update_halo!(@velocity(stokes)...)
 

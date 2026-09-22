@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -26,7 +26,7 @@ using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -246,7 +246,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
 
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
     centroid2particle!(pT, thermal.T, particles)
 
     τxx_v = @zeros(ni .+ 1...)
@@ -287,12 +287,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             args,
             dt,
             igg;
-            kwargs = (;
-                iterMax = 100.0e3,
-                nout = 2.0e3,
-                free_surface = true,
-                viscosity_cutoff = viscosity_cutoff,
-            )
+            air_phase = air_phase,
+            iterMax = 100.0e3,
+            nout = 2.0e3,
+            free_surface = true,
+            viscosity_cutoff = viscosity_cutoff,
         )
 
         # rotate stresses
@@ -327,6 +326,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
@@ -338,6 +342,11 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Apply the new marker-chain surface before particle replenishment.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ))
         center2vertex!(τxx_v, stokes.τ.xx)
@@ -360,10 +369,6 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particle_args_reduced,
             (thermal.T, τxx_v_ghost, τyy_v_ghost, τxy_ghost, ωxy_ghost)
         )
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         compute_melt_fraction!(
             ϕ_m, dϕdT, phase_ratios, rheology, (; T = thermal.T, P = stokes.P)

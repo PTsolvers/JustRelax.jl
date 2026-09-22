@@ -3,22 +3,22 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using GeoParams, SpecialFunctions
@@ -110,7 +110,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     # ----------------------------------------------------
 
     # Weno model -----------------------------------------
-    weno = WENO5(backend_JR, Val(2), ni .+ 1) # ni.+1 for Temp
+    weno = WENO5(backend, Val(2), ni .+ 1) # ni.+1 for Temp
     # ----------------------------------------------------
 
     # create rheology struct
@@ -152,7 +152,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     # initialize thermal profile - Half space cooling
     adiabat = 0.3 # adiabatic gradient
     Tp = 1900
@@ -180,7 +180,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 0.8 / √2.1)
 
     # Buoyancy forces
@@ -197,7 +197,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, thermal_perturb
 
     # PT coefficients for thermal diffusion
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1.0e-3 / √2.1
+        backend, rheology, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 1.0e-3 / √2.1
     )
 
     # Boundary conditions

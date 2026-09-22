@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,24 +30,12 @@ else
 end
 
 # Load script dependencies
-using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions, CellArrays
+using Printf, LinearAlgebra, GeoParams, CairoMakie, SpecialFunctions
 
 # Load file with all the rheology configurations
-include("Layered_rheology.jl")
+include(joinpath(@__DIR__, "Layered_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
 
 # Initial thermal profile
 @parallel_indices (i, j) function init_T!(T, z)
@@ -177,7 +165,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     args = (; T = thermal.T, P = stokes.P, dt = dt, ΔT = thermal.ΔT)

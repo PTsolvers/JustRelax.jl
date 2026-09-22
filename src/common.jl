@@ -64,6 +64,7 @@ include("rheology/BuoyancyForces.jl")
 export compute_ρg!
 
 include("rheology/Viscosity.jl")
+include("rheology/Viscosity_VS.jl")
 export compute_viscosity!, compute_viscosity_εII!, compute_viscosity_τII!
 
 include("rheology/Melting.jl")
@@ -127,9 +128,24 @@ include("DYREL/constructors.jl")
 include("DYREL/pressure_kernels.jl")
 include("DYREL/stress_kernels.jl")
 include("DYREL/velocity_kernels.jl")
+include("DYREL/velocity_kernels_VS.jl")
 include("DYREL/Gershgorin.jl")
+include("DYREL/Gershgorin_VS.jl")
 
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")
 export PTThermalCoeffs, heatdiffusion_PT!, compute_shear_heating!
+
+# Solver entry points forward their keywords to the backend-trait methods as a
+# single `kwargs` NamedTuple. Callers may pass the options either as plain
+# keywords or pre-bundled as `kwargs = (; ...)`; both normalize to the same
+# NamedTuple here.
+function flatten_solver_kwargs(kwargs)
+    options = (; kwargs...)
+    haskey(options, :kwargs) || return options
+    bundle = options.kwargs
+    bundle isa NamedTuple ||
+        throw(ArgumentError("`kwargs` must be a NamedTuple, got $(typeof(bundle))"))
+    return merge(bundle, Base.structdiff(options, (; kwargs = bundle)))
+end

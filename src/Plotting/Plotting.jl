@@ -5,29 +5,6 @@ import JustRelax: plot_particles, plot_field
 using JustRelax, JustPIC, CellArrays
 
 
-"""
-fig = plot_particles(particles, pPhases;)
-
-2D plot of the particles positions colored by their phase.
-
-# Arguments
-- `particles`: Particles from `JustPIC`
-- `pPhases`: Field containing the phase information for each particle.
-
-# Keyword Arguments
-- `chain`: Markerchain position to e.g. visualise topography (default: `nothing`)
-- `clrmap`: Colormap to use (default: `:roma`)
-- `title`: Title of the plot (default: `"Particle Position"`)
-- `filename`: If provided, saves the figure to this filename (default: `nothing`)
-- `resolution`: Resolution of the figure in pixels (default: `(1200, 1200)`)
-- `labelsize`: Font size of the axis labels (default: `35`)
-- `titlesize`: Font size of the title (default: `50`)
-- `linecolor`: Color of the markerchain line (default: `:black`)
-- `markersize`: Size of the markerchain markers (default: `1.0`)
-- `conversion`: Conversion factor for coordinates (default: `1.0e3`, to convert from m to km)
-- `units`: Units for the axis labels (default: `:km`)
-
-"""
 function plot_particles(
         particles, pPhases;
         chain = nothing,
@@ -74,7 +51,7 @@ function plot_particles(
 
     Colorbar(f[1, 2], h)
     if !isnothing(filename)
-        save(filename, fig)
+        save(filename, f)
         display(f)
     else
         display(f)
@@ -83,31 +60,6 @@ function plot_particles(
     return f
 end
 
-"""
-    fig = plot_field(data, number, grid;)
-
-Plots a 2D field from a CellArrays structure using Makie.jl
-
-# Arguments
-- `data`: Field to plot, must be a subtype of `CellArrays` e.g. `phase_ratios`
-- `index`: Index of the field to plot (e.g. phase number)
-- `grid`: Grid to use for plotting, must be a `LinRange`
-
-# Keyword Arguments
-- `clrmap`: Colormap to use (default: `:roma`)
-- `title`: Title of the plot (default: `"Field Plot"`)
-- `filename`: If provided, saves the figure to this filename (default: `nothing`)
-- `resolution`: Resolution of the figure in pixels (default: `(1200, 1200)`)
-- `labelsize`: Font size of the axis labels (default: `35`)
-- `titlesize`: Font size of the title (default: `50`)
-- `units`: Units for the axis labels (default: `:km`)
-- `conversion`: Conversion factor for coordinates (default: `1.0e3`, to convert from m to km)
-
-# Example
-Plot the ratio of the second phase at cell centers:
-f = plot_field(phase_ratios.center, 2, xci; title = "Phase Ratios at Cell Centers", units = :km)
-
-"""
 function plot_field(
         data,
         index::Int,
@@ -145,7 +97,7 @@ function plot_field(
 
     Colorbar(f[1, 2], h)
     if !isnothing(filename)
-        save(filename, fig)
+        save(filename, f)
         display(f)
     else
         display(f)

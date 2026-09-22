@@ -1,5 +1,5 @@
 # include benchmark related functions
-include("vizSolVi.jl")
+include(joinpath(@__DIR__, "vizSolVi.jl"))
 
 @parallel function smooth!(
         A2::AbstractArray{T, 2}, A::AbstractArray{T, 2}, fact::Real

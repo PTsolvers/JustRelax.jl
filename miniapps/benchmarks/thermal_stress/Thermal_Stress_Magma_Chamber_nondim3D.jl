@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,25 +30,11 @@ else
 end
 
 # Load script dependencies
-using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie, CellArrays
-using StaticArrays
+using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
 using ImplicitGlobalGrid
 using MPI: MPI
-using WriteVTK
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[3]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z, sticky_air)
-    @all(P) = @all(ρg)
-    # @all(P) = abs(@all(ρg) * (@all_j(z) + sticky_air)) * <((@all_j(z) + sticky_air), 0.0)
-    return nothing
-end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom)
     ni = size(phases)
@@ -111,22 +97,22 @@ end
 end
 
 
-function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi, sticky_air)
+function circular_perturbation!(T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xci, sticky_air)
 
     @parallel_indices (i, j, k) function _circular_perturbation!(
             T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, x, y, z, sticky_air
         )
         depth = -z[k] - sticky_air
         @inbounds if ((x[i] - xc_anomaly)^2 + (y[j] - yc_anomaly)^2 + (depth + zc_anomaly)^2 ≤ r_anomaly^2)
-            T[i, j, k] = δT
+            T[i + 1, j + 1, k + 1] = δT
         end
         return nothing
     end
 
-    ni = size(T)
+    ni = size(T) .- 2
 
     return @parallel (@idx ni) _circular_perturbation!(
-        T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xvi..., sticky_air
+        T, δT, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, xci..., sticky_air
     )
 end
 
@@ -243,7 +229,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     max_xcell = 40
     min_xcell = 15
     particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -261,8 +247,14 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Initialisation of thermal profile
     thermal = ThermalArrays(backend, ni) # initialise thermal arrays and boundary conditions
+    Tsurf = nondimensionalize(273K, CharDim)
+    dTdz = nondimensionalize((723 - 273)K, CharDim) / nondimensionalize(15km, CharDim)
+    Tbot = Tsurf + dTdz * (lz - sticky_air)
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, front = true, back = true, top = false, bot = false),
+        constant_value = (
+            left = false, right = false, front = false, back = false, top = Tsurf, bot = Tbot,
+        ),
     )
     @parallel (@idx ni) init_T!(
         thermal.T,
@@ -270,11 +262,11 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         sticky_air,
         nondimensionalize(0.0e0km, CharDim),
         nondimensionalize(15km, CharDim),
-        nondimensionalize((723 - 273)K, CharDim) / nondimensionalize(15km, CharDim),
-        nondimensionalize(273K, CharDim)
+        dTdz,
+        Tsurf,
     )
     circular_perturbation!(
-        thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xvi, sticky_air
+        thermal.T, anomaly, x_anomaly, y_anomaly, z_anomaly, r_anomaly, xci, sticky_air
     )
     thermal_bcs!(thermal, thermal_bc)
 
@@ -302,7 +294,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
+        compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
@@ -320,15 +312,14 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
     # Plot initial T and η profiles
     let
-        Zv = [z for _ in xvi[1], _ in xvi[2], z in xvi[3]][:]
         Z = [z for _ in xci[1], _ in xci[2], z in xci[3]][:]
         fig = Figure(; size = (1200, 900))
         ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title = "T")
         ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Pressure")
         scatter!(
             ax1,
-            Array(ustrip.(dimensionalize(thermal.T[:], C, CharDim))),
-            ustrip.(dimensionalize(Zv, km, CharDim)),
+            Array(ustrip.(dimensionalize(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)], C, CharDim)))[:],
+            ustrip.(dimensionalize(Z, km, CharDim)),
         )
         scatter!(
             ax2,
@@ -340,6 +331,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         fig
     end
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     local Vx_v, Vy_v
@@ -349,14 +342,10 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    dt₀ = similar(stokes.P)
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
-    Tsurf = thermal.T[1, 1, end]
-    Tbot = thermal.T[1, 1, 1]
 
     while it < 25
 
@@ -418,9 +407,16 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -434,10 +430,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
-        @views thermal.T[:, :, end] .= Tsurf
-        @views thermal.T[:, :, 1] .= Tbot
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told
 
@@ -490,14 +483,13 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
                 end
 
                 let
-                    Zv = [z for _ in 1:(nx + 1), _ in 1:(ny + 1), z in ustrip.(dimensionalize(xvi[3], km, CharDim))][:]
                     Z = [z for _ in 1:nx  , _ in 1:ny  , z in ustrip.(dimensionalize(xci[3], km, CharDim))][:]
                     fig = Figure(; size = (1200, 900))
                     ax1 = Axis(fig[1, 1]; aspect = 2 / 3, title = "T")
                     ax2 = Axis(fig[1, 2]; aspect = 2 / 3, title = "Pressure")
                     a3 = Axis(fig[2, 1]; aspect = 2 / 3, title = "τII")
 
-                    scatter!(ax1, ustrip.(dimensionalize((Array(thermal.T)), C, CharDim))[:], Zv, markersize = 4)
+                    scatter!(ax1, ustrip.(dimensionalize(Array(thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]), C, CharDim))[:], Z, markersize = 4)
                     scatter!(ax2, ustrip.(dimensionalize((Array(stokes.P)), MPa, CharDim))[:], Z, markersize = 4)
                     scatter!(a3, ustrip.(dimensionalize(Array(stokes.τ.II), MPa, CharDim))[:], Z, markersize = 4)
 

@@ -3,7 +3,8 @@
 It is common to save the state of a simulation at regular intervals, especially for long-running simulations. This allows you to restart the simulation from the last saved state in case of interruptions or to continue the simulation at a later time without losing progress. JustRelax provides a simple way to save and load checkpoint files. Two checkpointing functions are available for the most common file extensions (HDF5 and JLD2). By loading the `DataIO` module, you gain access to these checkpointing functions as well as VTK saving functions for later visualization with [ParaView](https://www.paraview.org/).
 For more details on the vtk, see the [here](./subduction2D/subduction2D.md).
 
-!!! tip "JustPIC checkpointing"  A similar checkpointing function is defined by [JustPIC.jl](https://juliageodynamics.github.io/JustPIC.jl/dev/IO/) to save the state of the particles.
+!!! tip "JustPIC checkpointing"
+    A similar checkpointing function is defined by [JustPIC.jl](https://juliageodynamics.github.io/JustPIC.jl/dev/IO/) to save the state of the particles.
 
 
 :::code-group
@@ -39,7 +40,8 @@ P, T, Vx, Vy, Vz, η, t, dt = load_checkpoint_hdf5(fname)
 ### Saving and loading checkpoint with JLD2
 JLD2 checkpointing is recommended for most users due to its speed and ability to preserve Julia data types. In contrast to the HDF5 function, the JLD2 checkpointing function saves all stokes and thermal arrays (optional) while being MPI agnostic. This means that if you run your model with multiple processors, each processor will save its own checkpoint file in the specified directory with MPI rank attached to the name (e.g. `checkpoint0000.jld2`, `checkpoint0001.jld2`). The function automatically handles the naming of these files to avoid overwriting. Additionally, you can save any custom fields by passing them as keyword arguments.
 
-!!! warning "Checkpointing" All checkpointing functions will save the arrays as CPU arrays no matter your backend. This means that if you are using a GPU backend, the arrays will be transferred to the CPU before saving, which may take some time depending on the size of your model.
+!!! warning "Checkpointing"
+    All checkpointing functions save the arrays as CPU arrays no matter the backend. On a GPU backend the arrays are transferred to the CPU before saving, which takes time proportional to the size of the model.
 
 :::code-group
 

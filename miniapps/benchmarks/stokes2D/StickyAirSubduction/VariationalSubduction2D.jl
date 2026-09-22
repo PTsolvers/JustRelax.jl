@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,19 +30,13 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CellArrays
+using GeoParams
 using CairoMakie
 
 # Load file with all the rheology configurations
-include("VariationalSubduction2D_rheology.jl")
+include(joinpath(@__DIR__, "VariationalSubduction2D_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
 
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
@@ -53,11 +47,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -175,6 +164,7 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
                 dt,
                 igg;
                 kwargs = (;
+                    air_phase = air_phase,
                     iterMax = 50.0e3,
                     free_surface = true,
                     nout = 5.0e3,
@@ -195,12 +185,14 @@ function main(igg; nx::Int64 = 16, ny::Int64 = 16, figdir::String = "figs2D", do
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
 
-        # advect marker chain
+        # Filter against the new surface before injection so emptied cells are
+        # replenished before phase ratios are recomputed.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

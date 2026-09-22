@@ -3,7 +3,7 @@
 ## Particles-in-Cell
 [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) relies on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) for advections of particles containing material information.
 
-The recommended workflow is now:
+Particles are initialized from the staggered velocity grids stored in `Geometry`:
 
 ```julia
 using JustRelax
@@ -31,7 +31,7 @@ explicitly. For example, in 2D use `ghost_1 = false, ghost_2 = false` (and add
 
 ## Typical particle operations
 
-Common particle operations now follow the compact API used in the tests and examples:
+The common particle operations are:
 
 ```julia
 grid2particle!(pT, T_buffer, particles)
@@ -61,3 +61,29 @@ subgrid_diffusion!(pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, partic
 ## Velocity grids
 
 `velocity_grids(xci, xvi, di)` is still available when you need the staggered coordinates explicitly, for example for analysis or custom utilities. When you already have a [`Geometry`](@ref), prefer `grid.xi_vel`.
+
+## Marker-chain free surfaces
+
+For a 2D free surface represented by a `JustPIC.MarkerChain`, the chain must be
+advanced with the same velocity field and timestep as the material particles.
+The recommended robust update is semi-Lagrangian:
+
+```julia
+semilagrangian_advection_markerchain!(
+    chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
+)
+```
+
+This updates fixed surface vertices by backtracking, limits steep slopes,
+conserves the mean height, and reconstructs a regular marker chain. The direct
+Lagrangian alternative is:
+
+```julia
+advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+```
+
+The direct form does not take `xvi`; it moves and resamples the chain markers,
+then reconstructs its topography internally. After either update, invalidate
+particles on the wrong side of the chain, replenish particle slots, update
+particle phase ratios, and finally recompute any `RockRatio` field derived from
+the chain.

@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -11,25 +11,25 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -120,7 +120,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     args = (; P = P)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     Ttop = 300.0
     Tbot = 3500.0
     thermal_bc = TemperatureBoundaryConditions(;
@@ -139,19 +139,19 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, Cp0 = 1.2e
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 40, 40, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     # temperature
     pPhases, = init_cell_arrays(particles, Val(1))
     init_phases!(pPhases, particles, center_perturbation..., r)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
     args = (; P = P, T = thermal.T)
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √2
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.95 / √2
     )
 
     # Time loop
@@ -189,7 +189,7 @@ end
         thermal, phase_ratios = diffusion_2D(; nx = nx, ny = ny)
 
         nx_T, ny_T = size(thermal.T)
-        if backend_JR === CPUBackend
+        if backend === CPUBackend
             @test thermal.T[nx_T >>> 1 + 1, ny_T >>> 1 + 1] ≈ 1814.029 atol = 1.0e-1
             @test thermal.T[(nx >>> 1) + 1, (ny >>> 1) + 1] ≈ 1823.548 atol = 1.0e-1
             @test nphases(phase_ratios) === Val{2}()

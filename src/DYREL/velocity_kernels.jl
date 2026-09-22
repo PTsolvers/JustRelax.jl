@@ -151,9 +151,10 @@ end
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.
 
-function compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, do_strain_rate = true)
-    ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
-    melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
+function compute_∇V_strain_rate_RP!(
+        stokes, dyrel, rheology, phase_ratios, _di, ni, dt, do_strain_rate = true;
+        ΔT = nothing, melt_fraction = nothing, kwargs...,
+    )
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,
@@ -326,21 +327,25 @@ end
 @parallel_indices (i, j) function compute_PH_residual_V!(
         Rx::AbstractArray{T, 2}, Ry, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, _di_center, _di_vertex
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    # Cell-centred fields are differenced with the wrapping stencil: `Rx` reaches `i = nx` only
+    # when the x-direction is periodic, and that row is the seam face at `Vx[nx + 1, :]`, whose
+    # east neighbour is cell 1. The vertex field `τxy` needs no wrap -- `τxy[nx + 1, :]` is the
+    # seam vertex itself.
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa_wrap(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya_wrap(A, i, j)
 
     # @inbounds begin
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
         _dx_c = @dx(_di_center, i)
         _dy_v = @dy(_di_vertex, j)
-        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa_wrap(A, _dx_c, i, j)
         Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
         Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
         _dy_c = @dy(_di_center, j)
         _dx_v = @dx(_di_vertex, i)
-        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya_wrap(A, _dy_c, i, j)
         Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
         Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy)
     end
@@ -364,14 +369,15 @@ end
         _di_vertex,
         dt,
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    # See the overload above: cell-centred fields wrap, the vertex field `τxy` does not.
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa_wrap(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya_wrap(A, i, j)
 
     nx, ny = size(ρgy)
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
         _dx_c = @dx(_di_center, i)
         _dy_v = @dy(_di_vertex, j)
-        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+        Base.@propagate_inbounds @inline d_xa(A) = _d_xa_wrap(A, _dx_c, i, j)
         Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
         Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
@@ -379,13 +385,13 @@ end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
         _dy_c = @dy(_di_center, j)
         _dx_v = @dx(_di_vertex, i)
-        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+        Base.@propagate_inbounds @inline d_ya(A) = _d_ya_wrap(A, _dy_c, i, j)
         Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
         θ = 1.0
         # Vertical velocity
         Vyᵢⱼ = Vy[i + 1, j + 1]
         # Get necessary buoyancy forces
-        j_N = min(j + 1, ny)
+        j_N = wrap_next(j, ny)
         ρg_S = ρgy[i, j]
         ρg_N = ρgy[i, j_N]
         # Spatial derivatives
@@ -399,137 +405,115 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_DR_residual_V!(
-        Rx::AbstractArray{T, 2},
-        Ry,
-        P,
-        P_num,
-        ΔPψ,
-        τxx,
-        τyy,
-        τxy,
-        ρgx,
-        ρgy,
-        Dx,
-        Dy,
-        _di_center,
-        _di_vertex,
-    ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
-
-    # @inbounds begin
-    if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
-        _dx_c = @dx(_di_center, i)
-        _dy_v = @dy(_di_vertex, j)
-        Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
-        Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-        Rx[i, j] = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(P_num) - d_xa(ΔPψ) - av_xa(ρgx)) / Dx[i, j]
-    end
-    if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
-        _dy_c = @dy(_di_center, j)
-        _dx_v = @dx(_di_vertex, i)
-        Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
-        Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-        Ry[i, j] = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(P_num) - d_ya(ΔPψ) - av_ya(ρgy)) / Dy[i, j]
-    end
-    # end
-
-    return nothing
-end
-
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _di_center, _di_vertex
+        Rx::AbstractArray{T, 3}, Ry, Rz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_vertex, k)
 
-        Rx[i, j, k] = d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) - d_xa(P, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+        Rx[i, j, k] =
+            d_xa(τxx, _dx) +
+            _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+            _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
+            d_xa(P, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
     end
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_center, j)
         _dz = @dz(_di_vertex, k)
 
-        Ry[i, j, k] = d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) - d_ya(P, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+        Ry[i, j, k] =
+            d_ya(τyy, _dy) +
+            _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+            _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
+            d_ya(P, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
     end
     if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_center, k)
 
-        Rz[i, j, k] = d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) - d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
+        Rz[i, j, k] =
+            d_za(τzz, _dz) +
+            _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+            _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
+            d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
     end
     return nothing
 end
 
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τxy, τxz, τyz, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt
+        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
-    nx, ny, nz = size(ρgz)
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_vertex, k)
 
-        Rx[i, j, k] = d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) - d_xa(P, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
+        Rx[i, j, k] =
+            d_xa(τxx, _dx) +
+            _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+            _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
+            d_xa(P, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
     end
-
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && k ≤ size(Ry, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_center, j)
         _dz = @dz(_di_vertex, k)
 
-        Ry[i, j, k] = d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) - d_ya(P, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
+        Ry[i, j, k] =
+            d_ya(τyy, _dy) +
+            _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+            _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
+            d_ya(P, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
     end
-
     if i ≤ size(Rz, 1) && j ≤ size(Rz, 2) && k ≤ size(Rz, 3)
         _dx = @dx(_di_vertex, i)
         _dy = @dy(_di_vertex, j)
         _dz = @dz(_di_center, k)
 
-        θ = 1.0
-        # Vertical velocity
-        Vzᵢⱼₖ = Vz[i + 1, j + 1, k + 1]
-        # Get necessary buoyancy forces
-        k_T = min(k + 1, nz)
-        ρg_B = ρgz[i, j, k]
-        ρg_T = ρgz[i, j, k_T]
-        # Spatial derivatives
-        ∂ρg∂z = (ρg_T - ρg_B) * _dz
-        # correction term
-        ρg_correction = (Vzᵢⱼₖ * ∂ρg∂z) * θ * dt
-
-        Rz[i, j, k] = d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) - d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz) + ρg_correction
+        k_T = wrap_next(k, size(ρgz, 3))
+        ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
+        ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
+        Rz[i, j, k] =
+            d_za(τzz, _dz) +
+            _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+            _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
+            d_za(P, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz) + ρg_correction
     end
-
     return nothing
 end
 
+# Non-fused 3D DR residual (no damped velocity update). Used to probe the discretized momentum
+# operator column-by-column (see the Gershgorin row-sum test), where only the raw residual per
+# unit input is needed, not the pseudo-time state (dVdτ, α, β, dτV) carried by
+# `compute_DR_residual_update_V!`.
 @parallel_indices (i, j, k) function compute_DR_residual_V!(
         Rx::AbstractArray{T, 3},
         Ry,
@@ -540,9 +524,9 @@ end
         τxx,
         τyy,
         τzz,
-        τxy,
-        τxz,
         τyz,
+        τxz,
+        τxy,
         ρgx,
         ρgy,
         ρgz,
@@ -553,17 +537,17 @@ end
         _di_vertex,
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
-    # @inbounds begin
     if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
         _dx = @dx(_di_center, i)
         _dy = @dy(_di_vertex, j)
@@ -571,7 +555,9 @@ end
 
         Rx[i, j, k] =
             (
-            d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+            d_xa(τxx, _dx) +
+                _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+                _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
                 d_xa(P, _dx) - d_xa(P_num, _dx) - d_xa(ΔPψ, _dx) - av_x(ρgx)
         ) / Dx[i, j, k]
     end
@@ -582,7 +568,9 @@ end
 
         Ry[i, j, k] =
             (
-            d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+            d_ya(τyy, _dy) +
+                _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+                _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
                 d_ya(P, _dy) - d_ya(P_num, _dy) - d_ya(ΔPψ, _dy) - av_y(ρgy)
         ) / Dy[i, j, k]
     end
@@ -593,11 +581,12 @@ end
 
         Rz[i, j, k] =
             (
-            d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
+            d_za(τzz, _dz) +
+                _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+                _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
                 d_za(P, _dz) - d_za(P_num, _dz) - d_za(ΔPψ, _dz) - av_z(ρgz)
         ) / Dz[i, j, k]
     end
-    # end
 
     return nothing
 end
@@ -662,7 +651,7 @@ end
     return dVdτ_new, dVdτ_new * β * dτ
 end
 
-# Fuses `compute_DR_residual_V!` (velocity residual R = ∂ⱼτiⱼ − ∂ᵢ(P + θc) − ρgᵢ, /Dᵢ, where the
+# Fuses the velocity residual (R = ∂ⱼτiⱼ − ∂ᵢ(P + θc) − ρgᵢ, /Dᵢ, where the
 # small pressure correction θc = P_num + ΔPψ is assembled once per iteration by the stress kernel)
 # with the damped update of `update_V_damping_DR_V!`. Folding only the two small corrections (not the
 # large hydrostatic P) collapses three neighbour-stencil reads into two while keeping P differenced
@@ -694,14 +683,18 @@ end
         _di_vertex,
         dt,
     ) where {T}
-    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
-    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. Vertex reads (`τxy`) and the velocity write land on the seam
+    # plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa_wrap(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya_wrap(A, i, j)
 
     @inbounds begin
         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
             _dx_c = @dx(_di_center, i)
             _dy_v = @dy(_di_vertex, j)
-            Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx_c, i, j)
+            Base.@propagate_inbounds @inline d_xa(A) = _d_xa_wrap(A, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
             Rx_ij = (d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(θc) - av_xa(ρgx)) / Dx[i, j]
             Rx[i, j] = Rx_ij
@@ -713,9 +706,9 @@ end
         if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
             _dy_c = @dy(_di_center, j)
             _dx_v = @dx(_di_vertex, i)
-            Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy_c, i, j)
+            Base.@propagate_inbounds @inline d_ya(A) = _d_ya_wrap(A, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx_v, i, j)
-            j_N = min(j + 1, size(ρgy, 2))
+            j_N = wrap_next(j, size(ρgy, 2))
             ∂ρg∂y = (ρgy[i, j_N] - ρgy[i, j]) * _dy_c
             ρg_correction = Vy[i + 1, j + 1] * ∂ρg∂y * dt
             Ry_ij = (d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(θc) - av_ya(ρgy) + ρg_correction) / Dy[i, j]
@@ -745,9 +738,9 @@ end
         τxx,
         τyy,
         τzz,
-        τxy,
-        τxz,
         τyz,
+        τxz,
+        τxy,
         ρgx,
         ρgy,
         ρgz,
@@ -765,17 +758,19 @@ end
         dτVz,
         _di_center,
         _di_vertex,
+        dt,
     ) where {T}
 
-    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A, _dx) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A, _dy) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A, _dz) = _d_zi(A, _dz, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
+    # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
+    # last cell index only when its direction is periodic, and that row is the seam face, whose
+    # forward neighbour is cell 1. The vertex reads (`τxy`, `τxz`, `τyz`) and the velocity writes
+    # land on the seam plane of their own arrays and need no wrap.
+    Base.@propagate_inbounds @inline d_xa(A, _dx) = _d_xa_wrap(A, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_ya(A, _dy) = _d_ya_wrap(A, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_za(A, _dz) = _d_za_wrap(A, _dz, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A) = _av_xa_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A) = _av_ya_wrap(A, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A) = _av_za_wrap(A, i, j, k)
 
     @inbounds begin
         if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && k ≤ size(Rx, 3)
@@ -785,7 +780,9 @@ end
 
             Rx_ijk =
                 (
-                d_xa(τxx, _dx) + d_yi(τxy, _dy) + d_zi(τxz, _dz) -
+                d_xa(τxx, _dx) +
+                    _dy * (τxy[i + 1, j + 1, k] - τxy[i + 1, j, k]) +
+                    _dz * (τxz[i + 1, j, k + 1] - τxz[i + 1, j, k]) -
                     d_xa(P, _dx) - d_xa(θc, _dx) - av_x(ρgx)
             ) / Dx[i, j, k]
             Rx[i, j, k] = Rx_ijk
@@ -801,7 +798,9 @@ end
 
             Ry_ijk =
                 (
-                d_ya(τyy, _dy) + d_xi(τxy, _dx) + d_zi(τyz, _dz) -
+                d_ya(τyy, _dy) +
+                    _dx * (τxy[i + 1, j + 1, k] - τxy[i, j + 1, k]) +
+                    _dz * (τyz[i, j + 1, k + 1] - τyz[i, j + 1, k]) -
                     d_ya(P, _dy) - d_ya(θc, _dy) - av_y(ρgy)
             ) / Dy[i, j, k]
             Ry[i, j, k] = Ry_ijk
@@ -814,11 +813,15 @@ end
             _dx = @dx(_di_vertex, i)
             _dy = @dy(_di_vertex, j)
             _dz = @dz(_di_center, k)
-
+            k_T = wrap_next(k, size(ρgz, 3))
+            ∂ρg∂z = (ρgz[i, j, k_T] - ρgz[i, j, k]) * _dz
+            ρg_correction = Vz[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
             Rz_ijk =
                 (
-                d_za(τzz, _dz) + d_xi(τxz, _dx) + d_yi(τyz, _dy) -
-                    d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz)
+                d_za(τzz, _dz) +
+                    _dx * (τxz[i + 1, j, k + 1] - τxz[i, j, k + 1]) +
+                    _dy * (τyz[i, j + 1, k + 1] - τyz[i, j, k + 1]) -
+                    d_za(P, _dz) - d_za(θc, _dz) - av_z(ρgz) + ρg_correction
             ) / Dz[i, j, k]
             Rz[i, j, k] = Rz_ijk
 

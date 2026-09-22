@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -33,21 +33,9 @@ end
 using Printf, GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
-include("Layered_rheology.jl")
+include(joinpath(@__DIR__, "Layered_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 
 # Initial thermal profile
 @parallel_indices (I...) function init_T!(T, z)
@@ -155,7 +143,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[end], xci[end])
+    compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -200,9 +188,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         fig
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
-    dt₀ = similar(stokes.P)
+    centroid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v, Vz_v
     if do_vtk
@@ -211,13 +197,14 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         Vz_v = @zeros(ni .+ 1...)
     end
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particle to grid vertices
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         # ------------------------------
 
         # Stokes solver ----------------
@@ -262,9 +249,16 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 

@@ -3,22 +3,22 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using GeoParams
@@ -70,7 +70,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     P = @zeros(ni...)
 
     ## Allocate arrays needed for every Thermal Diffusion
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.H .= 1.0e-6 # radiogenic heat production
     # physical parameters
     ρ = @fill(ρ0, ni...)
@@ -87,7 +87,7 @@ function diffusion_2D(; nx = 32, ny = 32, lx = 100.0e3, ly = 100.0e3, ρ0 = 3.3e
     @parallel (1:(nx + 2), 1:ny) init_T!(thermal.T, xci[2])
     thermal_bcs!(thermal, thermal_bc)
 
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
 
     # Add thermal perturbation
     δT = 100.0e0 # thermal perturbation
@@ -136,7 +136,7 @@ end
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
     grid = Geometry(ni, li; origin = (0.0, -ly))
 
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.T .= 300.0
     thermal.H .= NaN # poisons the residual on the first update
     thermal_bc = TemperatureBoundaryConditions(;
@@ -146,7 +146,7 @@ end
     K = @fill(3.0, ni...)
     ρCp = @fill(3.1e3 * 1.2e3, ni...)
     dt = 1.0e3
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
 
     # not wrapped in @suppress: Suppressor swallows the log record @test_logs needs
     try

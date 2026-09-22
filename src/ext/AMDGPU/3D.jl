@@ -9,8 +9,8 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
-using MPI
 using Statistics
+using MPI
 
 import JustRelax.JustRelax3D as JR3D
 
@@ -32,9 +32,14 @@ import JustRelax:
     VelocityBoundaryConditions,
     apply_dirichlet,
     apply_dirichlet!,
-    isdirichlet
+    isdirichlet,
+    periodic_dims,
+    flow_bcs_of,
+    check_periodic_bcs,
+    reject_periodic_bcs
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
@@ -42,24 +47,51 @@ __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
 include("../../stokes/Stokes3D.jl")
+include("../../variational_stokes/Stokes3D.jl")
+include("../../DYREL/solver.jl")
 
 # Types
 function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR3D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5) where {N}
-    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+function JR3D.StokesArrays(
+        ::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, bcs::JustRelax.AbstractFlowBoundaryConditions
+    ) where {N}
+    return StokesArrays(ni, bcs)
 end
 
-function JR3D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5)
-    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact)
+function JR3D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool} = ntuple(_ -> false, Val(N)); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N}
+    return DYREL(ni, periodic; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
 function JR3D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
     return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
 end
 
+function JR3D.update_α_β!(βVx::ROCArray, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+    return update_α_β!(βVx, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+end
+
+function JR3D.update_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_α_β!(dyrel)
+end
+
+function JR3D.update_dτV_α_β!(dτVx::ROCArray, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+end
+
+function JR3D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:ROCArray})
+    return update_dτV_α_β!(dyrel)
+end
+
+function JR3D.apply_free_surface_diagonal!(Dz::ROCArray, λmaxVz::ROCArray, ρgz::ROCArray, di_center, dt)
+    return apply_free_surface_diagonal!(Dz, λmaxVz, ρgz, di_center, dt)
+end
 
 function JR3D.ThermalArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
@@ -326,15 +358,17 @@ function JR3D.compute_ρg!(
         ρg::Union{ROCArray, NTuple{N, ROCArray}},
         phase_ratios::JustPIC.PhaseRatios,
         rheology,
-        args,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 function JR3D.compute_ρg!(
-        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args
+        ρg::Union{ROCArray, NTuple{N, ROCArray}}, phase_ratios, rheology, args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction
@@ -439,6 +473,10 @@ function JR3D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kw
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
+function JR3D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_DYREL!(stokes, args...; kwargs...)
+end
+
 function JR3D.heatdiffusion_PT!(::AMDGPUBackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
@@ -450,14 +488,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::ROCArray,
+        particles::Particles{ROCBackend},
+        dt₀,
         phases::JustPIC.PhaseRatios,
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     )
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -466,14 +505,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::ROCArray,
+        particles::Particles{ROCBackend},
+        dt₀,
         phases::AbstractArray{Int, N},
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     ) where {N}
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )

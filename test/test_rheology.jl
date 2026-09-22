@@ -1,7 +1,7 @@
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test
@@ -10,22 +10,22 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -185,7 +185,7 @@ end
         # compute_buoyancies: scalar gravity → ρ·g scalar
         @test JustRelax2D.compute_buoyancies(mat, args, -9.81, Val(2)) ≈ -ρg_expected
 
-        if backend_JR === CPUBackend
+        if backend === CPUBackend
             # tuple variant writes each component
             ρg_tuple = (@zeros(2, 2), @zeros(2, 2))
             JustRelax2D.fill_density!(ρg_tuple, (1.0, 2.0), 1, 1)
@@ -223,6 +223,38 @@ end
         b3 = JustRelax2D.compute_buoyancies(rheology, ratios, args, gvec, Val(3))
         @test length(b3) == 3 && b3[3] ≈ -ρg_avg
         @test JustRelax2D.compute_buoyancies(rheology, ratios, args, -9.81, Val(2)) ≈ -ρg_avg
+
+        # compute_ρg! with air_phase must renormalize the non-air phases before
+        # the variational solver applies its rock-volume weight.
+        ni = (2, 2)
+        phase_ratios = PhaseRatios(backend_JP, 2, ni)
+        for ratios_field in (phase_ratios.center, phase_ratios.vertex, phase_ratios.Vx, phase_ratios.Vy)
+            for I in CartesianIndices(ratios_field)
+                ratios_field[I] = ratios
+            end
+        end
+        ρg_air = @zeros(ni...)
+        args_ρg = (; T = @fill(300.0, ni...), P = @fill(0.0, ni...))
+        compute_ρg!(ρg_air, phase_ratios, rheology, args_ρg; air_phase = 2)
+        @test all(ρg_air .≈ 2700.0 * 9.81)
+
+        # The non-constant-density refresh used inside the solver must forward
+        # air_phase as well, rather than reverting to the mixed phase density.
+        mat_t1 = GeoParams.SetMaterialParams(;
+            Phase = 1,
+            Density = GeoParams.T_Density(; ρ0 = 2700.0, T0 = 300.0, α = 1.0e-5),
+            Gravity = GeoParams.ConstantGravity(; g = 9.81),
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+        mat_t2 = GeoParams.SetMaterialParams(;
+            Phase = 2,
+            Density = GeoParams.T_Density(; ρ0 = 3300.0, T0 = 300.0, α = 1.0e-5),
+            Gravity = GeoParams.ConstantGravity(; g = 9.81),
+            CompositeRheology = GeoParams.CompositeRheology((GeoParams.LinearViscous(; η = 1.0e21),)),
+        )
+        ρg_update = @zeros(ni...)
+        JustRelax2D.update_ρg!(ρg_update, phase_ratios, (mat_t1, mat_t2), args_ρg; air_phase = 2)
+        @test all(ρg_update .≈ 2700.0 * 9.81)
     end
 
     @testset "Melting.jl" begin
@@ -280,7 +312,7 @@ end
         # MeltingParam_Quadratic zeroes dϕdT only for `T > T_l || T < T_s`, so at
         # T == T_s it returns 2 / (T_l - T_s) rather than 0.
         T_h = [900.0 + 120.0 * i for i in 0:(nx - 1), _ in 1:ny]
-        T = PTArray(backend_JR)(T_h)
+        T = PTArray(backend)(T_h)
         P = @fill(1.0e8, ni...)
         args = (; T, P)
 
@@ -320,7 +352,7 @@ end
 
         # 5) args without a cell-sized entry: the kernels index on their own grid,
         #    so a ghosted T is offset past its halo either way
-        T_ghost = PTArray(backend_JR)(
+        T_ghost = PTArray(backend)(
             [
                 T_h[clamp(i - 1, 1, nx), clamp(j - 1, 1, ny)] for i in 1:(nx + 2), j in 1:(ny + 2)
             ]
@@ -365,7 +397,7 @@ end
         dt = 100.0
 
         coeffs(dϕdT) = PTThermalCoeffs(
-            backend_JR, rheology, pr, (; T, P, dϕdT = @fill(dϕdT, ni...)),
+            backend, rheology, pr, (; T, P, dϕdT = @fill(dϕdT, ni...)),
             dt, ni, di.center, li
         )
 
@@ -396,11 +428,11 @@ end
         JustRelax2D.update_phase_ratios_2D!(pr, (@fill(1.0, ni...),), xci, xvi)
 
         # a ramp, so reading the halo instead of the interior changes ρCp
-        T = PTArray(backend_JR)([800.0 + 10.0 * (i + j) for i in 1:(nx + 2), j in 1:(ny + 2)])
+        T = PTArray(backend)([800.0 + 10.0 * (i + j) for i in 1:(nx + 2), j in 1:(ny + 2)])
         P = @fill(1.0e8, ni...)
 
         dτ_ρ(args) = Base.Array(
-            PTThermalCoeffs(backend_JR, rheology, pr, args, 100.0, ni, di.center, li).dτ_ρ
+            PTThermalCoeffs(backend, rheology, pr, args, 100.0, ni, di.center, li).dτ_ρ
         )
 
         @test dτ_ρ((; T)) == dτ_ρ((; T, P))
@@ -416,7 +448,7 @@ end
         P_h = [1.0e8 * (i + j) for i in 1:nx, j in 1:ny]    # Pa
         T_h = [1073.0 + 10i for i in 1:nx, _ in 1:ny]       # K
         X_co2 = 0.3
-        args = (; P = PTArray(backend_JR)(P_h), T = PTArray(backend_JR)(T_h), X_co2)
+        args = (; P = PTArray(backend)(P_h), T = PTArray(backend)(T_h), X_co2)
 
         grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
         (; xci, xvi) = grid
@@ -457,6 +489,7 @@ end
 
         # 2) ratio[air_phase] ≈ 1 → all-air → zeros
         @test JustRelax2D.correct_phase_ratio(1, SA[1.0, 0.0]) == SA[0.0, 0.0]
+        @test JustRelax2D.correct_phase_ratio(1, SA[0.0, 0.0]) == SA[0.0, 0.0]
 
         # 3) general case → mask air slot and renormalize the rest
         # input [0.6, 0.4] with air=2 → mask → [0.6, 0.0] → renorm → [1.0, 0.0]

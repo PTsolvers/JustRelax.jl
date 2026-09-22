@@ -92,8 +92,8 @@ function solve_DYREL_adjoint!(
         stokes_ad.τ.xy .= 0.0
 
         # Init seeds for reverse accumulation
-        stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-        stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
+        @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
+        @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
         stokes_ad.R.RP .= stokes_ad.λP
 
         # Init observation points
@@ -157,8 +157,8 @@ function solve_DYREL_adjoint!(
             stokes_ad.τ.xy .= 0.0
 
             # Init seeds for reverse accumulation
-            stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-            stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
+            @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
+            @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
             stokes_ad.R.RP .= stokes_ad.λP
 
             # Init observation points
@@ -170,11 +170,11 @@ function solve_DYREL_adjoint!(
             enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
 
             # calculate Schur complement contribution
-            x_pen .= ((dyrel.γ_eff[1:(end - 1), :] .* stokes_ad.P[1:(end - 1), :]) .- (dyrel.γ_eff[2:end, :] .* stokes_ad.P[2:end, :])) .* _di.center[1]
-            y_pen .= ((dyrel.γ_eff[:, 1:(end - 1)] .* stokes_ad.P[:, 1:(end - 1)]) .- (dyrel.γ_eff[:, 2:end] .* stokes_ad.P[:, 2:end])) .* _di.center[2]
+            @views x_pen .= ((dyrel.γ_eff[1:(end - 1), :] .* stokes_ad.P[1:(end - 1), :]) .- (dyrel.γ_eff[2:end, :] .* stokes_ad.P[2:end, :])) .* _di.center[1]
+            @views y_pen .= ((dyrel.γ_eff[:, 1:(end - 1)] .* stokes_ad.P[:, 1:(end - 1)]) .- (dyrel.γ_eff[:, 2:end] .* stokes_ad.P[:, 2:end])) .* _di.center[2]
 
-            stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] .-= x_pen
-            stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] .-= y_pen
+            @views stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] .-= x_pen
+            @views stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] .-= y_pen
 
             if iszero(iter % nout)
                 errV = (
@@ -184,8 +184,8 @@ function solve_DYREL_adjoint!(
             end
 
             # preconditioning
-            stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] ./= dyrel.Dx
-            stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] ./= dyrel.Dy
+            @views stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] ./= dyrel.Dx
+            @views stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] ./= dyrel.Dy
 
             @parallel (@idx ni) update_V_damping_DR_V!(
                 (stokes_ad.λV.Vx, stokes_ad.λV.Vy),

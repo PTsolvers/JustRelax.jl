@@ -15,7 +15,7 @@ PoissonGrids = "738b24c9-c2dc-46c1-8999-11ea9699e80b"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
-JustRelax = {path = "/home/albert/Documents/DevPkg/JustRelax.jl"}
+JustRelax = {path = ".."}
 
 [compat]
 ExactFieldSolutions = "0.1, 0.2"

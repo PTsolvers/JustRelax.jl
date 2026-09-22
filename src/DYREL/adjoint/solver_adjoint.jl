@@ -78,20 +78,7 @@ function solve_DYREL_adjoint!(
 
     for itPH in 1:1000
 
-        stokes_ad.P    .= 0.0
-        stokes_ad.V.Vx .= 0.0
-        stokes_ad.V.Vy .= 0.0
-        stokes_ad.ε.xx .= 0.0
-        stokes_ad.ε.yy .= 0.0
-        stokes_ad.ε.xy .= 0.0
-        stokes_ad.τ.xx .= 0.0
-        stokes_ad.τ.yy .= 0.0
-        stokes_ad.τ.xy .= 0.0
-
-        # Init seeds for reverse accumulation
-        @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-        @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-        stokes_ad.R.RP        .= stokes_ad.λP
+        initialize_adjoint_iteration!(stokes_ad, ni)
 
         # Init observation points
         observation.target[observation.i, observation.j] .= -1.0
@@ -143,20 +130,7 @@ function solve_DYREL_adjoint!(
             itPT += 1
             iter += 1
 
-            stokes_ad.P    .= 0.0
-            stokes_ad.V.Vx .= 0.0
-            stokes_ad.V.Vy .= 0.0
-            stokes_ad.ε.xx .= 0.0
-            stokes_ad.ε.yy .= 0.0
-            stokes_ad.ε.xy .= 0.0
-            stokes_ad.τ.xx .= 0.0
-            stokes_ad.τ.yy .= 0.0
-            stokes_ad.τ.xy .= 0.0
-
-            # Init seeds for reverse accumulation
-            @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-            @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-            stokes_ad.R.RP        .= stokes_ad.λP
+            initialize_adjoint_iteration!(stokes_ad, ni)
 
             # Init observation points
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)

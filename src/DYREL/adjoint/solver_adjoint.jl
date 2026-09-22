@@ -69,9 +69,6 @@ function solve_DYREL_adjoint!(
     ϵ = dyrel.ϵ
     err = 2 * ϵ
 
-    nx, ny = ni
-    x_pen = @zeros(nx - 1, ny)
-    y_pen = @zeros(nx, ny - 1)
     # Reuse the density sensitivity as vertical buoyancy scratch during iterations.
     # The final sensitivity pass clears and recomputes it.
     dρg = buoyancy_uses_stokes_pressure(stokes, args) ? (@zeros(ni...), stokes_ad.ρ) : nothing
@@ -81,7 +78,7 @@ function solve_DYREL_adjoint!(
 
     for itPH in 1:1000
 
-        stokes_ad.P .= 0.0
+        stokes_ad.P    .= 0.0
         stokes_ad.V.Vx .= 0.0
         stokes_ad.V.Vy .= 0.0
         stokes_ad.ε.xx .= 0.0
@@ -94,7 +91,7 @@ function solve_DYREL_adjoint!(
         # Init seeds for reverse accumulation
         @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
         @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-        stokes_ad.R.RP .= stokes_ad.λP
+        stokes_ad.R.RP        .= stokes_ad.λP
 
         # Init observation points
         observation.target[observation.i, observation.j] .= -1.0
@@ -146,7 +143,7 @@ function solve_DYREL_adjoint!(
             itPT += 1
             iter += 1
 
-            stokes_ad.P .= 0.0
+            stokes_ad.P    .= 0.0
             stokes_ad.V.Vx .= 0.0
             stokes_ad.V.Vy .= 0.0
             stokes_ad.ε.xx .= 0.0
@@ -159,7 +156,7 @@ function solve_DYREL_adjoint!(
             # Init seeds for reverse accumulation
             @views stokes_ad.R.Rx .= stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
             @views stokes_ad.R.Ry .= stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-            stokes_ad.R.RP .= stokes_ad.λP
+            stokes_ad.R.RP        .= stokes_ad.λP
 
             # Init observation points
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
@@ -169,12 +166,25 @@ function solve_DYREL_adjoint!(
             enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
             enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
 
-            # calculate Schur complement contribution
-            @views x_pen .= ((dyrel.γ_eff[1:(end - 1), :] .* stokes_ad.P[1:(end - 1), :]) .- (dyrel.γ_eff[2:end, :] .* stokes_ad.P[2:end, :])) .* _di.center[1]
-            @views y_pen .= ((dyrel.γ_eff[:, 1:(end - 1)] .* stokes_ad.P[:, 1:(end - 1)]) .- (dyrel.γ_eff[:, 2:end] .* stokes_ad.P[:, 2:end])) .* _di.center[2]
-
-            @views stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] .-= x_pen
-            @views stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] .-= y_pen
+            @parallel (@idx ni) update_adjoint_V_damping_DR!(
+                stokes_ad.λV.Vx,
+                stokes_ad.λV.Vy,
+                dyrel.dVxdτ,
+                dyrel.dVydτ,
+                stokes_ad.V.Vx,
+                stokes_ad.V.Vy,
+                stokes_ad.P,
+                dyrel.γ_eff,
+                dyrel.Dx,
+                dyrel.Dy,
+                dyrel.αVx,
+                dyrel.αVy,
+                dyrel.βVx,
+                dyrel.βVy,
+                dyrel.dτVx,
+                dyrel.dτVy,
+                _di.center,
+            )
 
             if iszero(iter % nout)
                 errV = (
@@ -182,19 +192,6 @@ function solve_DYREL_adjoint!(
                     norm_mpi(@view(stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)])) / √(v_dofs[2]),
                 )
             end
-
-            # preconditioning
-            @views stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)] ./= dyrel.Dx
-            @views stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)] ./= dyrel.Dy
-
-            @parallel (@idx ni) update_V_damping_DR_V!(
-                (stokes_ad.λV.Vx, stokes_ad.λV.Vy),
-                (dyrel.dVxdτ, dyrel.dVydτ),
-                (@view(stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)]), @view(stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)])),
-                (dyrel.αVx, dyrel.αVy),
-                (dyrel.βVx, dyrel.βVy),
-                (dyrel.dτVx, dyrel.dτVy),
-            )
 
             # Residual check
             if iszero(iter % nout)

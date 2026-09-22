@@ -1,3 +1,50 @@
+function initialize_adjoint_iteration!(adjoint, ni)
+    @parallel (@idx ni .+ 2) _initialize_adjoint_iteration!(
+        adjoint.P,
+        (adjoint.V.Vx, adjoint.V.Vy),
+        (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
+        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy),
+        (adjoint.R.Rx, adjoint.R.Ry, adjoint.R.RP),
+        (adjoint.λV.Vx, adjoint.λV.Vy),
+        adjoint.λP,
+    )
+    return nothing
+end
+
+@parallel_indices (i, j) function _initialize_adjoint_iteration!(
+        P, V, ε, τ, R, λV, λP
+    )
+    if i ≤ size(P, 1) && j ≤ size(P, 2)
+        @inbounds begin
+            P[i, j] = 0.0
+            ε[1][i, j] = 0.0
+            ε[2][i, j] = 0.0
+            τ[1][i, j] = 0.0
+            τ[2][i, j] = 0.0
+            R[3][i, j] = λP[i, j]
+        end
+    end
+    if i ≤ size(V[1], 1) && j ≤ size(V[1], 2)
+        @inbounds V[1][i, j] = 0.0
+    end
+    if i ≤ size(V[2], 1) && j ≤ size(V[2], 2)
+        @inbounds V[2][i, j] = 0.0
+    end
+    if i ≤ size(ε[3], 1) && j ≤ size(ε[3], 2)
+        @inbounds begin
+            ε[3][i, j] = 0.0
+            τ[3][i, j] = 0.0
+        end
+    end
+    if i ≤ size(R[1], 1) && j ≤ size(R[1], 2)
+        @inbounds R[1][i, j] = λV[1][i + 1, j + 1]
+    end
+    if i ≤ size(R[2], 1) && j ≤ size(R[2], 2)
+        @inbounds R[2][i, j] = λV[2][i + 1, j + 1]
+    end
+    return nothing
+end
+
 # Apply the adjoint Schur-complement correction and diagonal preconditioner,
 # then advance the damped velocity iterate. Keep the unpreconditioned corrected
 # residual in Rx/Ry so the caller can evaluate the same norm as before fusion.

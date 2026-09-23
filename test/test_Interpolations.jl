@@ -53,6 +53,21 @@ end
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
         @test stokes.τ.xy[2, 2] == 1
 
+        @testset "vertex2center! periodic" begin
+            # Unique periodic x vertices: the east vertex of the last cell wraps to x index 1.
+            vertex = [1.0 2.0 3.0; 10.0 20.0 30.0]
+            center = zeros(2, 2)
+            vertex2center!(center, vertex; periodic_x = true)
+            @test center[1, 1] == (1 + 10 + 2 + 20) / 4
+            @test center[2, 1] == (10 + 1 + 20 + 2) / 4
+
+            # Duplicated periodic seam uses canonical x index 1, not a stale duplicate endpoint.
+            vertex_duplicate = [1.0 2.0 999.0; 10.0 20.0 888.0]
+            center_duplicate = zeros(2, 2)
+            vertex2center!(center_duplicate, vertex_duplicate; periodic_x = true)
+            @test center_duplicate[2, 1] == center[2, 1]
+        end
+
         Vx_v = @ones(ni .+ 1...)
         Vy_v = @ones(ni .+ 1...)
 

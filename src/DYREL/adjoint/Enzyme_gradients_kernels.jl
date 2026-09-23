@@ -1,13 +1,90 @@
 using Enzyme
 
 """
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
+    enzyme_material_gradient(objective, material, args...)
+
+Differentiate a scalar local `objective(material, args...)` with respect to the complete
+GeoParams material object. All arguments after `material` are held constant. The returned
+object has the same nested structure as `material` and contains the local reverse-mode
+derivatives.
+
+Keeping this operation local is what allows callers to retain one contribution per phase and
+grid point instead of immediately reducing all uses of a phase parameter to one scalar.
+"""
+@generated function enzyme_material_gradient(objective, material, args::Vararg{Any, N}) where {N}
+    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
+    return quote
+        Enzyme.autodiff_deferred(
+            Enzyme.Reverse,
+            Enzyme.Const(objective),
+            Enzyme.Active,
+            Enzyme.Active(material),
+            $(constant_args...),
+        )[1][1]
+    end
+end
+
+@generated function _material_parameter(derivative, ::Val{path}) where {path}
+    path isa Tuple || error("a material-parameter path must be a tuple")
+    value = :derivative
+    for component in path
+        if component isa Symbol
+            value = :(getproperty($value, $(QuoteNode(component))))
+        elseif component isa Integer
+            value = :($value[$component])
+        else
+            error("material-parameter paths support only field names and tuple indices")
+        end
+    end
+    return value
+end
+
+@inline _material_parameter_value(parameter::GeoParams.GeoUnit) = parameter.val
+@inline _material_parameter_value(parameter) = parameter
+
+"""
+    material_parameter_gradient(material, derivative, Val(path))
+
+Extract a scalar parameter derivative from the nested object returned by
+`enzyme_material_gradient`. Most paths are direct. GeoParams caches the trigonometric
+forms of `ϕ` and `Ψ`, so those two paths additionally include the chain rule from the
+cached fields back to the user-facing angles in degrees.
+"""
+@generated function material_parameter_gradient(material, derivative, ::Val{path}) where {path}
+    path isa Tuple || error("a material-parameter path must be a tuple")
+    isempty(path) && error("a material-parameter path must not be empty")
+    name = last(path)
+    name in (:ϕ, :Ψ) || return :(_material_parameter_value(
+        _material_parameter(derivative, Val($(QuoteNode(path))))
+    ))
+
+    value(object, field) = begin
+        field_path = (path[1:(end - 1)]..., field)
+        :(_material_parameter_value(
+            _material_parameter($object, Val($(QuoteNode(field_path))))
+        ))
+    end
+    angle = value(:material, name)
+    angle_gradient = value(:derivative, name)
+    sin_gradient = value(:derivative, Symbol(:sin, name))
+    cos_gradient = value(:derivative, Symbol(:cos, name))
+    return quote
+        $angle_gradient + oftype($angle, π / 180) * (
+            cosd($angle) * $sin_gradient - sind($angle) * $cos_gradient
+        )
+    end
+end
+
+"""
+    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
 
 Differentiate the momentum residual with respect to pressure, stress, and the
 two buoyancy-force arrays. The residual seeds are read from `adjoint.R`;
-sensitivities accumulate in `adjoint.P`, `adjoint.τ`, and `dρg`.
+sensitivities accumulate in `adjoint.P`, `adjoint.τ`, `adjoint.dρgx`, and
+`adjoint.ρ`.
 """
-function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
+function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
+    dρg = (adjoint.dρgx, adjoint.ρ)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
         stokes.R.Rx,
         stokes.R.Ry,
@@ -40,107 +117,225 @@ end
 # Pick the thermal-expansion accessor the density model actually provides: the
 # melt-dependent models take the melt fraction, while the plain ones (PT_Density and
 # friends) only define the single-argument method.
-@inline model_thermal_expansion(model, ::NamedTuple{()}) = get_thermal_expansion(model)
-@inline model_thermal_expansion(model, thermal_args::NamedTuple) =
-    get_thermal_expansion(model, thermal_args)
+@inline material_thermal_expansion(material, ::NamedTuple{()}) =
+    get_thermal_expansion(material)
+@inline material_thermal_expansion(material, thermal_args::NamedTuple) =
+    get_thermal_expansion(material, thermal_args)
 
 # Differentiate the original GeoParams evaluations with local reverse seeds.
 # Phase weighting is applied to the seeds by the caller, exactly once.
-@inline function density_parameter_objective(model, args, ρ_seed, α_seed, thermal_args)
-    result = ρ_seed * compute_density(model, args)
+@inline function density_parameter_objective(material, args, ρ_seed, α_seed, thermal_args)
+    result = ρ_seed * compute_density(material, args)
     if !iszero(α_seed)
-        result += α_seed * model_thermal_expansion(model, thermal_args)
+        result += α_seed * material_thermal_expansion(material, thermal_args)
     end
     return result
 end
 
-@inline function enzyme_density_parameter_gradient(model, args, ρ_seed, α_seed, thermal_args)
-    return Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
-        # `autodiff_deferred` takes the function as an annotation, unlike `autodiff`
-        Enzyme.Const(density_parameter_objective),
-        Enzyme.Active,
-        Enzyme.Active(model),
-        Enzyme.Const(args),
-        Enzyme.Const(ρ_seed),
-        Enzyme.Const(α_seed),
-        Enzyme.Const(thermal_args),
-    )[1][1]
+@inline function enzyme_density_parameter_gradient(material, args, ρ_seed, α_seed, thermal_args)
+    return enzyme_material_gradient(
+        density_parameter_objective, material, args, ρ_seed, α_seed, thermal_args
+    )
 end
 
-"""
-    enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing,
-    )
-
-Differentiate the constitutive kernel with respect to center and vertex
-viscosity. Stress seeds come from `adjoint.τ`; viscosity sensitivities
-accumulate in `adjoint.viscosity.η` and `adjoint.viscosity.ηv`.
-When `gradients` is supplied, also accumulate derivatives with respect to the
-selected multipliers. `compute_sensitivities!` converts these to material derivatives.
-An empty `gradients` is treated like `nothing`: without a multiplier to differentiate,
-`controls` is a constant, and seeding an empty `NamedTuple` as `Duplicated` would only
-hand Enzyme an inactive shadow.
-"""
-function enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;), gradients = nothing
-    )
-    ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) configcall = compute_stress_DRYEL!(
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
-        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
-        stokes.τ.II,
-        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
-        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),
-        stokes.EII_pl,
-        stokes.ε_vol_pl,
-        stokes.P,
-        stokes.λ,
-        stokes.λv,
-        stokes.viscosity.η,
-        stokes.viscosity.ηv,
-        stokes.viscosity.η_vep,
-        stokes.ΔPψ,
-        rheology,
-        phase_ratios.center,
-        phase_ratios.vertex,
+# Contract one phase's constitutive outputs with the converged adjoint seeds. This calls
+# the same local stress update as the forward kernel; only the surrounding scalar
+# contraction is specific to sensitivity evaluation.
+@inline function stress_parameter_objective(
+        material,
+        εij,
+        τij_o,
+        η,
+        P,
+        λ,
         λ_relaxation,
         dt,
-        controls,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_stress_DRYEL!,
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-        ),
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-        ),
-        Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
-        Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
-        Enzyme.Const(stokes.τ.II),
-        Enzyme.Const((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy)),
-        Enzyme.Const((stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)),
-        Enzyme.Const(stokes.EII_pl),
-        Enzyme.Const(stokes.ε_vol_pl),
-        Enzyme.Const(stokes.P),
-        Enzyme.Const(stokes.λ),
-        Enzyme.Const(stokes.λv),
-        Enzyme.DuplicatedNoNeed(stokes.viscosity.η, adjoint.viscosity.η),
-        Enzyme.DuplicatedNoNeed(stokes.viscosity.ηv, adjoint.viscosity.ηv),
-        Enzyme.Const(stokes.viscosity.η_vep),
-        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
-        Enzyme.Const(rheology),
-        Enzyme.Const(phase_ratios.center),
-        Enzyme.Const(phase_ratios.vertex),
-        Enzyme.Const(λ_relaxation),
-        Enzyme.Const(dt),
-        (isnothing(gradients) || isempty(gradients)) ?
-            Enzyme.Const(controls) : Enzyme.Duplicated(controls, gradients),
+        EII,
+        τ_seed,
+        θ_seed,
+        ratio,
     )
+    G = get_shear_modulus(material)
+    Kb = get_bulk_modulus(material)
+    solution = _compute_local_stress(
+        εij, τij_o, η, P, G, Kb, λ, λ_relaxation, material, dt, EII
+    )
+    return ratio * (
+        τ_seed[1] * solution[1] +
+            τ_seed[2] * solution[2] +
+            τ_seed[3] * solution[3] +
+            θ_seed * solution[9]
+    )
+end
+
+@generated function enzyme_stress_gradients(
+        material, εij, τij_o, η, args::Vararg{Any, N}
+    ) where {N}
+    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
+    return quote
+        derivatives = Enzyme.autodiff_deferred(
+            Enzyme.Reverse,
+            Enzyme.Const(stress_parameter_objective),
+            Enzyme.Active,
+            Enzyme.Active(material),
+            Enzyme.Const(εij),
+            Enzyme.Const(τij_o),
+            Enzyme.Active(η),
+            $(constant_args...),
+        )[1]
+        derivative = derivatives[1]
+        dη = derivatives[4]
+        # Enzyme returns `nothing` for an Active scalar that is inactive on the
+        # executed material branch. Its derivative contribution is then zero.
+        return derivative, isnothing(dη) ? zero(η) : dη
+    end
+end
+
+@inline function viscosity_parameter_objective(
+        material, rheology, ::Val{p}, ratio, AII, args, seed, cutoff
+    ) where {p}
+    local_rheology = Base.setindex(rheology, material, p)
+    η = compute_phase_viscosity(
+        local_rheology, ratio, AII, compute_viscosity_εII, args
+    )
+    return seed * clamp(η, cutoff...)
+end
+
+@inline function enzyme_viscosity_parameter_gradient(material, args...)
+    return enzyme_material_gradient(viscosity_parameter_objective, material, args...)
+end
+
+@parallel_indices (I...) function linear_viscosity_parameter_sensitivity_kernel!(
+        centers, vertices, parameters, material, rheology, phase::Val{p},
+        phase_center, phase_vertex, ε_center, ε_vertex, args,
+        η_seed, ηv_seed, cutoff,
+    ) where {p}
+    Base.@propagate_inbounds @inline AII(A) = begin
+        AII_0 = allzero(A...) * eps()
+        second_invariant(AII_0 + A[1], -AII_0 + A[2], A[3])
+    end
+    ni = size(phase_center)
+    @inbounds begin
+        derivative = enzyme_viscosity_parameter_gradient(
+            material, rheology, phase, phase_vertex[I...],
+            AII((ε_vertex[1][I...], ε_vertex[2][I...], ε_vertex[3][I...])),
+            local_viscosity_args_vertex(args, I...), ηv_seed[I...], cutoff,
+        )
+        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
+
+        if all(I .≤ ni)
+            derivative = enzyme_viscosity_parameter_gradient(
+                material, rheology, phase, phase_center[I...],
+                AII((ε_center[1][I...], ε_center[2][I...], ε_center[3][I...])),
+                local_viscosity_args(args, I...), η_seed[I...], cutoff,
+            )
+            store_parameter_gradients!(centers, parameters, material, derivative, p, I)
+        end
+    end
     return nothing
+end
+
+@parallel_indices (I...) function stress_sensitivity_kernel!(
+        centers, vertices, parameters,
+        material, p, phase_center, phase_vertex,
+        τ_o, τ_ov, ε, EII_pl, P, λ, λv, η, ηv,
+        η_gradient, ηv_gradient,
+        τ_seed, τv_seed, θ_seed, λ_relaxation, dt,
+    )
+    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+    ni = size(phase_center)
+    @inbounds begin
+        Ic = clamped_indices(ni, I...)
+        ratio = phase_vertex[I...][p]
+        derivative, dη = enzyme_stress_gradients(
+            material,
+            (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
+            (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
+            ηv[I...], av_clamped(P, Ic...), λv[I...], λ_relaxation, dt,
+            av_clamped(EII_pl, Ic...),
+            (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
+            0.0, ratio,
+        )
+        ηv_gradient[I...] += dη
+        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
+
+        if all(I .≤ ni)
+            ratio = phase_center[I...][p]
+            derivative, dη = enzyme_stress_gradients(
+                material,
+                (ε[1][I...], ε[2][I...], av(ε[3])),
+                (τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]),
+                η[I...], P[I...], λ[I...], λ_relaxation, dt, EII_pl[I...],
+                (τ_seed[1][I...], τ_seed[2][I...], τ_seed[3][I...]),
+                θ_seed[I...], ratio,
+            )
+            η_gradient[I...] += dη
+            store_parameter_gradients!(centers, parameters, material, derivative, p, I)
+        end
+    end
+    return nothing
+end
+
+@parallel_indices (i, j) function combine_center_vertex_gradient_kernel!(center, vertex, p)
+    nx, ny = size(center, 2), size(center, 3)
+    total = zero(eltype(center))
+    @inbounds begin
+        # Vertex (iv, jv) was written from the four centers around (clamp(iv, 2, nx),
+        # clamp(jv, 2, ny)), so center (i, j) collects every vertex whose clamped index
+        # is one of (i, j), (i+1, j), (i, j+1), (i+1, j+1).
+        for jc in max(j, 2):min(j + 1, ny)
+            jv_lo = jc == 2 ? 1 : jc
+            jv_hi = jc == ny ? ny + 1 : jc
+            for ic in max(i, 2):min(i + 1, nx)
+                iv_lo = ic == 2 ? 1 : ic
+                iv_hi = ic == nx ? nx + 1 : ic
+                for jv in jv_lo:jv_hi, iv in iv_lo:iv_hi
+                    total += vertex[p, iv, jv]
+                end
+            end
+        end
+        center[p, i, j] += total / 4
+    end
+    return nothing
+end
+
+@parallel_indices (I...) function density_parameter_sensitivity_kernel!(
+        centers, parameters, material, p, phase_ratios, args, dρ, λP, ΔT, melt_fraction, dt
+    )
+    ratio = (@cell phase_ratios[I...])[p]
+    if !iszero(ratio)
+        local_args = getindex_NamedTuple(args, I...)
+        thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
+        α_seed = isnothing(ΔT) ? 0.0 : -λP[I...] * ΔT[(I .+ 1)...] / dt
+        derivative = enzyme_density_parameter_gradient(
+            material, local_args, ratio * dρ[I...], ratio * α_seed, thermal_args
+        )
+        store_parameter_gradients!(centers, parameters, material, derivative, p, I)
+    end
+    return nothing
+end
+
+# These generated helpers unroll the gradient-buffer walk inside the kernels and keep each
+# resolved material path available as a compile-time `Val` at the extraction site.
+@generated function store_parameter_gradients!(
+        fields::NamedTuple{names}, parameters::NamedTuple{names, parameter_types},
+        material, derivative, p, I::NTuple,
+    ) where {names, parameter_types}
+    writes = Expr[]
+    for k in eachindex(names)
+        paths_type = parameter_types.parameters[k]
+        for path_index in 1:fieldcount(paths_type)
+            push!(writes, quote
+                fields[$k][p, I...] += material_parameter_gradient(
+                    material, derivative, parameters[$k][$path_index]
+                )
+            end)
+        end
+    end
+    return quote
+        @inbounds begin
+            $(writes...)
+        end
+        return nothing
+    end
 end

@@ -256,5 +256,78 @@ end
         ∂ρg∂y = -inv(grid.di.center[2])
         expected_correction = Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]) .* (0.5 * ∂ρg∂y)
         @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
+
+        # --- fused adjoint Schur correction + preconditioning + update ---
+        adjoint = JustRelax2D.AdjointStokesArrays(backend_JR, ni)
+        adjoint.P .= 1.0
+        adjoint.V.Vx .= 1.0
+        adjoint.V.Vy .= 1.0
+        adjoint.ε.xx .= 1.0
+        adjoint.ε.yy .= 1.0
+        adjoint.ε.xy .= 1.0
+        adjoint.τ.xx .= 1.0
+        adjoint.τ.yy .= 1.0
+        adjoint.τ.xy .= 1.0
+        adjoint.λV.Vx .= 2.0
+        adjoint.λV.Vy .= 3.0
+        adjoint.λP .= 4.0
+        JR2K.initialize_adjoint_iteration!(adjoint, ni)
+        @test all(iszero, Array(adjoint.P))
+        @test all(iszero, Array(adjoint.V.Vx))
+        @test all(iszero, Array(adjoint.V.Vy))
+        @test all(iszero, Array(adjoint.ε.xx))
+        @test all(iszero, Array(adjoint.ε.yy))
+        @test all(iszero, Array(adjoint.ε.xy))
+        @test all(iszero, Array(adjoint.τ.xx))
+        @test all(iszero, Array(adjoint.τ.yy))
+        @test all(iszero, Array(adjoint.τ.xy))
+        @test all(==(2.0), Array(adjoint.R.Rx))
+        @test all(==(3.0), Array(adjoint.R.Ry))
+        @test all(==(4.0), Array(adjoint.R.RP))
+
+        adjoint.V.Vx .= 4.0
+        adjoint.V.Vy .= 5.0
+        adjoint.P .= PTArray(backend_JR)([i + 2j for i in 1:nx, j in 1:ny])
+        adjoint.λV.Vx .= 0.0
+        adjoint.λV.Vy .= 0.0
+        dyrel.γ_eff .= 2.0
+        dyrel.Dx .= 2.0
+        dyrel.Dy .= 4.0
+        dyrel.αVx .= 0.0
+        dyrel.αVy .= 0.0
+        dyrel.βVx .= 0.5
+        dyrel.βVy .= 0.5
+        dyrel.dτVx .= 0.25
+        dyrel.dτVy .= 0.25
+        dyrel.dVxdτ .= 0.0
+        dyrel.dVydτ .= 0.0
+
+        Rx0 = Array(adjoint.V.Vx)
+        Ry0 = Array(adjoint.V.Vy)
+        P = Array(adjoint.P)
+        γ = Array(dyrel.γ_eff)
+        expected_Rx = @views Rx0[2:(end - 1), 2:(end - 1)] .-
+            (γ[1:(end - 1), :] .* P[1:(end - 1), :] .- γ[2:end, :] .* P[2:end, :]) .* _di.center[1]
+        expected_Ry = @views Ry0[2:(end - 1), 2:(end - 1)] .-
+            (γ[:, 1:(end - 1)] .* P[:, 1:(end - 1)] .- γ[:, 2:end] .* P[:, 2:end]) .* _di.center[2]
+
+        @parallel (@idx ni) JR2K.update_adjoint_V_damping_DR!(
+            adjoint.λV.Vx, adjoint.λV.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            adjoint.V.Vx, adjoint.V.Vy,
+            adjoint.P, dyrel.γ_eff,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di.center,
+        )
+
+        @test Array(adjoint.V.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx
+        @test Array(adjoint.V.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry
+        @test Array(dyrel.dVxdτ) ≈ expected_Rx ./ 2
+        @test Array(dyrel.dVydτ) ≈ expected_Ry ./ 4
+        @test Array(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx ./ 16
+        @test Array(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry ./ 32
     end
 end

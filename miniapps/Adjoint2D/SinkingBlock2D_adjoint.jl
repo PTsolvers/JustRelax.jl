@@ -6,7 +6,6 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax2D
-# using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -30,16 +29,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams
-using CairoMakie:
-    Axis,
-    Colorbar,
-    DataAspect,
-    Figure,
-    heatmap!,
-    hidexdecorations!,
-    hideydecorations!,
-    save
+using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -82,14 +72,13 @@ end
 # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
-function sinking_block2D_VE(
+function sinking_block2D(
         igg;
         ar = 8,
         ny = 16,
         nx = ny * 8,
-        figdir = "SinkingBlock2D_VE_adjoint",
+        figdir = "SinkingBlock2D_adjoint",
         thermal_perturbation = :circular,
-        nt = 10,
         viscosity_perturbation = 0.0,
         η_multiplier = nothing,
         adjoint = true,
@@ -116,32 +105,23 @@ function sinking_block2D_VE(
     η_mantle = 1.0
     η_block = 10.0
     gravity = 1.0
-    G = 0.1
-    elasticity = ConstantElasticity(; G = G, Kb = 5G)
     rheology = (
         SetMaterialParams(;
             Name = "Mantle",
             Phase = 1,
             Density = ConstantDensity(; ρ = ρ_mantle),
-            CompositeRheology = CompositeRheology(
-                (LinearViscous(; η = η_mantle * exp(viscosity_perturbation)), elasticity)
-            ),
-            Elasticity = elasticity,
+            CompositeRheology = CompositeRheology((LinearViscous(; η = η_mantle * exp(viscosity_perturbation)),)),
             Gravity = ConstantGravity(; g = gravity),
         ),
         SetMaterialParams(;
             Name = "Block",
             Phase = 2,
             Density = ConstantDensity(; ρ = ρ_block),
-            CompositeRheology = CompositeRheology(
-                (LinearViscous(; η = η_block * exp(viscosity_perturbation)), elasticity)
-            ),
-            Elasticity = elasticity,
+            CompositeRheology = CompositeRheology((LinearViscous(; η = η_block * exp(viscosity_perturbation)),)),
             Gravity = ConstantGravity(; g = gravity),
         ),
     )
-    # One mantle Maxwell time keeps both viscous and elastic deformation active.
-    dt = η_mantle / G
+    dt = 1.0
     # ----------------------------------------------------
 
     grid_vxi = velocity_grids(xci, xvi, di)
@@ -201,11 +181,7 @@ function sinking_block2D_VE(
     )
 
     it = 0 # iteration counter
-    AdjointSolve = false
-    while it <= nt
-
-        AdjointSolve = adjoint && it == nt
-        step_η_multiplier = it == nt ? η_multiplier : nothing
+    while it < 1
         # Stokes solver ----------------
         args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
         solve_DYREL!(
@@ -231,11 +207,11 @@ function sinking_block2D_VE(
             viscosity_cutoff = viscosity_cutoff,
             # a cell-wise multiplier only survives if the τII viscosity refresh is switched off
             linear_viscosity = !isnothing(η_multiplier),
-            η_multiplier = step_η_multiplier,
-            adjoint = AdjointSolve,
+            η_multiplier = η_multiplier,
+            adjoint = adjoint,
             observation = observation,
         )
-        dt = compute_dt(stokes, di, igg) * 0.1
+        dt = compute_dt(stokes, di, igg) * 0.8
         # ------------------------------
 
         Vx_v = @zeros(ni .+ 1...)
@@ -254,7 +230,7 @@ function sinking_block2D_VE(
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
 
-        if plot_results && it in (0, nt)
+        if plot_results
             # Plotting ---------------------
             # adjoint velocities live on the same staggered grid as the forward ones,
             # so they get interpolated to the vertices the same way
@@ -326,16 +302,16 @@ function sinking_block2D_VE(
 end
 
 # Define `NO_AUTORUN` before including this file to load the functions without running the
-# demo (see ViscosityGradientTest.jl). A plain `include` from the REPL still runs it.
+# demo. A plain `include` from the REPL still runs it.
 if !@isdefined(NO_AUTORUN)
     ar = 1 # aspect ratio
     n = 1
     nx = 32 * n
     ny = 32 * n
-    figdir = "SinkingBlock2D_VE_adjoint"
+    figdir = "SinkingBlock2D_adjoint"
     # A global grid may still be active from an earlier run in this session, which makes
     # `init_global_grid` throw. Tear it down first, keeping MPI alive so it can be re-created.
     ImplicitGlobalGrid.grid_is_initialized() && finalize_global_grid(; finalize_MPI = false)
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = !JustRelax.MPI.Initialized())...)
-    sinking_block2D_VE(igg; ar = ar, nx = nx, ny = ny, figdir = figdir)
+    sinking_block2D(igg; ar = ar, nx = nx, ny = ny, figdir = figdir)
 end

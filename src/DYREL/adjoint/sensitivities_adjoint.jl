@@ -1,7 +1,7 @@
 """
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation, dt, igg,
-        controls = (;), gradients = nothing, args = (;),
+        gradients = (;), args = (;); viscosity_cutoff = (-Inf, Inf),
     )
 
 Accumulate the sensitivities of the objective functional with respect to the material
@@ -12,14 +12,13 @@ Fills
   - `stokes_ad.ρ` -- sensitivity with respect to density,
   - `stokes_ad.viscosity.η` and `stokes_ad.viscosity.ηv` -- sensitivity with respect to
     viscosity at the centers and vertices.
-  - `gradients.G.center`, when supplied -- the derivative of the complete multiphase
-    expression with respect to a center-based shear-modulus field, holding previous-step
-    state fixed. It contains
-    both the direct center contribution and the transpose-interpolated vertex contribution.
-    Phases without elasticity (`G = Inf`) have zero sensitivity. `gradients.G.vertex`
-    retains the uncombined vertex contribution for diagnostics.
-  - `gradients.<density_parameter>.center[p, ..]` -- the local derivative for phase `p`,
-    including density/buoyancy and thermal pressure-residual contributions.
+  - each `gradients` entry -- the accumulated phase-wise derivative with respect to every
+    use of the requested parameter name. Center arrays include the transpose-interpolated
+    vertex contribution; vertex arrays retain that contribution separately for diagnostics.
+
+`gradients` comes from [`material_controls`](@ref) and is keyed directly by parameter name.
+Each name is resolved in every supported material-function path before the sensitivity
+kernels launch.
 
 The adjoint working arrays (`P`, `θ`, the stress tensor and the viscosity fields) are zeroed
 on entry, so this has to be called *after* the adjoint iterations have converged and not in
@@ -36,154 +35,223 @@ function compute_sensitivities!(
         λ_relaxation,
         dt,
         igg,
-        controls = (;),
-        gradients = nothing,
+        gradients = (;),
         args = (;),
+        ;
+        viscosity_cutoff = (-Inf, Inf),
     )
-    if !isnothing(gradients)
-        control_names = filter(name -> !is_density_parameter(name), keys(gradients))
-        keys(controls) == control_names ||
-            throw(ArgumentError("controls must match the non-density gradient parameters"))
-        all(name -> name === :G || is_density_parameter(name), keys(gradients)) ||
-            throw(ArgumentError("material gradients support :G and scalar density parameters"))
-        for name in keys(gradients)
-            if is_density_parameter(name)
-                dims = (length(rheology), ni...)
-                size(gradients[name].center) == dims ||
-                    throw(DimensionMismatch("$name center field must have size $dims"))
-                fill!(gradients[name].center, 0.0)
-            else
-                for location in (:center, :vertex)
-                    A = getproperty(gradients[name], location)
-                    multiplier = getproperty(controls[name], location)
-                    dims = location === :center ? ni : ni .+ 1
-                    size(A) == size(multiplier) == dims ||
-                        throw(DimensionMismatch("$name $location fields must match the grid"))
-                    fill!(A, 0.0)
-                end
-            end
-        end
+
+    center_dims = (length(rheology), ni...)
+    vertex_dims = (length(rheology), (ni .+ 1)...)
+    for name in keys(gradients)
+        # Check that the parameter is used and its phase-wise buffers fit the grid.
+        any(material -> material_parameter_is_used(material, name), rheology) ||
+            throw(ArgumentError("no supported material function uses $name"))
+        size(gradients[name].center) == center_dims ||
+            throw(DimensionMismatch("$name center field must have size $center_dims"))
+        size(gradients[name].vertex) == vertex_dims ||
+            throw(DimensionMismatch("$name vertex field must have size $vertex_dims"))
+        # Sensitivity paths add into these buffers with `+=`.
+        fill!(gradients[name].center, 0.0)
+        fill!(gradients[name].vertex, 0.0)
     end
+
     igg.me == 0 && @printf("\n######## Calculate Sensitivities ########\n")
-
-    stokes_ad.P .= 0.0
-    stokes_ad.θ .= 0.0
-    stokes_ad.τ.xx .= 0.0
-    stokes_ad.τ.yy .= 0.0
-    stokes_ad.τ.xy_c .= 0.0
-    stokes_ad.τ.xx_v .= 0.0
-    stokes_ad.τ.yy_v .= 0.0
-    stokes_ad.τ.xy .= 0.0
-    stokes_ad.viscosity.η .= 0.0
+    # zero out adjoint arrays
+    stokes_ad.P            .= 0.0
+    stokes_ad.θ            .= 0.0
+    stokes_ad.τ.xx         .= 0.0
+    stokes_ad.τ.yy         .= 0.0
+    stokes_ad.τ.xy_c       .= 0.0
+    stokes_ad.τ.xx_v       .= 0.0
+    stokes_ad.τ.yy_v       .= 0.0
+    stokes_ad.τ.xy         .= 0.0
+    stokes_ad.viscosity.η  .= 0.0
     stokes_ad.viscosity.ηv .= 0.0
-    stokes_ad.ρ .= 0.0
+    stokes_ad.ρ            .= 0.0
+    stokes_ad.dρgx         .= 0.0
 
-    dρgx = @zeros(ni...)
     @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
     @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
-    enzyme_compute_PH_residual_V_sensitivity!(
-        stokes, stokes_ad, ρg, (dρgx, stokes_ad.ρ), _di, ni
-    )
-    enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, controls,
-        isnothing(gradients) ? nothing : NamedTuple{keys(controls)}(map(name -> gradients[name], keys(controls))),
+
+    # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
+    enzyme_compute_PH_residual_V_sensitivity!(stokes, stokes_ad, ρg, _di, ni)
+
+    # Pull back the local stress update to its material parameters and viscosity fields.
+    compute_stress_sensitivities!(
+        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, gradients
     )
 
-    if !isnothing(gradients) && haskey(gradients, :G)
-        moduli = filter(isfinite, map(p -> get_shear_modulus(rheology, p), eachindex(rheology)))
-        if !isempty(moduli)
-            G = first(moduli)
-            all(==(G), moduli) || throw(
-                ArgumentError(
-                    "a single G field requires the elastic phases to use the same base shear modulus"
-                )
-            )
-            # G_local = multiplier * G, so dJ/dG_local = (dJ/dmultiplier) / G.
-            center = gradients.G.center
-            vertex = gradients.G.vertex
-            center ./= G
-            vertex ./= G
-            combine_center_vertex_gradient!(center, vertex)
-        end
-    end
+    compute_linear_viscosity_parameter_sensitivities!(
+        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients
+    )
 
     gravity = compute_gravity(first(rheology))
     gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
     # The residual depends on density through the buoyancy forces ρgx = ρ*gx and
     # ρgy = ρ*gy. The chain rule therefore gives dJ/dρ = gx*dJ/dρgx + gy*dJ/dρgy.
-    @. stokes_ad.ρ = gx * dρgx + gy * stokes_ad.ρ
+    @. stokes_ad.ρ = gx * stokes_ad.dρgx + gy * stokes_ad.ρ
 
-    if !isnothing(gradients)
-        density_names = filter(is_density_parameter, keys(gradients))
-        density_gradients = NamedTuple{density_names}(map(name -> gradients[name], density_names))
-        compute_density_parameter_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, density_gradients)
+    compute_density_parameter_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, gradients)
+    for gradient in values(gradients), p in eachindex(rheology)
+        combine_center_vertex_gradient!(gradient.center, gradient.vertex, p)
     end
 
     return stokes_ad
 end
 
-function combine_center_vertex_gradient!(center, vertex)
-    nx, ny = size(center)
-    size(vertex) == (nx + 1, ny + 1) ||
-        throw(DimensionMismatch("vertex gradient must be one point larger than the center gradient"))
-
-    # Pull back center2vertex!: each vertex value is the average of four centers.
-    # Boundary vertices copy the nearest interior vertex, hence the clamped indices.
-    for jv in axes(vertex, 2), iv in axes(vertex, 1)
-        i = clamp(iv, 2, nx)
-        j = clamp(jv, 2, ny)
-        contribution = vertex[iv, jv] / 4
-        center[i - 1, j - 1] += contribution
-        center[i, j - 1] += contribution
-        center[i - 1, j] += contribution
-        center[i, j] += contribution
+function _density_parameter_paths(material, name::Symbol)
+    paths = Tuple[]
+    for (model_index, model) in pairs(material.Density)
+        hasproperty(model, name) && push!(paths, (:Density, model_index, name))
     end
-    return center
+    return paths
 end
 
-function compute_density_parameter_sensitivities!(adjoint, phases, rheology, args, dt, gradients)
-    isempty(gradients) && return nothing
-    for name in keys(gradients)
-        any(material -> hasproperty(first(material.Density), name), rheology) ||
-            throw(ArgumentError("no phase density model has parameter $name"))
-    end
-    ΔT = get(args, :ΔT, nothing)
-    melt_fraction = get(args, :melt_fraction, nothing)
-    for (p, material) in enumerate(rheology)
-        model = first(material.Density)
-        for name in keys(gradients)
-            if hasproperty(model, name)
-                parameter = getproperty(model, name)
-                parameter isa GeoParams.GeoUnit && parameter.val isa AbstractFloat ||
-                    throw(ArgumentError("$name must be a scalar floating-point GeoUnit"))
-            end
+function _composite_parameter_paths(material, name::Symbol, model_type)
+    paths = Tuple[]
+    for (rheology_index, composite) in pairs(material.CompositeRheology)
+        for (element_index, element) in pairs(composite.elements)
+            element isa model_type && hasproperty(element, name) && push!(
+                paths,
+                (:CompositeRheology, rheology_index, :elements, element_index, name),
+            )
         end
-        @parallel (@idx size(adjoint.ρ)) density_parameter_sensitivity_kernel!(
-            gradients, model, p, phases.center, args, adjoint.ρ, adjoint.λP, ΔT, melt_fraction, dt
+    end
+    return paths
+end
+
+@inline _linear_viscosity_parameter_paths(material, name::Symbol) =
+    _composite_parameter_paths(material, name, GeoParams.LinearViscous)
+
+@inline _plastic_parameter_paths(material, name::Symbol) =
+    _composite_parameter_paths(material, name, GeoParams.AbstractPlasticity)
+
+function _elastic_parameter_paths(material, name::Symbol)
+    paths = Tuple[]
+    for (rheology_index, composite) in pairs(material.CompositeRheology)
+        for (element_index, element) in pairs(composite.elements)
+            element isa GeoParams.AbstractElasticity && hasproperty(element, name) || continue
+            value = _material_parameter_value(getproperty(element, name))
+            isfinite(value) && !iszero(value) && push!(
+                paths,
+                (:CompositeRheology, rheology_index, :elements, element_index, name),
+            )
+        end
+    end
+    return paths
+end
+
+function _stress_parameter_paths(material, name::Symbol)
+    return (_elastic_parameter_paths(material, name)..., _plastic_parameter_paths(material, name)...)
+end
+
+function _resolve_parameter_paths(material, names, path_function)
+    return NamedTuple{names}(map(names) do name
+        Tuple(Val(path) for path in path_function(material, name))
+    end)
+end
+
+@inline _has_parameter_paths(parameters) = any(paths -> !isempty(paths), parameters)
+
+function material_parameter_is_used(material, parameter)
+    return !isempty(_density_parameter_paths(material, parameter)) ||
+        !isempty(_linear_viscosity_parameter_paths(material, parameter)) ||
+        !isempty(_stress_parameter_paths(material, parameter))
+end
+
+function compute_linear_viscosity_parameter_sensitivities!(
+        stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients
+    )
+    isempty(gradients) && return nothing
+    names = keys(gradients)
+    centers = map(entry -> entry.center, gradients)
+    vertices = map(entry -> entry.vertex, gradients)
+    for (p, material) in enumerate(rheology)
+        parameters = _resolve_parameter_paths(
+            material, names, _linear_viscosity_parameter_paths
+        )
+        _has_parameter_paths(parameters) || continue
+
+        @parallel (@idx size(phases.vertex)) linear_viscosity_parameter_sensitivity_kernel!(
+            centers, vertices, parameters, material, rheology, Val(p),
+            phases.center, phases.vertex,
+            @strain_center(stokes), @tensor_vertex(stokes.ε), args,
+            adjoint.viscosity.η, adjoint.viscosity.ηv, viscosity_cutoff,
         )
     end
     return nothing
 end
 
-@parallel_indices (I...) function density_parameter_sensitivity_kernel!(
-        gradients, model, p, phase_ratios, args, dρ, λP, ΔT, melt_fraction, dt
+function compute_stress_sensitivities!(
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, gradients
     )
-    ratio = (@cell phase_ratios[I...])[p]
-    for name in keys(gradients)
-        gradients[name].center[p, I...] = 0.0
-    end
-    if !iszero(ratio)
-        local_args = getindex_NamedTuple(args, I...)
-        thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
-        α_seed = isnothing(ΔT) ? 0.0 : -λP[I...] * ΔT[(I .+ 1)...] / dt
-        derivative = enzyme_density_parameter_gradient(
-            model, local_args, ratio * dρ[I...], ratio * α_seed, thermal_args
+    names = keys(gradients)
+    centers = map(entry -> entry.center, gradients)
+    vertices = map(entry -> entry.vertex, gradients)
+    for (p, material) in enumerate(rheology)
+        parameters = _resolve_parameter_paths(material, names, _stress_parameter_paths)
+
+        @parallel (@idx size(phases.vertex)) stress_sensitivity_kernel!(
+            centers, vertices, parameters,
+            material, p, phases.center, phases.vertex,
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
+            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
+            stokes.EII_pl, stokes.P, stokes.λ, stokes.λv,
+            stokes.viscosity.η, stokes.viscosity.ηv,
+            adjoint.viscosity.η, adjoint.viscosity.ηv,
+            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
+            adjoint.θ, λ_relaxation, dt,
         )
-        for name in keys(gradients)
-            if hasproperty(model, name)
-                gradients[name].center[p, I...] = getproperty(derivative, name).val
+    end
+    return nothing
+end
+
+"""
+    combine_center_vertex_gradient!(center, vertex, p)
+
+Fold phase `p`'s vertex gradient into its center gradient, the exact adjoint of
+[`center2vertex!`](@ref): each interior vertex is the average of its four surrounding
+centers and each boundary vertex copies the nearest interior one, which the clamped index
+reproduces.
+
+Written as a gather over centers rather than a scatter from vertices, so that no two
+threads accumulate into the same cell.
+"""
+function combine_center_vertex_gradient!(center, vertex, p)
+    ni = size(center)[2:end]
+    size(vertex)[2:end] == ni .+ 1 || throw(
+        DimensionMismatch(
+            "the vertex gradient must be one point larger than the center gradient"
+        ),
+    )
+    @parallel (@idx ni) combine_center_vertex_gradient_kernel!(center, vertex, p)
+    return center
+end
+
+function compute_density_parameter_sensitivities!(adjoint, phases, rheology, args, dt, gradients)
+    isempty(gradients) && return nothing
+    names = keys(gradients)
+    centers = map(entry -> entry.center, gradients)
+    ΔT = get(args, :ΔT, nothing)
+    melt_fraction = get(args, :melt_fraction, nothing)
+    for (p, material) in enumerate(rheology)
+        density_parameters = _resolve_parameter_paths(material, names, _density_parameter_paths)
+        for (name, paths) in pairs(density_parameters)
+            for path in paths
+                value = _material_parameter(material, path)
+                value isa GeoParams.GeoUnit && value.val isa AbstractFloat ||
+                    throw(ArgumentError("$name must be a scalar floating-point GeoUnit"))
             end
         end
+        _has_parameter_paths(density_parameters) || continue
+
+        @parallel (@idx size(adjoint.ρ)) density_parameter_sensitivity_kernel!(
+            centers, density_parameters, material, p, phases.center, args,
+            adjoint.ρ, adjoint.λP, ΔT, melt_fraction, dt,
+        )
     end
     return nothing
 end

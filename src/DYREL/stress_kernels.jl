@@ -1,4 +1,4 @@
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt, controls = (;))
+function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -17,7 +17,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt
         stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, controls
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
     )
     return nothing
 end
@@ -39,7 +39,7 @@ end
         ηv,
         η_vep,
         ΔPψ,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, controls
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -57,9 +57,8 @@ end
         Pij = av_clamped(P, Ic...)
         EIIv = av_clamped(EII_pl, Ic...)
         ratio = phase_ratios_vertex[I...]
-        G_multiplier = haskey(controls, :G) ? controls.G.vertex : nothing
         # compute local stress
-        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv, G_multiplier, I)
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
 
         # update arrays
         τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
@@ -75,11 +74,9 @@ end
             Pij = P[I...]
             EII = EII_pl[I...]
             ratio = phase_ratios_center[I...]
-            G_multiplier = haskey(controls, :G) ? controls.G.center : nothing
-
             # compute local stress
             τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, G_multiplier, I)
+                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
             # update arrays
             τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
             ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
@@ -100,7 +97,7 @@ end
 # τ instead of relaunching a kernel that reads the stress tensor back. The τII-viscosity update
 # is purely local (same cell), so this is race-free and needs no halo.
 function compute_stress_viscosity_DRYEL!(
-        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, controls = (;)
+        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
@@ -122,7 +119,7 @@ function compute_stress_viscosity_DRYEL!(
         stokes.ΔPψ,
         θc, stokes.R.RP, γ_eff,                             # small pressure correction θc = γ_eff·RP + ΔPψ
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
-        viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, controls,
+        viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
     )
     return nothing
 end
@@ -155,7 +152,7 @@ end
         ΔPψ,
         θc, RP, γ_eff,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
-        ν, visc_args, cutoff, linear_viscosity, controls
+        ν, visc_args, cutoff, linear_viscosity
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -172,9 +169,8 @@ end
         Pij = av_clamped(P, Ic...)
         EIIv = av_clamped(EII_pl, Ic...)
         ratio = phase_ratios_vertex[I...]
-        G_multiplier = haskey(controls, :G) ? controls.G.vertex : nothing
         # compute local stress
-        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv, G_multiplier, I)
+        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv)
 
         # update arrays
         τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
@@ -195,11 +191,9 @@ end
             Pij = P[I...]
             EII = EII_pl[I...]
             ratio = phase_ratios_center[I...]
-            G_multiplier = haskey(controls, :G) ? controls.G.center : nothing
-
             # compute local stress
             τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, G_multiplier, I)
+                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII)
             # update arrays
             τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
             ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
@@ -225,13 +219,7 @@ end
     return nothing
 end
 
-@inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII) =
-    compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, nothing, ())
-
-@inline _material_multiplier(::Nothing, I...) = 1.0
-@inline _material_multiplier(A, I...) = @inbounds A[I...]
-
-@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, G_multiplier, I) where {N}
+@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII) where {N}
     return quote
         @inline
         # iterate over phases
@@ -244,8 +232,6 @@ end
             else
                 # get rheological properties for this phase
                 G = get_shear_modulus(rheology, phase)
-                # A purely viscous phase has no active G; avoid differentiating Inf * multiplier.
-                G = isinf(G) ? G : G * _material_multiplier(G_multiplier, I...)
                 Kb = get_bulk_modulus(rheology, phase)
                 ratio_I .* _compute_local_stress(
                     εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII
@@ -329,7 +315,7 @@ end
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, controls = (;))
+function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
@@ -348,7 +334,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt, controls
+        rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt
     )
     return nothing
 end
@@ -370,7 +356,7 @@ end
         η_vep,
         ΔPψ,
         ϕ::JustRelax.RockRatio,
-        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, controls
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -388,10 +374,8 @@ end
             Pij = av_clamped(P, Ic...)
             EIIvij = av_clamped(EII_pl, Ic...)
             ratio = phase_ratios_vertex[I...]
-            G_multiplier = haskey(controls, :G) ? controls.G.vertex : nothing
-
             # compute local stress
-            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, _, _, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij, G_multiplier, I)
+            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, _, _, _ = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIvij)
 
             # update arrays
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
@@ -414,11 +398,9 @@ end
                 Pij = P[I...]
                 EIIij = EII_pl[I...]
                 ratio = phase_ratios_center[I...]
-                G_multiplier = haskey(controls, :G) ? controls.G.center : nothing
-
                 # compute local stress
                 τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-                    compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij, G_multiplier, I)
+                    compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij)
                 # update arrays
                 τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
                 ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl

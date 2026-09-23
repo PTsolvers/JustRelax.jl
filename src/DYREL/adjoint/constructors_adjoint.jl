@@ -1,39 +1,48 @@
 """
-    material_controls(CPUBackend, ni, parameters; nphases=nothing)
+    material_controls(CPUBackend, ni, parameters; nphases = nothing)
 
-Allocate only the requested material fields. `:G` retains its center/vertex multipliers
-and gradient buffers. Density parameters (`:ρ0`, `:α`, `:β`, `:T0`, `:P0`, `:ρ`)
-allocate gradient outputs only, of size `(nphases, ni...)`; no input multipliers are needed.
+Allocate gradient fields for the requested material parameters.
 
-Pass the returned `controls, gradients` to `solve_DYREL!`. Density gradients are
-derivatives with respect to the numeric GeoParams parameter values, including buoyancy
-and thermal pressure-residual contributions, with previous-step state held fixed.
-A parameter absent from a phase's density model has zero gradient for that phase.
-The direct path supports scalar GeoUnit fields of Enzyme-compatible density models;
-nested parameter selection is not yet supported.
+`parameters` is a tuple of material parameter names, as in
+
+    (:ρ0, :G)
+
+Each requested name represents one upstream parameter. If that name occurs in several
+material functions, all contributions are accumulated into the same gradient.
+
+Returns a named tuple keyed by the selected parameter names. Every entry has the same
+pointwise, phase-wise layout:
+
+    gradients[name].center[p, I...]  # size (nphases, ni...)
+    gradients[name].vertex[p, I...]  # size (nphases, (ni .+ 1)...)
+
+The center and vertex contributions remain separate during sensitivity evaluation. After
+all paths have been accumulated, the transpose of the center-to-vertex interpolation is
+added to `center`; `vertex` retains the uncombined contribution for diagnostics.
+
+Pass the result as `gradients` to `solve_DYREL!`. Gradients are derivatives with respect to the numeric
+GeoParams parameter values, including the buoyancy and thermal pressure-residual
+contributions, with previous-step state held fixed. A parameter that a phase's model does
+not define has zero gradient for that phase.
 """
-is_density_parameter(name) = name in (:ρ0, :α, :β, :T0, :P0, :ρ)
-
 function material_controls(
-        ::Type{CPUBackend}, ni::NTuple{N, Integer}, parameters::NTuple{M, Symbol};
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};
         nphases = nothing,
     ) where {N, M}
-    if any(is_density_parameter, parameters)
-        nphases isa Integer && nphases > 0 ||
-            throw(ArgumentError("a positive nphases is required for density gradients"))
+    if !isempty(names) && !(nphases isa Integer && nphases > 0)
+        throw(ArgumentError("a positive nphases is required for material gradients"))
     end
-    control_names = filter(name -> !is_density_parameter(name), parameters)
-    multipliers = map(control_names) do _
-        (; center = @ones(ni...), vertex = @ones(ni .+ 1...))
+    allunique(names) || throw(ArgumentError("gradient parameter names must be unique"))
+
+    # All material parameters use this layout, independent of which local material
+    # function produces their sensitivity.
+    gradient_fields = map(names) do _
+        (;
+            center = @zeros(nphases, ni...),
+            vertex = @zeros(nphases, (ni .+ 1)...),
+        )
     end
-    gradients = map(parameters) do parameter
-        if is_density_parameter(parameter)
-            (; center = @zeros(nphases, ni...))
-        else
-            (; center = @zeros(ni...), vertex = @zeros(ni .+ 1...))
-        end
-    end
-    return NamedTuple{control_names}(multipliers), NamedTuple{parameters}(gradients)
+    return NamedTuple{names}(gradient_fields)
 end
 
 function AdjointStokesArrays(::Type{CPUBackend}, ni::Vararg{Integer, N}) where {N}
@@ -65,6 +74,7 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
     ω = Vorticity(ni...)
     η = @zeros(ni...)
     ρ = @zeros(ni...)
+    dρgx = @zeros(ni...)
 
     return JustRelax.AdjointStokesArrays(
         P,
@@ -85,6 +95,7 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
         ω,
         η,
         ρ,
+        dρgx,
     )
 end
 

@@ -82,6 +82,7 @@ struct AdjointStokesArrays{A, B, RType, D, E, F, T}
     ω::F
     η::T
     ρ::T
+    dρgx::T
 end
 
 Adapt.@adapt_structure AdjointStokesArrays

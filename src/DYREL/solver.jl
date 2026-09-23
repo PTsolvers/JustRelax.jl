@@ -35,10 +35,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
   history-dependent state. Default: `false`.
-- `controls`: Optional material multiplier fields created by `material_controls`.
-  They start at one, so the selected parameters retain their rheology values. Default: an
-  empty named tuple.
-- `gradients`: Optional matching buffers from `material_controls`, filled by the adjoint
+- `gradients`: Optional buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the actual material parameters. `G` is returned
   on the center grid; phase-specific density-parameter gradients have size `(nphases, ni...)`. Default:
   `nothing`.
@@ -85,8 +82,7 @@ function _solve_DYREL!(
         free_surface = false,
         adjoint = false,
         observation = nothing,
-        controls = (;),
-        gradients = nothing,
+        gradients = (;),
         η_multiplier = nothing,
         kwargs...,
     ) where {N}
@@ -166,7 +162,7 @@ function _solve_DYREL!(
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
-        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, controls)
+        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
         # update_halo!(stokes.τ.xx_v)
@@ -235,7 +231,7 @@ function _solve_DYREL!(
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, args, true)
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity, controls)
+            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             # update_halo!(stokes.λv)
             # batch the vertex-stress halos (+ vertex viscosity, refreshed above in the fused
             # kernel from pre-halo stress) into a single MPI exchange, so shared boundary vertices
@@ -335,8 +331,8 @@ function _solve_DYREL!(
             verbose_PH,
             verbose_DR,
             observation,
-            controls,
             gradients,
+            viscosity_cutoff,
             kwargs...,
         )
     end

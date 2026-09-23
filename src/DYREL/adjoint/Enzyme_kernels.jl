@@ -122,17 +122,23 @@ function buoyancy_uses_stokes_pressure(stokes, args)
 end
 
 """
-    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni, rheology, phases, args, dρg)
+    enzyme_compute_PH_residual_V!(
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args, pressure_dependent_buoyancy
+    )
 
 Reverse the momentum residual and its pressure-dependent buoyancy. The reusable
-`dρg` buffers are supplied when `args.P === stokes.P`; `nothing` retains the fixed
-buoyancy path. Accumulate the additional pressure derivative before either the
-outer residual check or the inner Schur-complement correction.
+buoyancy-sensitivity buffers are read from `adjoint` when `pressure_dependent_buoyancy`
+is true. Accumulate the additional pressure derivative before either the outer residual
+check or the inner Schur-complement correction.
 """
-function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni, rheology, phases, args, dρg)
-    isnothing(dρg) && return enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+function enzyme_compute_PH_residual_V!(
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args, pressure_dependent_buoyancy
+    )
+    pressure_dependent_buoyancy ||
+        return enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+    dρg = (adjoint.dρgx, adjoint.ρ)
     foreach(A -> fill!(A, 0.0), dρg)
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, dρg, _di, ni)
+    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
     @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
         adjoint.P, dρg, phases.center, rheology, args
     )
@@ -174,7 +180,7 @@ Differentiate the two-dimensional DYREL constitutive kernel. Stress adjoints in
 toy example.
 """
 function enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, controls = (;)
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt
     )
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) configcall = compute_stress_DRYEL!(
@@ -199,7 +205,6 @@ function enzyme_compute_stress_DRYEL!(
         phase_ratios.vertex,
         λ_relaxation,
         dt,
-        controls,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_stress_DRYEL!,
@@ -233,7 +238,6 @@ function enzyme_compute_stress_DRYEL!(
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
-        Enzyme.Const(controls),
     )
     return nothing
 end

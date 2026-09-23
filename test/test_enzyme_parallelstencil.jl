@@ -24,13 +24,20 @@ end
 end
 
 @parallel_indices (i, j) function _init_α_gradient_phases!(phase)
-    @index phase[1, i, j] = i == 1 ? 1.0 : 0.25
-    @index phase[2, i, j] = i == 1 ? 0.0 : 0.75
+    @index phase[1, i, j] = i == 1 ? 0.6 : 0.2
+    @index phase[2, i, j] = i == 1 ? 0.1 : 0.5
+    @index phase[3, i, j] = i == 1 ? 0.3 : 0.3
     return nothing
 end
 
-function _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
-    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt, controls)
+@parallel_indices (i, j) function _init_η_gradient_phases!(phase)
+    @index phase[1, i, j] = i == 1 ? 1.0 : 0.35
+    @index phase[2, i, j] = i == 1 ? 0.0 : 0.65
+    return nothing
+end
+
+function _elastic_residual_objective!(stokes, adjoint, rheology, phases, ρg, grid, dt)
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt)
     @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
         stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
         stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
@@ -40,27 +47,85 @@ function _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
 end
 
-@testset "Whole-expression shear-modulus sensitivity" begin
-    ni = (3, 2)
-    grid = Geometry(ni, (3.0, 2.0))
-    dt = 0.7
-    moduli = (2.0, 2.0, Inf)
-    rheology = ntuple(3) do p
-        elasticity = ConstantElasticity(; G = moduli[p], Kb = 10.0)
+function _elastic_rheology(moduli, bulk_moduli)
+    return ntuple(length(moduli)) do p
+        elasticity = ConstantElasticity(; G = moduli[p], Kb = bulk_moduli[p])
+        plasticity = DruckerPrager_regularised(;
+            ϕ = 20.0, Ψ = p == 3 ? 0.0 : 10.0, C = 0.01, η_vp = 0.1
+        )
         SetMaterialParams(;
             Phase = p,
             Gravity = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((LinearViscous(; η = 3.0), elasticity)),
+            CompositeRheology = CompositeRheology((
+                LinearViscous(; η = 3.0), elasticity, plasticity,
+            )),
             Elasticity = elasticity,
+            Plasticity = plasticity,
         )
     end
+end
+
+function _linear_viscosity_rheology(values)
+    return ntuple(length(values)) do p
+        SetMaterialParams(;
+            Phase = p,
+            Density = ConstantDensity(; ρ = 1.0),
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = values[p]),)),
+        )
+    end
+end
+
+function _plastic_rheology(parameters)
+    return ntuple(length(parameters)) do p
+        elasticity = ConstantElasticity(; G = 1.5, Kb = 4.0)
+        plasticity = DruckerPrager_regularised(; parameters[p]...)
+        SetMaterialParams(;
+            Phase = p,
+            Density = ConstantDensity(; ρ = 1.0),
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((
+                LinearViscous(; η = 2.0), elasticity, plasticity,
+            )),
+            Elasticity = elasticity,
+            Plasticity = plasticity,
+        )
+    end
+end
+
+function _linear_viscosity_residual_objective!(
+        stokes, adjoint, rheology, phases, args, ρg, grid, dt
+    )
+    compute_viscosity!(stokes, phases, args, rheology, (-Inf, Inf))
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt)
+    @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
+        stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
+        stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+        grid._di.center, grid._di.vertex,
+    )
+    return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
+        sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
+end
+
+@testset "Spatial elastic-modulus sensitivities" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 0.7
+    moduli = (2.0, 4.0, Inf)
+    bulk_moduli = (7.0, 11.0, Inf)
+    rheology = _elastic_rheology(moduli, bulk_moduli)
     phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_G_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_G_gradient_phases!(phases.vertex)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
-    controls, gradients = material_controls(CPUBackend, ni, (:G,))
+    gradients = material_controls(
+        CPUBackend,
+        ni,
+        (:G, :Kb);
+        nphases = length(rheology),
+    )
     stokes.viscosity.η .= 3.0
     stokes.viscosity.ηv .= 3.0
     stokes.ε.xx .= 0.2
@@ -76,116 +141,187 @@ end
     adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
     adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
 
-    # Check every finite-G phase and grid point against perturbations in actual G.
-    # Repeat after poisoning the buffers to ensure each call replaces old gradients.
+    # Check each phase-wise material derivative against a perturbation of the actual
+    # GeoParams modulus. Repeat after poisoning the buffers to ensure each call replaces it.
     for _ in 1:2
-        gradients.G.center .= 123.0
-        gradients.G.vertex .= 123.0
-        _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
+        for gradient in values(gradients)
+            gradient.center .= 123.0
+            gradient.vertex .= 123.0
+        end
+        baseline = _elastic_residual_objective!(
+            stokes, adjoint, rheology, phases, ρg, grid, dt
+        )
+        @test isfinite(baseline)
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), controls, gradients,
+            (; me = 0), gradients,
         )
-        @test all(isfinite, gradients.G.center)
-        @test all(isfinite, gradients.G.vertex)
-        @test any(!iszero, gradients.G.center)
-        @test any(!iszero, gradients.G.vertex)
+        for (name, modulus_values) in ((:G, moduli), (:Kb, bulk_moduli))
+            gradient = gradients[name]
+            @test size(gradient.center) == (length(rheology), ni...)
+            @test size(gradient.vertex) == (length(rheology), (ni .+ 1)...)
+            @test all(isfinite, gradient.center)
+            @test all(isfinite, gradient.vertex)
+            @test any(!iszero, gradient.center)
 
-        # Perturb one center G. The corresponding vertex controls are obtained with
-        # center2vertex!, so this checks the combined gradient and its boundary weights.
-        for I in CartesianIndices(gradients.G.center)
-            h = 1.0e-5
-            controls.G.center[I] = 1 + h / first(moduli)
-            center2vertex!(controls.G.vertex, controls.G.center)
-            plus = _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
-            controls.G.center[I] = 1 - h / first(moduli)
-            center2vertex!(controls.G.vertex, controls.G.center)
-            minus = _G_residual_objective!(stokes, adjoint, rheology, phases, controls, ρg, grid, dt)
-            controls.G.center[I] = 1.0
-            center2vertex!(controls.G.vertex, controls.G.center)
-            @test gradients.G.center[I] ≈ (plus - minus) / (2h) rtol = 1.0e-6 atol = 1.0e-8
+            for p in eachindex(modulus_values)
+                isfinite(modulus_values[p]) || continue
+                h = 1.0e-5
+                plus_values = Base.setindex(modulus_values, modulus_values[p] + h, p)
+                minus_values = Base.setindex(modulus_values, modulus_values[p] - h, p)
+                plus_rheology = name === :G ?
+                    _elastic_rheology(plus_values, bulk_moduli) :
+                    _elastic_rheology(moduli, plus_values)
+                minus_rheology = name === :G ?
+                    _elastic_rheology(minus_values, bulk_moduli) :
+                    _elastic_rheology(moduli, minus_values)
+                plus = _elastic_residual_objective!(
+                    stokes, adjoint, plus_rheology, phases, ρg, grid, dt
+                )
+                minus = _elastic_residual_objective!(
+                    stokes, adjoint, minus_rheology, phases, ρg, grid, dt
+                )
+                predicted = sum(@view gradient.center[p, :, :])
+                @test predicted ≈ (plus - minus) / (2h) rtol = 1.0e-5 atol = 1.0e-8
+            end
         end
     end
-    @test all(isone, controls.G.center)
-    @test all(isone, controls.G.vertex)
 end
 
-@parallel_indices (i, j) function _selected_control_kernel!(yc, yv, xc, xv, controls)
-    @inbounds begin
-        if i <= size(yc, 1) && j <= size(yc, 2)
-            yc[i, j] = xc[i, j] * controls.G.center[i, j]
-        end
-        yv[i, j] = xv[i, j] * controls.G.vertex[i, j]
-    end
-    return nothing
-end
-
-function _selected_control_sensitivity!(yc, dyc, yv, dyv, xc, xv, controls, dcontrols, n)
-    @parallel (@idx n) configcall = _selected_control_kernel!(yc, yv, xc, xv, controls) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _selected_control_kernel!,
-        Enzyme.DuplicatedNoNeed(yc, dyc),
-        Enzyme.DuplicatedNoNeed(yv, dyv),
-        Enzyme.Const(xc),
-        Enzyme.Const(xv),
-        Enzyme.DuplicatedNoNeed(controls, dcontrols),
-    )
-    return nothing
-end
-
-function _selected_control_const!(yc, dyc, yv, dyv, xc, dxc, xv, dxv, controls, n)
-    @parallel (@idx n) configcall = _selected_control_kernel!(yc, yv, xc, xv, controls) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _selected_control_kernel!,
-        Enzyme.DuplicatedNoNeed(yc, dyc),
-        Enzyme.DuplicatedNoNeed(yv, dyv),
-        Enzyme.DuplicatedNoNeed(xc, dxc),
-        Enzyme.DuplicatedNoNeed(xv, dxv),
-        Enzyme.Const(controls),
-    )
-    return nothing
-end
-
-@testset "Selectively active material controls MWE" begin
+@testset "Spatial linear-viscosity sensitivities" begin
     ni = (3, 2)
-    yc = @zeros(ni...)
-    yv = @zeros(ni .+ 1...)
-    xc = @ones(ni...) .* 2.0
-    xv = @ones(ni .+ 1...) .* 3.0
-    controls, dcontrols = material_controls(CPUBackend, ni, (:G,))
-    empty_controls, empty_gradients = material_controls(CPUBackend, ni, ())
-    controls3D, gradients3D = JR3.material_controls(CPUBackend, (3, 2, 4), (:G, :C))
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 0.7
+    values = (2.0, 5.0)
+    rheology = _linear_viscosity_rheology(values)
+    phases = PhaseRatios(JustPIC.CPU, 2, ni)
+    @parallel (@idx ni) _init_η_gradient_phases!(phases.center)
+    @parallel (@idx ni .+ 1) _init_η_gradient_phases!(phases.vertex)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ρg = (@zeros(ni...), @zeros(ni...))
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P)
+    gradients = material_controls(
+        CPUBackend, ni, (:η,); nphases = length(rheology)
+    )
+    stokes.ε.xx .= 0.2
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.3
+    adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
+    adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
 
-    @test keys(controls) == (:G,)
-    @test !haskey(controls, :C)
-    @test isempty(empty_controls)
-    @test isempty(empty_gradients)
-    @test size(controls.G.center) == ni
-    @test size(controls.G.vertex) == ni .+ 1
-    @test all(isone, controls.G.center)
-    @test all(iszero, dcontrols.G.center)
-    @test controls.G.center !== dcontrols.G.center
-    @test keys(controls3D) == (:G, :C)
-    @test size(controls3D.G.center) == (3, 2, 4)
-    @test size(controls3D.C.vertex) == (4, 3, 5)
-    @test controls3D.G.center !== gradients3D.G.center
+    _linear_viscosity_residual_objective!(
+        stokes, adjoint, rheology, phases, args, ρg, grid, dt
+    )
+    JustRelax2D.compute_sensitivities!(
+        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), gradients, args,
+    )
+    @test all(isfinite, gradients.η.center)
+    @test all(isfinite, gradients.η.vertex)
+    @test any(!iszero, gradients.η.center)
 
-    @parallel (@idx ni .+ 1) _selected_control_kernel!(yc, yv, xc, xv, controls)
-    dyc = @ones(ni...)
-    dyv = @ones(ni .+ 1...)
-    _selected_control_sensitivity!(yc, dyc, yv, dyv, xc, xv, controls, dcontrols, ni .+ 1)
-    @test dcontrols.G.center ≈ xc
-    @test dcontrols.G.vertex ≈ xv
+    h = 1.0e-6
+    for p in eachindex(values)
+        plus_values = Base.setindex(values, values[p] + h, p)
+        minus_values = Base.setindex(values, values[p] - h, p)
+        plus = _linear_viscosity_residual_objective!(
+            stokes, adjoint, _linear_viscosity_rheology(plus_values), phases,
+            args, ρg, grid, dt,
+        )
+        minus = _linear_viscosity_residual_objective!(
+            stokes, adjoint, _linear_viscosity_rheology(minus_values), phases,
+            args, ρg, grid, dt,
+        )
+        @test sum(gradients.η.center[p, :, :]) ≈ (plus - minus) / (2h) rtol = 1.0e-6 atol = 1.0e-8
+    end
+end
 
-    dxc = @zeros(ni...)
-    dxv = @zeros(ni .+ 1...)
-    dyc .= 1.0
-    dyv .= 1.0
-    _selected_control_const!(yc, dyc, yv, dyv, xc, dxc, xv, dxv, controls, ni .+ 1)
-    @test dxc ≈ one.(dxc)
-    @test dxv ≈ one.(dxv)
-    @test all(isone, controls.G.center)
-    @test all(isone, controls.G.vertex)
+@testset "Spatial plastic-parameter sensitivities" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 0.5
+    parameters = (
+        (; C = 0.15, ϕ = 25.0, Ψ = 8.0, η_vp = 0.07),
+        (; C = 0.10, ϕ = 20.0, Ψ = 5.0, η_vp = 0.05),
+    )
+    rheology = _plastic_rheology(parameters)
+    phases = PhaseRatios(JustPIC.CPU, 2, ni)
+    @parallel (@idx ni) _init_η_gradient_phases!(phases.center)
+    @parallel (@idx ni .+ 1) _init_η_gradient_phases!(phases.vertex)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ρg = (@zeros(ni...), @zeros(ni...))
+    requested = keys(parameters[1])
+    gradients = material_controls(
+        CPUBackend, ni, requested; nphases = length(rheology)
+    )
+    stokes.P .= 0.2
+    stokes.viscosity.η .= 2.0
+    stokes.viscosity.ηv .= 2.0
+    stokes.ε.xx .= 0.8
+    stokes.ε.yy .= -0.4
+    stokes.ε.xy .= 0.5
+    stokes.τ_o.xx .= 0.1
+    stokes.τ_o.yy .= -0.05
+    stokes.τ_o.xy_c .= 0.03
+    stokes.τ_o.xx_v .= 0.1
+    stokes.τ_o.yy_v .= -0.05
+    stokes.τ_o.xy .= 0.03
+    adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
+    adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
+
+    baseline = _elastic_residual_objective!(
+        stokes, adjoint, rheology, phases, ρg, grid, dt
+    )
+    @test isfinite(baseline)
+    @test any(>(0), stokes.λ)
+    JustRelax2D.compute_sensitivities!(
+        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), gradients,
+    )
+    for gradient in values(gradients)
+        @test all(isfinite, gradient.center)
+        @test all(isfinite, gradient.vertex)
+        @test any(!iszero, gradient.center)
+    end
+
+    for p in eachindex(parameters), name in keys(parameters[p])
+        h = name in (:ϕ, :Ψ) ? 1.0e-5 : 1.0e-6
+        plus_phase = merge(
+            parameters[p], NamedTuple{(name,)}((parameters[p][name] + h,))
+        )
+        minus_phase = merge(
+            parameters[p], NamedTuple{(name,)}((parameters[p][name] - h,))
+        )
+        plus = _elastic_residual_objective!(
+            stokes, adjoint,
+            _plastic_rheology(Base.setindex(parameters, plus_phase, p)),
+            phases, ρg, grid, dt,
+        )
+        minus = _elastic_residual_objective!(
+            stokes, adjoint,
+            _plastic_rheology(Base.setindex(parameters, minus_phase, p)),
+            phases, ρg, grid, dt,
+        )
+        @test sum(gradients[name].center[p, :, :]) ≈
+            (plus - minus) / (2h) rtol = 1.0e-5 atol = 1.0e-8
+    end
+
+    # Elastic and plastic parameters share one material reverse pass.
+    C_gradient = copy(gradients.C.center)
+    mixed_gradients = material_controls(
+        CPUBackend, ni, (:G, :C); nphases = length(rheology)
+    )
+    _elastic_residual_objective!(
+        stokes, adjoint, rheology, phases, ρg, grid, dt
+    )
+    JustRelax2D.compute_sensitivities!(
+        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), mixed_gradients,
+    )
+    @test mixed_gradients.C.center ≈ C_gradient
+    @test any(!iszero, mixed_gradients.G.center)
 end
 
 @testset "Spatial GeoParams density-parameter sensitivities" begin
@@ -195,9 +331,11 @@ end
     parameters = (
         (; ρ0 = 2.0, α = 0.1, β = 0.2, T0 = 1.0, P0 = 0.3),
         (; ρ0 = 3.0, α = 0.0, T0 = 0.5),
+        (; ρ = 4.0),
     )
-    models = (PT_Density(; parameters[1]...), T_Density(; parameters[2]...))
-    rheology = ntuple(2) do p
+    model_types = (PT_Density, T_Density, ConstantDensity)
+    models = ntuple(p -> model_types[p](; parameters[p]...), 3)
+    rheology = ntuple(3) do p
         SetMaterialParams(;
             Phase = p,
             Density = models[p],
@@ -205,16 +343,22 @@ end
             CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
         )
     end
-    phases = PhaseRatios(JustPIC.CPU, 2, ni)
+    phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_α_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_α_gradient_phases!(phases.vertex)
-    names = (:ρ0, :α, :β, :T0, :P0)
-    controls, gradients = material_controls(CPUBackend, ni, names; nphases = 2)
-    @test isempty(controls)
+    names = (:ρ0, :α, :β, :T0, :P0, :ρ)
+    requested = names
+    gradients = material_controls(CPUBackend, ni, requested; nphases = 3)
     @test keys(gradients) == names
-    @test all(g -> keys(g) == (:center,) && size(g.center) == (2, ni...), values(gradients))
+    @test all(
+        g -> keys(g) == (:center, :vertex) &&
+            size(g.center) == (3, ni...) && size(g.vertex) == (3, (ni .+ 1)...),
+        values(gradients),
+    )
     @test_throws ArgumentError material_controls(CPUBackend, ni, (:α,))
-    @test_throws ArgumentError material_controls(CPUBackend, ni, (:α,); nphases = 0)
+    @test_throws ArgumentError material_controls(
+        CPUBackend, ni, (:α,); nphases = 0
+    )
 
     ρg = (@zeros(ni...), @zeros(ni...))
     stokes = StokesArrays(CPUBackend, ni)
@@ -261,7 +405,7 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), controls, gradients, args,
+            (; me = 0), gradients, args,
         )
         density_gradient = copy(adjoint.ρ)
         for p in eachindex(models), name in names, I in CartesianIndices(stokes.P)
@@ -269,7 +413,7 @@ end
                 h = 1.0e-6
                 plus = merge(parameters[p], NamedTuple{(name,)}((parameters[p][name] + h,)))
                 minus = merge(parameters[p], NamedTuple{(name,)}((parameters[p][name] - h,)))
-                make_model = p == 1 ? PT_Density : T_Density
+                make_model = model_types[p]
                 fd = (objective(p, I, make_model(; plus...)) - objective(p, I, make_model(; minus...))) / (2h)
                 @test gradients[name].center[p, Tuple(I)...] ≈ fd rtol = 1.0e-6 atol = 1.0e-8
             else
@@ -285,7 +429,7 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), controls, gradients, args,
+            (; me = 0), gradients, args,
         )
         @test all(name -> gradients[name].center ≈ saved[name].center, names)
     end
@@ -373,14 +517,13 @@ end
     adjoint.R.Ry .= 1.0
     adjoint.P .= 0.0
     adjoint.τ.xy .= 0.0
-    dρg = (@zeros(ni...), @zeros(ni...))
-    JustRelax2D.enzyme_compute_PH_residual_V_sensitivity!(
-        stokes, adjoint, ρg, dρg, grid._di, ni
-    )
+    adjoint.dρgx .= 0.0
+    adjoint.ρ .= 0.0
+    JustRelax2D.enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, grid._di, ni)
     @test any(!iszero, adjoint.P)
     @test any(!iszero, adjoint.τ.xy)
-    @test any(!iszero, dρg[1])
-    @test any(!iszero, dρg[2])
+    @test any(!iszero, adjoint.dρgx)
+    @test any(!iszero, adjoint.ρ)
 
     elasticity = ConstantElasticity(; G = 1.0, Kb = 5.0)
     rheology = (
@@ -405,28 +548,6 @@ end
     τxx_default = copy(stokes.τ.xx)
     τxy_default = copy(stokes.τ.xy)
 
-    empty_controls, = material_controls(CPUBackend, ni, ())
-    JustRelax2D.compute_stress_DRYEL!(
-        stokes, rheology, phase_ratios, 1.0, 1.0, empty_controls
-    )
-    @test stokes.τ.xx ≈ τxx_default
-    @test stokes.τ.xy ≈ τxy_default
-
-    controls, = material_controls(CPUBackend, ni, (:G,))
-    JustRelax2D.compute_stress_DRYEL!(
-        stokes, rheology, phase_ratios, 1.0, 1.0, controls
-    )
-    @test stokes.τ.xx ≈ τxx_default
-    @test stokes.τ.xy ≈ τxy_default
-
-    controls.G.center .= 2.0
-    controls.G.vertex .= 2.0
-    JustRelax2D.compute_stress_DRYEL!(
-        stokes, rheology, phase_ratios, 1.0, 1.0, controls
-    )
-    @test stokes.τ.xx ≈ (4 / 3) .* τxx_default
-    @test stokes.τ.xy ≈ (4 / 3) .* τxy_default
-
     θc = @zeros(ni...)
     γ_eff = @ones(ni...)
     JustRelax2D.compute_stress_viscosity_DRYEL!(
@@ -441,28 +562,18 @@ end
         (;),
         (-Inf, Inf),
         true,
-        controls,
     )
-    @test stokes.τ.xx ≈ (4 / 3) .* τxx_default
-    @test stokes.τ.xy ≈ (4 / 3) .* τxy_default
+    @test stokes.τ.xx ≈ τxx_default
+    @test stokes.τ.xy ≈ τxy_default
 
     adjoint.τ.xx .= 1.0
     adjoint.τ.yy .= 1.0
     adjoint.τ.xy .= 1.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0, controls
+        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
-
-    adjoint.τ.xx .= 1.0
-    adjoint.τ.yy .= 1.0
-    adjoint.τ.xy .= 1.0
-    JustRelax2D.enzyme_compute_stress_DRYEL_sensitivity!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0, controls
-    )
-    @test any(!iszero, adjoint.viscosity.η)
-    @test any(!iszero, adjoint.viscosity.ηv)
 
     bcs = VelocityBoundaryConditions()
     adjoint.V.Vx .= 1.0

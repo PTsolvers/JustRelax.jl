@@ -575,16 +575,14 @@ end
 function JR3D.rotate_stress_particles!(
         τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method::Symbol = :matrix
     )
-    fn = if method === :matrix
-        rotate_stress_particles_rotation_matrix!
-
-    elseif method === :jaumann
-        rotate_stress_particles_jaumann!
-
-    else
-        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
-    end
-    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+    # The :jaumann and rotation-matrix kernels are 2D-only; 3D stress rotation always
+    # uses GeoParams' elastic stress rotation.
+    method === :matrix || error(
+        "Unknown method: $method. Only the GeoParams-based rotation (method = :matrix) is available in 3D"
+    )
+    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
+        τ..., ω..., particles.index, dt
+    )
 
     return nothing
 end

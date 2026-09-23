@@ -40,27 +40,6 @@ end
 end
 
 @parallel_indices (I...) function compute_vorticity!(
-        ωyz, ωxz, ωxy, Vx, Vy, Vz, _di
-    )
-    _dx, _dy, _dz = @dxi(_di, I...)
-    Base.@propagate_inbounds @inline dx(A) = _d_xa(A, _dx, I...)
-    Base.@propagate_inbounds @inline dy(A) = _d_ya(A, _dy, I...)
-    Base.@propagate_inbounds @inline dz(A) = _d_za(A, _dz, I...)
-
-    if all(I .≤ size(ωyz))
-        @inbounds ωyz[I...] = 0.5 * (dy(Vz) - dz(Vy))
-    end
-    if all(I .≤ size(ωxz))
-        @inbounds ωxz[I...] = 0.5 * (dz(Vx) - dx(Vz))
-    end
-    if all(I .≤ size(ωxy))
-        @inbounds ωxy[I...] = 0.5 * (dx(Vy) - dy(Vx))
-    end
-
-    return nothing
-end
-
-@parallel_indices (I...) function compute_vorticity!(
         ωyz, ωxz, ωxy, Vx, Vy, Vz, _di_vx, _di_vy, _di_vz
     )
     i, j, k = I
@@ -146,8 +125,10 @@ end
         τ_xz = @inbounds @index xz[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
+        # GeoParams expects the raw curl of the velocity field, twice the vorticity
+        # tensor components stored here.
         τ_rotated = GeoParams.rotate_elastic_stress3D(
-            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
+            (2ω_yz, 2ω_xz, 2ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
         )
 
         components = xx, yy, zz, yz, xz, xy
@@ -159,7 +140,7 @@ end
     return nothing
 end
 
-@parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
+@parallel_indices (I...) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
     for ip in cellaxes(index)
         !@index(index[ip, I...]) && continue # no particle in this location
 
@@ -169,7 +150,7 @@ end
         τ_xy = @inbounds @index xy[ip, I...]
 
         tmp = τ_xy * ω_xy * 2
-        @inbounds @index xx[ip, I...] = muladd(dt, tmp, τ_xx)
+        @inbounds @index xx[ip, I...] = muladd(dt, -tmp, τ_xx)
         @inbounds @index yy[ip, I...] = muladd(dt, tmp, τ_yy)
         @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
     end

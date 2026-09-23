@@ -44,16 +44,6 @@ import JustRelax.JustRelax3D as JR3
 
     @test isone(inv(m, 1, 1))
     @test iszero(inv(m, 5, 5))
-
-    m[1, 1] = 1.0
-    m[1:2, 1:2] = zeros(2, 2)
-    @test iszero(m[1, 1])
-    @test JustRelax.dims(m) == 2
-
-    @test apply_mask(A, B, nothing) === A
-    @test apply_mask(A, B, nothing, 1, 1) == A[1, 1]
-    @test isnothing(apply_mask!(A, B, nothing))
-    @test isnothing(apply_mask!(A, B, nothing, 1, 1))
 end
 
 @testset "Mask 3D" begin

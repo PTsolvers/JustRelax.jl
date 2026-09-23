@@ -348,16 +348,16 @@ end
         εyyv_ij = av_clamped_yz(εii[2], Ic...)
         εzzv_ij = av_clamped_yz(εii[3], Ic...)
         εyzv_ij = εij[1][I...]
-        εxzv_ij = av_clamped_yz_y(εij[2], I, Ic...)
-        εxyv_ij = av_clamped_yz_z(εij[3], I, Ic...)
+        εxzv_ij = av_clamped_yz_y(εij[2], Ic...)
+        εxyv_ij = av_clamped_yz_z(εij[3], Ic...)
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_yz(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_yz(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_yz(τ_o_c[3], Ic...)
         τyzv_old_ij = τ_o_shear[1][I...]
-        τxzv_old_ij = av_clamped_yz_y(τ_o_shear[2], I, Ic...)
-        τxyv_old_ij = av_clamped_yz_z(τ_o_shear[3], I, Ic...)
+        τxzv_old_ij = av_clamped_yz_y(τ_o_shear[2], Ic...)
+        τxyv_old_ij = av_clamped_yz_z(τ_o_shear[3], Ic...)
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 
         λvij = λv[1][I...]
@@ -380,17 +380,17 @@ end
         εxxv_ij = av_clamped_xz(εii[1], Ic...)
         εyyv_ij = av_clamped_xz(εii[2], Ic...)
         εzzv_ij = av_clamped_xz(εii[3], Ic...)
-        εyzv_ij = av_clamped_xz_x(εij[1], I, Ic...)
+        εyzv_ij = av_clamped_xz_x(εij[1], Ic...)
         εxzv_ij = εij[2][I...]
-        εxyv_ij = av_clamped_xz_z(εij[3], I, Ic...)
+        εxyv_ij = av_clamped_xz_z(εij[3], Ic...)
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_xz(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_xz(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_xz(τ_o_c[3], Ic...)
-        τyzv_old_ij = av_clamped_xz_x(τ_o_shear[1], I, Ic...)
+        τyzv_old_ij = av_clamped_xz_x(τ_o_shear[1], Ic...)
         τxzv_old_ij = τ_o_shear[2][I...]
-        τxyv_old_ij = av_clamped_xz_z(τ_o_shear[3], I, Ic...)
+        τxyv_old_ij = av_clamped_xz_z(τ_o_shear[3], Ic...)
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 
         λvij = λv[2][I...]
@@ -411,16 +411,16 @@ end
         εxxv_ij = av_clamped_xy(εii[1], Ic...)
         εyyv_ij = av_clamped_xy(εii[2], Ic...)
         εzzv_ij = av_clamped_xy(εii[3], Ic...)
-        εyzv_ij = av_clamped_xy_x(εij[1], I, Ic...)
-        εxzv_ij = av_clamped_xy_y(εij[2], I, Ic...)
+        εyzv_ij = av_clamped_xy_x(εij[1], Ic...)
+        εxzv_ij = av_clamped_xy_y(εij[2], Ic...)
         εxyv_ij = εij[3][I...]
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_xy(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_xy(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_xy(τ_o_c[3], Ic...)
-        τyzv_old_ij = av_clamped_xy_x(τ_o_shear[1], I, Ic...)
-        τxzv_old_ij = av_clamped_xy_y(τ_o_shear[2], I, Ic...)
+        τyzv_old_ij = av_clamped_xy_x(τ_o_shear[1], Ic...)
+        τxzv_old_ij = av_clamped_xy_y(τ_o_shear[2], Ic...)
         τxyv_old_ij = τ_o_shear[3][I...]
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 
@@ -579,16 +579,16 @@ end
         εyyv_ij = av_clamped_yz(εii[2], Ic...)
         εzzv_ij = av_clamped_yz(εii[3], Ic...)
         εyzv_ij = εij[1][I...]
-        εxzv_ij = av_clamped_yz_y(εij[2], I, Ic...)
-        εxyv_ij = av_clamped_yz_z(εij[3], I, Ic...)
+        εxzv_ij = av_clamped_yz_y(εij[2], Ic...)
+        εxyv_ij = av_clamped_yz_z(εij[3], Ic...)
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_yz(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_yz(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_yz(τ_o_c[3], Ic...)
         τyzv_old_ij = τ_o_shear[1][I...]
-        τxzv_old_ij = av_clamped_yz_y(τ_o_shear[2], I, Ic...)
-        τxyv_old_ij = av_clamped_yz_z(τ_o_shear[3], I, Ic...)
+        τxzv_old_ij = av_clamped_yz_y(τ_o_shear[2], Ic...)
+        τxyv_old_ij = av_clamped_yz_z(τ_o_shear[3], Ic...)
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 
         λvij = λv[1][I...]
@@ -609,17 +609,17 @@ end
         εxxv_ij = av_clamped_xz(εii[1], Ic...)
         εyyv_ij = av_clamped_xz(εii[2], Ic...)
         εzzv_ij = av_clamped_xz(εii[3], Ic...)
-        εyzv_ij = av_clamped_xz_x(εij[1], I, Ic...)
+        εyzv_ij = av_clamped_xz_x(εij[1], Ic...)
         εxzv_ij = εij[2][I...]
-        εxyv_ij = av_clamped_xz_z(εij[3], I, Ic...)
+        εxyv_ij = av_clamped_xz_z(εij[3], Ic...)
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_xz(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_xz(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_xz(τ_o_c[3], Ic...)
-        τyzv_old_ij = av_clamped_xz_x(τ_o_shear[1], I, Ic...)
+        τyzv_old_ij = av_clamped_xz_x(τ_o_shear[1], Ic...)
         τxzv_old_ij = τ_o_shear[2][I...]
-        τxyv_old_ij = av_clamped_xz_z(τ_o_shear[3], I, Ic...)
+        τxyv_old_ij = av_clamped_xz_z(τ_o_shear[3], Ic...)
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 
         λvij = λv[2][I...]
@@ -640,16 +640,16 @@ end
         εxxv_ij = av_clamped_xy(εii[1], Ic...)
         εyyv_ij = av_clamped_xy(εii[2], Ic...)
         εzzv_ij = av_clamped_xy(εii[3], Ic...)
-        εyzv_ij = av_clamped_xy_x(εij[1], I, Ic...)
-        εxzv_ij = av_clamped_xy_y(εij[2], I, Ic...)
+        εyzv_ij = av_clamped_xy_x(εij[1], Ic...)
+        εxzv_ij = av_clamped_xy_y(εij[2], Ic...)
         εxyv_ij = εij[3][I...]
         ε = (εxxv_ij, εyyv_ij, εzzv_ij, εyzv_ij, εxzv_ij, εxyv_ij)
 
         τxxv_old_ij = av_clamped_xy(τ_o_c[1], Ic...)
         τyyv_old_ij = av_clamped_xy(τ_o_c[2], Ic...)
         τzzv_old_ij = av_clamped_xy(τ_o_c[3], Ic...)
-        τyzv_old_ij = av_clamped_xy_x(τ_o_shear[1], I, Ic...)
-        τxzv_old_ij = av_clamped_xy_y(τ_o_shear[2], I, Ic...)
+        τyzv_old_ij = av_clamped_xy_x(τ_o_shear[1], Ic...)
+        τxzv_old_ij = av_clamped_xy_y(τ_o_shear[2], Ic...)
         τxyv_old_ij = τ_o_shear[3][I...]
         τij_o = (τxxv_old_ij, τyyv_old_ij, τzzv_old_ij, τyzv_old_ij, τxzv_old_ij, τxyv_old_ij)
 

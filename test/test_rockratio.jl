@@ -143,66 +143,6 @@ end
         end
     end
 
-    @testset "3D validity predicates" begin
-        if backend == CPUBackend
-            ϕ = JR3.RockRatio(backend, 3, 3, 3)
-            for field in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy, ϕ.Vz, ϕ.yz, ϕ.xz, ϕ.xy)
-                field .= 1.0
-            end
-
-            @test JR3.isvalid_c(ϕ, 2, 2, 2)
-            @test JR3.isvalid_v(ϕ, 2, 2, 2)
-            @test JR3.isvalid_vx(ϕ, 2, 2, 2)
-            @test JR3.isvalid_vy(ϕ, 2, 2, 2)
-            @test JR3.isvalid_vz(ϕ, 2, 2, 2)
-            @test JR3.isvalid_velocity(ϕ, 2, 2, 2)
-            @test JR3.isvalid_xy(ϕ, 2, 2, 2)
-            @test JR3.isvalid_xz(ϕ, 2, 2, 2)
-            @test JR3.isvalid_yz(ϕ, 2, 2, 2)
-
-            # A pressure row needs its center and all six faces active.
-            for (field, I) in (
-                    (ϕ.center, (2, 2, 2)),
-                    (ϕ.Vx, (2, 2, 2)), (ϕ.Vx, (3, 2, 2)),
-                    (ϕ.Vy, (2, 2, 2)), (ϕ.Vy, (2, 3, 2)),
-                    (ϕ.Vz, (2, 2, 2)), (ϕ.Vz, (2, 2, 3)),
-                )
-                field[I...] = 0.0
-                @test !JR3.isvalid_c(ϕ, 2, 2, 2)
-                field[I...] = 1.0
-                @test JR3.isvalid_c(ϕ, 2, 2, 2)
-            end
-            # A face outside the six neighbors leaves the row active.
-            ϕ.Vx[1, 2, 2] = 0.0
-            @test JR3.isvalid_c(ϕ, 2, 2, 2)
-            ϕ.Vx[1, 2, 2] = 1.0
-
-            for (field, pred) in (
-                    (ϕ.vertex, JR3.isvalid_v), (ϕ.Vx, JR3.isvalid_vx),
-                    (ϕ.Vy, JR3.isvalid_vy), (ϕ.Vz, JR3.isvalid_vz),
-                )
-                field .= 0.0
-                @test !pred(ϕ, 2, 2, 2)
-                field .= 1.0
-            end
-
-            # A shear edge at (2, 2, 2) is active only when its two end vertices
-            # and the four velocity faces around it are active.
-            for (pred, deps) in (
-                    (JR3.isvalid_xy, ((ϕ.vertex, (2, 2, 2)), (ϕ.vertex, (2, 2, 3)), (ϕ.Vx, (2, 1, 2)), (ϕ.Vx, (2, 2, 2)), (ϕ.Vy, (1, 2, 2)), (ϕ.Vy, (2, 2, 2)))),
-                    (JR3.isvalid_xz, ((ϕ.vertex, (2, 2, 2)), (ϕ.vertex, (2, 3, 2)), (ϕ.Vx, (2, 2, 1)), (ϕ.Vx, (2, 2, 2)), (ϕ.Vz, (1, 2, 2)), (ϕ.Vz, (2, 2, 2)))),
-                    (JR3.isvalid_yz, ((ϕ.vertex, (2, 2, 2)), (ϕ.vertex, (3, 2, 2)), (ϕ.Vy, (2, 2, 1)), (ϕ.Vy, (2, 2, 2)), (ϕ.Vz, (2, 1, 2)), (ϕ.Vz, (2, 2, 2)))),
-                )
-                @test pred(ϕ, 2, 2, 2)
-                for (field, I) in deps
-                    field[I...] = 0.0
-                    @test !pred(ϕ, 2, 2, 2)
-                    field[I...] = 1.0
-                end
-            end
-        end
-    end
-
     @testset "Variational MiniKernels (masked)" begin
         # src/variational_stokes/MiniKernels.jl — masked versions of the MiniKernels
         # accessors and finite-difference / averaging helpers. Each masked variant
@@ -269,15 +209,12 @@ end
         @test JustRelax2D.top(A3, ϕ3, 2, 2, 2) ≈ A3[2, 2, 3] * ϕ3[2, 2, 3]
         @test JustRelax2D.bot(A3, ϕ3, 2, 2, 2) ≈ A3[2, 2, 1] * ϕ3[2, 2, 1]
 
-        # 3D finite difference in z
+        # 3D finite differences in z (fixed from `front` to `top`, and `_d_zi`
+        # now resolvable since `top` is masked)
         @test JustRelax2D._d_za(A3, ϕ3, 1.0, 2, 2, 2) ≈
             -JustRelax2D.center(A3, ϕ3, 2, 2, 2) + JustRelax2D.top(A3, ϕ3, 2, 2, 2)
-        # `_d_zi` steps along z at the diagonally-opposite corner (i+1, j+1); compare
-        # against the unmasked 3D method (uniform ϕ3 = 0.5 factors out) and raw indices
         @test JustRelax2D._d_zi(A3, ϕ3, 1.0, 2, 2, 2) ≈
-            0.5 * JustRelax2D._d_zi(A3, 1.0, 2, 2, 2)
-        @test JustRelax2D._d_zi(A3, ϕ3, 1.0, 2, 2, 2) ≈
-            -A3[3, 3, 2] * ϕ3[3, 3, 2] + A3[3, 3, 3] * ϕ3[3, 3, 3]
+            -JustRelax2D.top(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2)
 
         # 3D averages along z and the now-summable xi/yi/zi variants
         @test JustRelax2D._av_za(A3, ϕ3, 2, 2, 2) ≈

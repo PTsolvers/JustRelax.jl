@@ -19,7 +19,7 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
             iR = clamp(i, 1, nx)
             Kx = (K[iL, j, k] + K[iR, j, k]) * 0.5
             θx = (θr_dτ[iL, j, k] + θr_dτ[iR, j, k]) * 0.5
-            _dx = @dx((i == 1 || i == nx + 1) ? _di.vertex : _di.center, clamp(i - 1, 1, nx))
+            _dx = @dx(_di, clamp(i, 1, nx))
             qx = qTx2[I...] = -Kx * (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
             qTx[I...] = (qTx[I...] * θx + qx) / (1.0 + θx)
         end
@@ -35,7 +35,7 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
             jB = clamp(j, 1, ny)
             Ky = (K[i, jF, k] + K[i, jB, k]) * 0.5
             θy = (θr_dτ[i, jF, k] + θr_dτ[i, jB, k]) * 0.5
-            _dy = @dy((j == 1 || j == ny + 1) ? _di.vertex : _di.center, clamp(j - 1, 1, ny))
+            _dy = @dy(_di, clamp(j, 1, ny))
             qy = qTy2[I...] = -Ky * (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
             qTy[I...] = (qTy[I...] * θy + qy) / (1.0 + θy)
         end
@@ -51,7 +51,7 @@ isNotDirichlet(::Nothing, ::Vararg{Int, N}) where {N} = true
             kT = clamp(k, 1, nz)
             Kz = (K[i, j, kB] + K[i, j, kT]) * 0.5
             θz = (θr_dτ[i, j, kB] + θr_dτ[i, j, kT]) * 0.5
-            _dz = @dz((k == 1 || k == nz + 1) ? _di.vertex : _di.center, clamp(k - 1, 1, nz))
+            _dz = @dz(_di, clamp(k, 1, nz))
             qz = qTz2[I...] = -Kz * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
             qTz[I...] = (qTz[I...] * θz + qz) / (1.0 + θz)
         end
@@ -94,11 +94,13 @@ end
 
             args_L = (; getindex_NamedTuple(args, iL, j, k)..., T = T_ijk)
             args_R = (; getindex_NamedTuple(args, iR, j, k)..., T = T_ijk)
-            phase_L, phase_R = phase_at_face(phase_ratios_qx, nx, 1, (i, j, k), (iL, j, k), (iR, j, k))
-            K = (get_K(phase_L, args_L) + get_K(phase_R, args_R)) * 0.5
+            K = (
+                get_K(getindex_phase(phase_ratios_qx, iL, j, k), args_L) +
+                    get_K(getindex_phase(phase_ratios_qx, iR, j, k), args_R)
+            ) * 0.5
             θx = (θr_dτ[iL, j, k] + θr_dτ[iR, j, k]) * 0.5
 
-            _dx = @dx((i == 1 || i == nx + 1) ? _di.vertex : _di.center, clamp(i - 1, 1, nx))
+            _dx = @dx(_di, clamp(i, 1, nx))
             qx = qTx2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i, j + 1, k + 1]) * _dx
             qTx[I...] = (qTx[I...] * θx + qx) / (1.0 + θx)
         end
@@ -116,11 +118,13 @@ end
 
             args_F = (; getindex_NamedTuple(args, i, jF, k)..., T = T_ijk)
             args_B = (; getindex_NamedTuple(args, i, jB, k)..., T = T_ijk)
-            phase_F, phase_B = phase_at_face(phase_ratios_qy, ny, 2, (i, j, k), (i, jF, k), (i, jB, k))
-            K = (get_K(phase_F, args_F) + get_K(phase_B, args_B)) * 0.5
+            K = (
+                get_K(getindex_phase(phase_ratios_qy, i, jF, k), args_F) +
+                    get_K(getindex_phase(phase_ratios_qy, i, jB, k), args_B)
+            ) * 0.5
             θy = (θr_dτ[i, jF, k] + θr_dτ[i, jB, k]) * 0.5
 
-            _dy = @dy((j == 1 || j == ny + 1) ? _di.vertex : _di.center, clamp(j - 1, 1, ny))
+            _dy = @dy(_di, clamp(j, 1, ny))
             qy = qTy2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i + 1, j, k + 1]) * _dy
             qTy[I...] = (qTy[I...] * θy + qy) / (1.0 + θy)
         end
@@ -138,11 +142,13 @@ end
 
             args_B = (; getindex_NamedTuple(args, i, j, kB)..., T = T_ijk)
             args_T = (; getindex_NamedTuple(args, i, j, kT)..., T = T_ijk)
-            phase_B, phase_T = phase_at_face(phase_ratios_qz, nz, 3, (i, j, k), (i, j, kB), (i, j, kT))
-            K = (get_K(phase_B, args_B) + get_K(phase_T, args_T)) * 0.5
+            K = (
+                get_K(getindex_phase(phase_ratios_qz, i, j, kB), args_B) +
+                    get_K(getindex_phase(phase_ratios_qz, i, j, kT), args_T)
+            ) * 0.5
             θz = (θr_dτ[i, j, kB] + θr_dτ[i, j, kT]) * 0.5
 
-            _dz = @dz((k == 1 || k == nz + 1) ? _di.vertex : _di.center, clamp(k - 1, 1, nz))
+            _dz = @dz(_di, clamp(k, 1, nz))
             qz = qTz2[I...] = -K * (T[i + 1, j + 1, k + 1] - T[i + 1, j + 1, k]) * _dz
             qTz[I...] = (qTz[I...] * θz + qz) / (1.0 + θz)
         end
@@ -319,7 +325,7 @@ end
 ## 2D KERNELS
 
 @parallel_indices (i, j) function compute_flux!(
-        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di, bc_flux
+        qTx::AbstractArray{_T, 2}, qTy, qTx2, qTy2, T, K, θr_dτ, _di_center, bc_flux
     ) where {_T}
     nx, ny = size(θr_dτ)
 
@@ -329,7 +335,7 @@ end
         elseif i == size(qTx, 1) && !isa(bc_flux.right, Bool)
             qTx[i, j] = bc_flux.right
         else
-            _dx = @dx((i == 1 || i == nx + 1) ? _di.vertex : _di.center, clamp(i - 1, 1, nx))
+            _dx = @dx(_di_center, clamp(i, 1, nx - 1))
             iL = clamp(i - 1, 1, nx)
             iR = clamp(i, 1, nx)
             Kx = (K[iL, j] + K[iR, j]) * 0.5
@@ -345,7 +351,7 @@ end
         elseif j == size(qTy, 2) && !isa(bc_flux.top, Bool)
             qTy[i, j] = bc_flux.top
         else
-            _dy = @dy((j == 1 || j == ny + 1) ? _di.vertex : _di.center, clamp(j - 1, 1, ny))
+            _dy = @dy(_di_center, clamp(j, 1, ny - 1))
             jB = clamp(j - 1, 1, ny)
             jT = clamp(j, 1, ny)
             Ky = (K[i, jB] + K[i, jT]) * 0.5
@@ -367,7 +373,7 @@ end
         phase_ratios_qx,
         phase_ratios_qy,
         θr_dτ,
-        _di,
+        _di_center,
         args,
         bc_flux,
     ) where {_T}
@@ -384,16 +390,19 @@ end
             iR = clamp(i, 1, nx)
             T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-            phase_L, phase_R = phase_at_face(phase_ratios_qx, nx, 1, (i, j), (iL, j), (iR, j))
-            args_ij = (; getindex_NamedTuple(args, iL, j)..., T = T_ij)
-            K1 = compute_phase(compute_conductivity, rheology, phase_L, args_ij)
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-            args_ij = (; getindex_NamedTuple(args, iR, j)..., T = T_ij)
-            K2 = compute_phase(compute_conductivity, rheology, phase_R, args_ij)
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
             K = (K1 + K2) * 0.5
             θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
 
-            _dx = @dx((i == 1 || i == nx + 1) ? _di.vertex : _di.center, clamp(i - 1, 1, nx))
+            _dx = @dx(_di_center, clamp(i, 1, nx - 1))
             qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
             qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
         end
@@ -409,16 +418,19 @@ end
             jT = clamp(j, 1, ny)
             T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-            phase_B, phase_T = phase_at_face(phase_ratios_qy, ny, 2, (i, j), (i, jB), (i, jT))
-            args_ij = (; getindex_NamedTuple(args, i, jB)..., T = T_ij)
-            K1 = compute_phase(compute_conductivity, rheology, phase_B, args_ij)
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
 
-            args_ij = (; getindex_NamedTuple(args, i, jT)..., T = T_ij)
-            K2 = compute_phase(compute_conductivity, rheology, phase_T, args_ij)
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_phase(compute_conductivity, rheology, phase_ij, args_ij)
             K = (K1 + K2) * 0.5
             θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
 
-            _dy = @dy((j == 1 || j == ny + 1) ? _di.vertex : _di.center, clamp(j - 1, 1, ny))
+            _dy = @dy(_di_center, clamp(j, 1, ny - 1))
             qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
             qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
         end
@@ -437,7 +449,7 @@ end
         phase_ratios_qx::CellArray{C1, C2, C3, C4},
         phase_ratios_qy::CellArray{C1, C2, C3, C4},
         θr_dτ,
-        _di,
+        _di_center,
         args,
         bc_flux,
     ) where {_T, N, C1, C2, C3, C4}
@@ -455,16 +467,19 @@ end
             iR = clamp(i, 1, nx)
             T_ij = (T[i, j + 1] + T[i + 1, j + 1]) * 0.5
 
-            phase_L, phase_R = phase_at_face(phase_ratios_qx, nx, 1, (i, j), (iL, j), (iR, j))
-            args_ij = (; getindex_NamedTuple(args, iL, j)..., T = T_ij)
-            K1 = compute_K(phase_L, args_ij)
+            ii, jj = iL, j
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-            args_ij = (; getindex_NamedTuple(args, iR, j)..., T = T_ij)
-            K2 = compute_K(phase_R, args_ij)
+            ii, jj = iR, j
+            phase_ij = getindex_phase(phase_ratios_qx, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
             K = (K1 + K2) * 0.5
             θx = (θr_dτ[iL, j] + θr_dτ[iR, j]) * 0.5
 
-            _dx = @dx((i == 1 || i == nx + 1) ? _di.vertex : _di.center, clamp(i - 1, 1, nx))
+            _dx = @dx(_di_center, clamp(i, 1, nx - 1))
             qx = qTx2[i, j] = -K * (T[i + 1, j + 1] - T[i, j + 1]) * _dx
             qTx[i, j] = (qTx[i, j] * θx + qx) / (1.0 + θx)
         end
@@ -480,16 +495,19 @@ end
             jT = clamp(j, 1, ny)
             T_ij = (T[i + 1, j] + T[i + 1, j + 1]) * 0.5
 
-            phase_B, phase_T = phase_at_face(phase_ratios_qy, ny, 2, (i, j), (i, jB), (i, jT))
-            args_ij = (; getindex_NamedTuple(args, i, jB)..., T = T_ij)
-            K1 = compute_K(phase_B, args_ij)
+            ii, jj = i, jB
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K1 = compute_K(phase_ij, args_ij)
 
-            args_ij = (; getindex_NamedTuple(args, i, jT)..., T = T_ij)
-            K2 = compute_K(phase_T, args_ij)
+            ii, jj = i, jT
+            phase_ij = getindex_phase(phase_ratios_qy, ii, jj)
+            args_ij = (; getindex_NamedTuple(args, ii, jj)..., T = T_ij)
+            K2 = compute_K(phase_ij, args_ij)
             K = (K1 + K2) * 0.5
             θy = (θr_dτ[i, jB] + θr_dτ[i, jT]) * 0.5
 
-            _dy = @dy((j == 1 || j == ny + 1) ? _di.vertex : _di.center, clamp(j - 1, 1, ny))
+            _dy = @dy(_di_center, clamp(j, 1, ny - 1))
             qy = qTy2[i, j] = -K * (T[i + 1, j + 1] - T[i + 1, j]) * _dy
             qTy[i, j] = (qTy[i, j] * θy + qy) / (1.0 + θy)
         end

@@ -146,47 +146,31 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
                 εyy[i, j, k] = d_yi(Vy) - ∇Vijk
                 # Compute ε_zz
                 εzz[i, j, k] = d_zi(Vz) - ∇Vijk
-            else
-                εxx[i, j, k] = zero(T)
-                εyy[i, j, k] = zero(T)
-                εzz[i, j, k] = zero(T)
             end
         end
         # Compute ε_yz
-        if all((i, j, k) .≤ size(εyz))
-            if isvalid_yz(ϕ, i, j, k)
-                εyz[i, j, k] =
-                    0.5 * (
-                    _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
-                        _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
-                )
-            else
-                εyz[i, j, k] = zero(T)
-            end
+        if all((i, j, k) .≤ size(εyz)) && isvalid_yz(ϕ, i, j, k)
+            εyz[i, j, k] =
+                0.5 * (
+                _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                    _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+            )
         end
         # Compute ε_xz
-        if all((i, j, k) .≤ size(εxz))
-            if isvalid_xz(ϕ, i, j, k)
-                εxz[i, j, k] =
-                    0.5 * (
-                    _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
-                        _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
-                )
-            else
-                εxz[i, j, k] = zero(T)
-            end
+        if all((i, j, k) .≤ size(εxz)) && isvalid_xz(ϕ, i, j, k)
+            εxz[i, j, k] =
+                0.5 * (
+                _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                    _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+            )
         end
         # Compute ε_xy
-        if all((i, j, k) .≤ size(εxy))
-            if isvalid_xy(ϕ, i, j, k)
-                εxy[i, j, k] =
-                    0.5 * (
-                    _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
-                        _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
-                )
-            else
-                εxy[i, j, k] = zero(T)
-            end
+        if all((i, j, k) .≤ size(εxy)) && isvalid_xy(ϕ, i, j, k)
+            εxy[i, j, k] =
+                0.5 * (
+                _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                    _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+            )
         end
     end
     return nothing
@@ -485,30 +469,22 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
     Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa(A, ϕ, _dx, i, j, k)
     Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya(A, ϕ, _dy, i, j, k)
     Base.@propagate_inbounds @inline d_za(A, ϕ) = _d_za(A, ϕ, _dz, i, j, k)
-    # The off-diagonal (shear) stress divergence in each momentum row is a face difference
-    # taken at the row's own staggered location, i.e. one grid step in the row's own
-    # direction from `(i, j, k)` — unlike `_d_xi`/`_d_yi`/`_d_zi`, which step in both of the
-    # *other* two directions and belong to the cell-centred divergence in
-    # `compute_strain_rate!`.
-    Base.@propagate_inbounds @inline d_ya_x(A, ϕ) = _d_ya(A, ϕ, _dy, i + 1, j, k)
-    Base.@propagate_inbounds @inline d_za_x(A, ϕ) = _d_za(A, ϕ, _dz, i + 1, j, k)
-    Base.@propagate_inbounds @inline d_xa_y(A, ϕ) = _d_xa(A, ϕ, _dx, i, j + 1, k)
-    Base.@propagate_inbounds @inline d_za_y(A, ϕ) = _d_za(A, ϕ, _dz, i, j + 1, k)
-    Base.@propagate_inbounds @inline d_xa_z(A, ϕ) = _d_xa(A, ϕ, _dx, i, j, k + 1)
-    Base.@propagate_inbounds @inline d_ya_z(A, ϕ) = _d_ya(A, ϕ, _dy, i, j, k + 1)
+    Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx, i, j, k)
+    Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy, i, j, k)
+    Base.@propagate_inbounds @inline d_zi(A, ϕ) = _d_zi(A, ϕ, _dz, i, j, k)
     Base.@propagate_inbounds @inline av_x(A) = _av_x(A, i, j, k)
     Base.@propagate_inbounds @inline av_y(A) = _av_y(A, i, j, k)
     Base.@propagate_inbounds @inline av_z(A) = _av_z(A, i, j, k)
-    Base.@propagate_inbounds @inline av_x(A, ϕ) = _av_xa(A, ϕ, i, j, k)
-    Base.@propagate_inbounds @inline av_y(A, ϕ) = _av_ya(A, ϕ, i, j, k)
-    Base.@propagate_inbounds @inline av_z(A, ϕ) = _av_za(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline av_x(A, ϕ) = _av_x(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline av_y(A, ϕ) = _av_y(A, ϕ, i, j, k)
+    Base.@propagate_inbounds @inline av_z(A, ϕ) = _av_z(A, ϕ, i, j, k)
 
     @inbounds begin
         if all((i, j, k) .< size(Vx) .- 1)
             if isvalid_vx(ϕ, i + 1, j, k)
                 Rx_ijk =
                     Rx[i, j, k] =
-                    d_xa(τxx, ϕ.center) + d_ya_x(τxy, ϕ.xy) + d_za_x(τxz, ϕ.xz) -
+                    d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.xy) + d_zi(τxz, ϕ.xz) -
                     d_xa(P, ϕ.center) - av_x(fx, ϕ.center)
                 Vx[i + 1, j + 1, k + 1] += Rx_ijk * ηdτ / av_x(ητ)
             else
@@ -520,7 +496,7 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
             if isvalid_vy(ϕ, i, j + 1, k)
                 Ry_ijk =
                     Ry[i, j, k] =
-                    d_ya(τyy, ϕ.center) + d_xa_y(τxy, ϕ.xy) + d_za_y(τyz, ϕ.yz) -
+                    d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.xy) + d_zi(τyz, ϕ.yz) -
                     d_ya(P, ϕ.center) - av_y(fy, ϕ.center)
                 Vy[i + 1, j + 1, k + 1] += Ry_ijk * ηdτ / av_y(ητ)
             else
@@ -532,7 +508,7 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
             if isvalid_vz(ϕ, i, j, k + 1)
                 Rz_ijk =
                     Rz[i, j, k] =
-                    d_za(τzz, ϕ.center) + d_xa_z(τxz, ϕ.xz) + d_ya_z(τyz, ϕ.yz) -
+                    d_za(τzz, ϕ.center) + d_xi(τxz, ϕ.xz) + d_yi(τyz, ϕ.yz) -
                     d_za(P, ϕ.center) - av_z(fz, ϕ.center)
                 Vz[i + 1, j + 1, k + 1] += Rz_ijk * ηdτ / av_z(ητ)
             else

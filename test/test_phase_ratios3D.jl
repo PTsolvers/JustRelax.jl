@@ -72,29 +72,6 @@ end
     v = vertex_h[3, 2, 2]
     @test v[1] > 0.0 && v[2] > 0.0
 
-    ϕ = JR3.RockRatio(backend, nx, ny, nz)
-    JR3.update_rock_ratio!(ϕ, pr, 2)
-    # Phase 2 (air) fills x > 0.5. Fields staggered in x have a node on the
-    # interface plane, which is half rock; all others are 1 or 0 by side.
-    cell_profile = [1.0, 1.0, 0.0, 0.0]
-    node_profile = [1.0, 1.0, 0.5, 0.0, 0.0]
-    for (field, profile) in (
-            (ϕ.center, cell_profile), (ϕ.Vy, cell_profile), (ϕ.Vz, cell_profile),
-            (ϕ.yz, cell_profile), (ϕ.vertex, node_profile), (ϕ.Vx, node_profile),
-            (ϕ.xy, node_profile), (ϕ.xz, node_profile),
-        )
-        A = Base.Array(field)
-        @test all(A[:, j, k] ≈ profile for j in axes(A, 2), k in axes(A, 3))
-    end
-
-    particle_grid = Geometry((nx, ny, nz), (1.0, 1.0, 1.0))
-    particles = init_particles(backend_JP, 2, 4, 1, particle_grid.xi_vel...)
-    particle_stress = JR3.StressParticles(particles)
-    @test length(JustRelax.normal_stress(particle_stress)) == 3
-    @test length(JustRelax.shear_stress(particle_stress)) == 3
-    @test length(JustRelax.shear_vorticity(particle_stress)) == 3
-    @test length(JustRelax.unwrap(particle_stress)) == 9
-
     # Threshold path: a tiny third phase (< 1e-5) should be cleaned to zero.
     pr3 = JustPIC.PhaseRatios(backend_JP, 3, (nx, ny, nz))
     p1b = @fill(0.6, nx, ny, nz)

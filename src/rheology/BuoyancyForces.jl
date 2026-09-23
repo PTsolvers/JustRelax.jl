@@ -18,21 +18,11 @@ end
     return nothing
 end
 
-"""
-    gravity_of(rheology)
-
-Gravity model to evaluate: `rheology` itself for a single `MaterialParams`, or the
-first phase's for a tuple/array of `MaterialParams` (every phase shares the same
-`Gravity` model).
-"""
-@inline gravity_of(rheology::MaterialParams) = rheology
-@inline gravity_of(rheology) = first(rheology)
-
 @parallel_indices (I...) function compute_ρg_kernel!(
         ρg::NTuple{N, AbstractArray}, rheology, args
     ) where {N}
     args_ijk = getindex_NamedTuple(args, I...)
-    gᵢ = compute_gravity(gravity_of(rheology))
+    gᵢ = compute_gravity(first(rheology))
     ρgᵢ = compute_buoyancies(rheology, args_ijk, gᵢ, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
     return nothing
@@ -78,7 +68,7 @@ end
         ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args, air_phase::Integer
     ) where {N}
     args_ijk = getindex_NamedTuple(args, I...)
-    gᵢ = compute_gravity(gravity_of(rheology))
+    gᵢ = compute_gravity(first(rheology))
     ratio_ijk = @cell phase_ratios[I...]
     if air_phase > 0
         ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
@@ -134,6 +124,20 @@ Compute the buoyancy forces based on the given rheology parameters and arguments
 """
 @inline function compute_buoyancy(rheology::MaterialParams, args)
     return compute_density(rheology, args) * compute_gravity(rheology)
+end
+
+"""
+    compute_buoyancy(rheology::MaterialParams, args, phase_ratios)
+
+Compute the buoyancy forces for a given set of material parameters, arguments, and phase ratios.
+
+# Arguments
+- `rheology`: The material parameters.
+- `args`: The arguments.
+- `phase_ratios`: The phase ratios.
+"""
+@inline function compute_buoyancy(rheology::MaterialParams, args, phase_ratios)
+    return compute_density_ratio(phase_ratios, rheology, args) * compute_gravity(rheology)
 end
 
 """

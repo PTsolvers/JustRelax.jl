@@ -416,9 +416,16 @@ function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
 end
 
 function JR3D.vertex2center!(
-        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+        center::T,
+        vertex::T;
+        ghost_x::Bool = false,
+        ghost_y::Bool = false,
+        ghost_z::Bool = false,
+        periodic_x::Bool = false,
+        periodic_y::Bool = false,
+        periodic_z::Bool = false,
     ) where {T <: ROCArray}
-    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z)
 end
 
 function JR3D.center2vertex!(vertex::T, center::T) where {T <: ROCArray}

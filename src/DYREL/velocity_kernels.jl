@@ -12,7 +12,8 @@ function compute_∇V_strain_rate!(stokes, _di, ni, dim)
 end
 
 function interpolate_shear_ε_to_centers(stokes, ::Val{2})
-    vertex2center!(stokes.ε.xy_c, stokes.ε.xy)
+    periodic = periodic_dims(stokes)
+    vertex2center!(stokes.ε.xy_c, stokes.ε.xy; periodic_x = periodic[1], periodic_y = periodic[2])
     return nothing
 end
 

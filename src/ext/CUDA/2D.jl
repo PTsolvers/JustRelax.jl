@@ -428,9 +428,16 @@ function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
 end
 
 function JR2D.vertex2center!(
-        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+        center::T,
+        vertex::T;
+        ghost_x::Bool = false,
+        ghost_y::Bool = false,
+        ghost_z::Bool = false,
+        periodic_x::Bool = false,
+        periodic_y::Bool = false,
+        periodic_z::Bool = false,
     ) where {T <: CuArray}
-    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z)
 end
 
 function JR2D.center2vertex!(vertex::T, center::T) where {T <: CuArray}

@@ -65,33 +65,71 @@ end
 end
 
 """
-    vertex2center!(center, vertex; ghost_x = false, ghost_y = false, ghost_z = false)
+    vertex2center!(center, vertex; ghost_x = false, ghost_y = false, ghost_z = false,
+                   periodic_x = false, periodic_y = false, periodic_z = false)
 
 Interpolates the values at the `vertex` onto `center` points.
 
 `center` may carry a ring of ghost nodes that `vertex` does not; each `ghost_*` keyword
 shifts the write index by one along that dimension, so the interpolated block lands in the
-interior of `center` instead of overwriting its ghost nodes. `ghost_z` is ignored in 2D.
+interior of `center` instead of overwriting its ghost nodes. `periodic_*` marks periodic
+dimensions. At a periodic seam, the upper vertex wraps to the first vertex. This works
+with both duplicated seam vertices (`size(vertex, d) == size(center, d) + 1`) and unique periodic
+vertices (`size(vertex, d) == size(center, d)`). `ghost_z` is ignored in 2D.
 """
-function vertex2center!(center, vertex; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false)
-    ni = size(vertex) .- 1
-    @parallel (@idx ni) vertex2center_kernel!(center, vertex, ghost_x, ghost_y, ghost_z)
+function vertex2center!(
+        center,
+        vertex;
+        ghost_x::Bool = false,
+        ghost_y::Bool = false,
+        ghost_z::Bool = false,
+        periodic_x::Bool = false,
+        periodic_y::Bool = false,
+        periodic_z::Bool = false,
+    )
+    N = ndims(vertex)
+    ndims(center) == N || throw(ArgumentError("center and vertex must have the same dimensionality"))
+    ghosts = ghost_x, ghost_y, ghost_z
+    periodic = periodic_x, periodic_y, periodic_z
+    ni = ntuple(Val(N)) do d
+        ncenter = size(center, d) - ghosts[d]
+        nvertex = size(vertex, d)
+        periodic[d] && nvertex == ncenter ? nvertex : nvertex - 1
+    end
+    all(>(0), ni) || throw(ArgumentError("center interior must be non-empty"))
+    all(d -> ni[d] + ghosts[d] ≤ size(center, d), 1:N) ||
+        throw(ArgumentError("center is too small for vertex interpolation"))
+
+    @parallel (@idx ni) vertex2center_kernel!(
+        center, vertex, ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z, ni...
+    )
     return nothing
 end
 
-@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2}, ghost_x, ghost_y, ::Bool) where {T}
-    Ic = I .+ (ghost_x, ghost_y)
+@parallel_indices (I...) function vertex2center_kernel!(
+        center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2},
+        ghost_x, ghost_y, ::Bool, periodic_x, periodic_y, ::Bool, nx, ny,
+    ) where {T}
     i, j = I
-    center[Ic...] = 0.25 * (vertex[i, j] + vertex[i + 1, j] + vertex[i, j + 1] + vertex[i + 1, j + 1])
+    i_next = periodic_x && i == nx ? 1 : i + 1
+    j_next = periodic_y && j == ny ? 1 : j + 1
+    center[i + ghost_x, j + ghost_y] = 0.25 * (
+        vertex[i, j] + vertex[i_next, j] + vertex[i, j_next] + vertex[i_next, j_next]
+    )
     return nothing
 end
 
-@parallel_indices (I...) function vertex2center_kernel!(center::AbstractArray{T, 3}, vertex::AbstractArray{T, 3}, ghost_x, ghost_y, ghost_z) where {T}
-    Ic = I .+ (ghost_x, ghost_y, ghost_z)
+@parallel_indices (I...) function vertex2center_kernel!(
+        center::AbstractArray{T, 3}, vertex::AbstractArray{T, 3},
+        ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z, nx, ny, nz,
+    ) where {T}
     i, j, k = I
-    center[Ic...] = 0.125 * (
-        vertex[i, j, k] + vertex[i + 1, j, k] + vertex[i, j + 1, k] + vertex[i + 1, j + 1, k] +
-            vertex[i, j, k + 1] + vertex[i + 1, j, k + 1] + vertex[i, j + 1, k + 1] + vertex[i + 1, j + 1, k + 1]
+    i_next = periodic_x && i == nx ? 1 : i + 1
+    j_next = periodic_y && j == ny ? 1 : j + 1
+    k_next = periodic_z && k == nz ? 1 : k + 1
+    center[i + ghost_x, j + ghost_y, k + ghost_z] = 0.125 * (
+        vertex[i, j, k] + vertex[i_next, j, k] + vertex[i, j_next, k] + vertex[i_next, j_next, k] +
+            vertex[i, j, k_next] + vertex[i_next, j, k_next] + vertex[i, j_next, k_next] + vertex[i_next, j_next, k_next]
     )
     return nothing
 end

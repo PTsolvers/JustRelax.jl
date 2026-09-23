@@ -67,7 +67,7 @@ _linear_phase(η) = SetMaterialParams(;
     igg = IGG(init_global_grid(24, 24, 1; init_MPI = init_mpi)...)
 
     @testset "periodic directions get a momentum row" begin
-        ni = (6, 5) .* 6 
+        ni = (6, 5) .* 6
         nx, ny = ni
         bcs = _periodic_flow_bcs()
         @test JustRelax.periodic_dims(bcs) == (true, false)

@@ -153,6 +153,21 @@ end
         @test JustRelax2D.compute_ρCp(rheology, 2700.0, ratios, args) ≈ ρCp_expected
 
         @test JustRelax2D.compute_α(rheology, ratios) == 0.0
+        @test JustRelax2D.compute_α(rheology, 1) == 0.0
+        @test JustRelax2D.compute_α(mat, nothing) == 0.0
+        @test JustRelax2D.compute_phase(JustRelax2D.get_α, rheology, 1) == 0.0
+        @test JustRelax2D.compute_phase(JustRelax2D.get_α, rheology, ratios) == 0.0
+        @test JustRelax2D.compute_phase(JustRelax2D.get_α, mat, nothing) == 0.0
+        @test JustRelax2D.get_phase_fluxes(ratios, (1, 1, 1)) == (ratios, ratios, ratios)
+        @test JustRelax2D.compute_radioactive_heating(mat, nothing) == 0.0
+
+        radioactive_mat = GeoParams.SetMaterialParams(;
+            Phase = 1,
+            RadioactiveHeat = GeoParams.ConstantRadioactiveHeat(2.0),
+        )
+        radioactive_rheology = (radioactive_mat,)
+        @test JustRelax2D.compute_radioactive_heating(radioactive_rheology, 1) ≈ 2.0
+        @test JustRelax2D.compute_radioactive_heating(radioactive_rheology, ratios) ≈ 2.0
     end
 
     @testset "BuoyancyForces helpers" begin
@@ -431,11 +446,33 @@ end
         T = PTArray(backend)([800.0 + 10.0 * (i + j) for i in 1:(nx + 2), j in 1:(ny + 2)])
         P = @fill(1.0e8, ni...)
 
+        args = (; T, P)
         dτ_ρ(args) = Base.Array(
             PTThermalCoeffs(backend, rheology, pr, args, 100.0, ni, di.center, li).dτ_ρ
         )
 
         @test dτ_ρ((; T)) == dτ_ρ((; T, P))
+
+        # With φ ≡ 1 the phase-ratio path must reproduce the single-rheology path,
+        # and every update with the constructor's own dt must be idempotent.
+        coeff_arrays(c) = Base.Array.((c.θr_dτ, c.dτ_ρ))
+        phase_coeffs = PTThermalCoeffs(
+            backend, rheology, pr, args, 100.0, ni, di.center, li
+        )
+        reference = coeff_arrays(phase_coeffs)
+        JustRelax2D.update_thermal_coeffs!(phase_coeffs, rheology, pr, args, 100.0)
+        @test all(coeff_arrays(phase_coeffs) .≈ reference)
+        JustRelax2D.update_pt_thermal_arrays!(phase_coeffs, pr, rheology, args, inv(100.0))
+        @test all(coeff_arrays(phase_coeffs) .≈ reference)
+
+        single_coeffs = PTThermalCoeffs(
+            backend, rheology[1], args, 100.0, ni, di.center, li
+        )
+        @test all(coeff_arrays(single_coeffs) .≈ reference)
+        JustRelax2D.update_thermal_coeffs!(single_coeffs, rheology[1], args, 100.0)
+        @test all(coeff_arrays(single_coeffs) .≈ reference)
+        JustRelax2D.update_thermal_coeffs!(single_coeffs, rheology[1], nothing, args, 100.0)
+        @test all(coeff_arrays(single_coeffs) .≈ reference)
     end
 
     @testset "Solubility.jl" begin

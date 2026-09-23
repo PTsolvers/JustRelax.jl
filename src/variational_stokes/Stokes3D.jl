@@ -81,7 +81,6 @@ function _solve_VS!(
     # geometry
     di = grid.di
     _di = grid._di
-    di = di isa NamedTuple ? di.center : di
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -111,7 +110,7 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -123,7 +122,7 @@ function _solve_VS!(
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
-            compute_P!(
+            compute_variational_P!(
                 θ,
                 stokes.P0,
                 stokes.R.RP,
@@ -131,7 +130,8 @@ function _solve_VS!(
                 stokes.Q,
                 ητ,
                 rheology,
-                phase_ratios.center,
+                phase_ratios,
+                ϕ,
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
@@ -155,7 +155,6 @@ function _solve_VS!(
                 air_phase = air_phase,
                 relaxation = viscosity_relaxation,
             )
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex!(
                 @strain(stokes),
@@ -191,7 +190,7 @@ function _solve_VS!(
             free_surface_stress_bcs!(stokes, flow_bcs, Val(3))
 
             @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_V!(
+                @parallel (@idx ni) compute_V!(
                     @velocity(stokes)...,
                     @residuals(stokes.R)...,
                     stokes.P,
@@ -250,7 +249,7 @@ function _solve_VS!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays

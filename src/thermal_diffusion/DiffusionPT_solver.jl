@@ -81,7 +81,7 @@ function _heatdiffusion_PT!(
                     thermal.T,
                     K,
                     pt_thermal.θr_dτ,
-                    _di.center,
+                    _di,
                     thermal_bc.constant_flux,
                 )
             else
@@ -91,7 +91,7 @@ function _heatdiffusion_PT!(
                     thermal.T,
                     K,
                     pt_thermal.θr_dτ,
-                    _di.center,
+                    _di,
                     thermal_bc.constant_flux,
                 )
             end
@@ -103,7 +103,7 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.center,
+                _di.vertex,
                 ni,
             )
             thermal_bcs!(thermal, thermal_bc)
@@ -124,7 +124,7 @@ function _heatdiffusion_PT!(
                     ρCp,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.center,
+                    _di.vertex,
                 )
             end
 
@@ -244,7 +244,7 @@ function _heatdiffusion_PT!(
                 rheology,
                 phase_flux...,
                 pt_thermal.θr_dτ,
-                grid._di.center,
+                grid._di,
                 args,
                 thermal_bc.constant_flux,
             )

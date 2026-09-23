@@ -276,7 +276,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    1.0
+    err = 1.0
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -293,8 +293,8 @@ function _solve!(
     θ = @zeros(ni...)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_ρg!(ρg, rheology, args)
+    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -315,10 +315,10 @@ function _solve!(
                 stokes.Q,
                 ητ,
                 Kb,
+                G,
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
-                args
             )
             @parallel (@idx ni) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
@@ -329,7 +329,6 @@ function _solve!(
 
             update_viscosity_τII!(
                 stokes,
-                phase_ratios,
                 args,
                 rheology,
                 viscosity_cutoff;
@@ -346,23 +345,15 @@ function _solve!(
                 stokes.P,
                 θ,
                 η,
-                @ones(ni...),
+                η_vep,
                 λ,
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
                 args,
             )
-
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)...,
-                @shear(stokes.τ_o)...,
-                @shear(stokes.ε)...,
-                η_vep,
-                G,
-                dt,
-                pt_stokes.θ_dτ,
-            )
+            center2vertex!(@shear(stokes.τ)..., @shear_center(stokes.τ)...)
+            update_halo!(@shear(stokes.τ)...)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -438,7 +429,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays
@@ -584,7 +575,6 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
             )
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
@@ -677,7 +667,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays

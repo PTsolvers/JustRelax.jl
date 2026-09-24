@@ -106,23 +106,36 @@ equal parity are then disjoint and run in parallel. The first and last row can w
 periodic seam, so they run on a single thread before and after. CPU only.
 """
 function enzyme_reverse_rowwise!(f::F, n::NTuple{2, Integer}, args::Vararg{Any, N}) where {F, N}
-    nx, ny = n
-    # the serial first row also compiles the reverse pass before any thread needs it
-    _enzyme_reverse_row!(f, 1, nx, args...)
-    for first_row in (2, 3)
-        Threads.@threads for j in first_row:2:(ny - 1)
-            _enzyme_reverse_row!(f, j, nx, args...)
-        end
-    end
-    ny > 1 && _enzyme_reverse_row!(f, ny, nx, args...)
-    return nothing
-end
-
-function _enzyme_reverse_row!(f::F, j, nx, args::Vararg{Any, N}) where {F, N}
-    for i in 1:nx
+    foreach_point_rowwise!(n) do i, j
         Enzyme.autodiff(
             Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const, args..., Enzyme.Const(i), Enzyme.Const(j)
         )
+    end
+    return nothing
+end
+
+"""
+    foreach_point_rowwise!(g, n)
+
+Call `g(i, j)` for every point of `1:n[1] × 1:n[2]` in the race-free row order of
+[`enzyme_reverse_rowwise!`](@ref).
+"""
+function foreach_point_rowwise!(g::G, n::NTuple{2, Integer}) where {G}
+    nx, ny = n
+    # the serial first row also compiles `g` before any thread needs it
+    _foreach_point_in_row!(g, 1, nx)
+    for first_row in (2, 3)
+        Threads.@threads for j in first_row:2:(ny - 1)
+            _foreach_point_in_row!(g, j, nx)
+        end
+    end
+    ny > 1 && _foreach_point_in_row!(g, ny, nx)
+    return nothing
+end
+
+function _foreach_point_in_row!(g::G, j, nx) where {G}
+    for i in 1:nx
+        g(i, j)
     end
     return nothing
 end

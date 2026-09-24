@@ -198,45 +198,58 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function stress_sensitivity_kernel!(
-        centers, vertices, parameters,
-        material, p, phase_center, phase_vertex,
-        τ_o, τ_ov, ε, EII_pl, P, λ, λv, η, ηv,
-        η_gradient, ηv_gradient,
-        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic,
+"""
+    enzyme_stress_sensitivities!(
+        vertex_update!, center_update!, n, centers, vertices, parameters, Val(k), args...,
     )
-    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
-    ni = size(phase_center)
-    @inbounds begin
-        Ic = clamped_indices(ni, periodic, I...)
-        ratio = phase_vertex[I...][p]
-        derivative, dη = enzyme_stress_gradients(
-            material,
-            (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
-            (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
-            ηv[I...], av_clamped(P, Ic...), λv[I...], λ_relaxation, dt,
-            av_clamped(EII_pl, Ic...),
-            (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
-            0.0, ratio,
-        )
-        ηv_gradient[I...] += dη
-        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
 
-        if all(I .≤ ni)
-            ratio = phase_center[I...][p]
-            derivative, dη = enzyme_stress_gradients(
-                material,
-                (ε[1][I...], ε[2][I...], av(ε[3])),
-                (τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]),
-                η[I...], P[I...], λ[I...], λ_relaxation, dt, EII_pl[I...],
-                (τ_seed[1][I...], τ_seed[2][I...], τ_seed[3][I...]),
-                θ_seed[I...], ratio,
-            )
-            η_gradient[I...] += dη
-            store_parameter_gradients!(centers, parameters, material, derivative, p, I)
+Reverse-differentiate the local stress update point by point, at the vertices with
+`vertex_update!(args..., i, j)` and at the centers with `center_update!(args..., i, j)`, the two
+halves of a forward stress kernel. `args` are Enzyme annotations, and `args[k]` must be
+`Enzyme.Active(rheology)`.
+
+The stress seeds in the `Duplicated` shadows are consumed as in the adjoint iterations, and the
+field sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
+derivative with respect to `rheology` comes back per point and holds every material parameter of
+every phase; the requested ones (`parameters`, one resolved path set per phase) are added to
+`vertices` and `centers` at `[p, i, j]`. Because the forward functions themselves are
+differentiated, every input reconstruction (averages, harmonic vertex viscosity, masks) and
+phase weighting matches the forward solve by construction.
+"""
+function enzyme_stress_sensitivities!(
+        vertex_update!::FV, center_update!::FC, n, centers, vertices, parameters, ::Val{k},
+        args::Vararg{Any, N},
+    ) where {FV, FC, k, N}
+    rheology = args[k].val
+    ni = n .- 1
+    foreach_point_rowwise!(n) do i, j
+        derivative = Enzyme.autodiff(
+            Enzyme.Reverse, Enzyme.Const(vertex_update!), Enzyme.Const, args...,
+            Enzyme.Const(i), Enzyme.Const(j),
+        )[1][k]
+        store_rheology_gradients!(vertices, parameters, rheology, derivative, (i, j))
+        if i ≤ ni[1] && j ≤ ni[2]
+            derivative = Enzyme.autodiff(
+                Enzyme.Reverse, Enzyme.Const(center_update!), Enzyme.Const, args...,
+                Enzyme.Const(i), Enzyme.Const(j),
+            )[1][k]
+            store_rheology_gradients!(centers, parameters, rheology, derivative, (i, j))
         end
     end
     return nothing
+end
+
+# `store_parameter_gradients!` for every phase of a whole-rheology derivative; `parameters[p]`
+# holds the resolved paths of phase `p`.
+@generated function store_rheology_gradients!(
+        fields, parameters::NTuple{N, Any}, rheology, derivative, I
+    ) where {N}
+    return quote
+        Base.@nexprs $N p -> store_parameter_gradients!(
+            fields, parameters[p], rheology[p], derivative[p], p, I
+        )
+        return nothing
+    end
 end
 
 @parallel_indices (i, j) function combine_center_vertex_gradient_kernel!(

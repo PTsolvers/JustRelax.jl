@@ -49,7 +49,8 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # Pull back the local stress update to its material parameters and viscosity fields.
+    # Pull the stress seeds back through the stress kernel to the viscosity fields and the
+    # stress-path material parameters.
     compute_stress_sensitivities!(
         stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients
     )
@@ -218,29 +219,65 @@ function compute_linear_viscosity_parameter_sensitivities!(
     return nothing
 end
 
+"""
+    compute_stress_sensitivities!(
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
+    )
+
+Pull the converged stress seeds in `adjoint.τ` (and the plastic pressure correction seed
+`adjoint.θ`) back through the fused stress kernel of the forward solve: its vertex and center
+halves are reverse-differentiated point by point with the rheology active. This fills the
+viscosity sensitivities `adjoint.viscosity.η` / `ηv` and adds the stress-path material-parameter
+derivatives to `gradients`. The τII viscosity refresh is left out, as in the linear-viscosity
+adjoint.
+"""
 function compute_stress_sensitivities!(
         stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
     )
     names = keys(gradients)
-    centers = map(entry -> entry.center, gradients)
-    vertices = map(entry -> entry.vertex, gradients)
-    for (p, material) in enumerate(rheology)
-        parameters = _resolve_parameter_paths(material, names, _stress_parameter_paths)
-
-        @parallel (@idx size(phases.vertex)) stress_sensitivity_kernel!(
-            centers, vertices, parameters,
-            material, p, phases.center, phases.vertex,
-            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
-            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
-            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
-            stokes.EII_pl, stokes.P, stokes.λ, stokes.λv,
-            stokes.viscosity.η, stokes.viscosity.ηv,
-            adjoint.viscosity.η, adjoint.viscosity.ηv,
-            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            adjoint.θ, λ_relaxation, dt, periodic,
-        )
-    end
+    parameters = map(material -> _resolve_parameter_paths(material, names, _stress_parameter_paths), rheology)
+    # the forward kernel also writes the pressure correction θc = γ_eff·RP + ΔPψ; it does not feed
+    # back into the stress, so scratch arrays keep the solver's own θc untouched
+    θc = similar(stokes.P)
+    γ_eff = zero(stokes.P)
+    enzyme_stress_sensitivities!(
+        compute_stress_viscosity_DRYEL_vertex!,
+        compute_stress_viscosity_DRYEL_center!,
+        size(phases.vertex),
+        map(entry -> entry.center, gradients),
+        map(entry -> entry.vertex, gradients),
+        parameters,
+        Val(20),
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c), (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c)),
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy), (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
+        Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
+        Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
+        Enzyme.DuplicatedNoNeed(stokes.τ.II, adjoint.τ.II),
+        Enzyme.DuplicatedNoNeed((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy), (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy)),
+        Enzyme.Const((stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)),
+        Enzyme.Const(stokes.EII_pl),
+        Enzyme.Const(stokes.ε_vol_pl),
+        Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
+        Enzyme.Const(stokes.λ),
+        Enzyme.Const(stokes.λv),
+        Enzyme.DuplicatedNoNeed(stokes.viscosity.η, adjoint.viscosity.η),
+        Enzyme.DuplicatedNoNeed(stokes.viscosity.ηv, adjoint.viscosity.ηv),
+        Enzyme.Const(stokes.viscosity.η_vep),
+        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
+        Enzyme.Const(θc),
+        Enzyme.Const(stokes.R.RP),
+        Enzyme.Const(γ_eff),
+        Enzyme.Active(rheology),                                 # argument 20
+        Enzyme.Const(phases.center),
+        Enzyme.Const(phases.vertex),
+        Enzyme.Const(λ_relaxation),
+        Enzyme.Const(dt),
+        Enzyme.Const(1.0),                                       # viscosity relaxation (unused)
+        Enzyme.Const((;)),                                       # viscosity args (unused)
+        Enzyme.Const((-Inf, Inf)),                               # viscosity cutoff (unused)
+        Enzyme.Const(true),                                      # linear viscosity
+        Enzyme.Const(periodic),
+    )
     return nothing
 end
 

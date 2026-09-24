@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 
 
 import JustPIC.GridGeometryUtils as GGU
@@ -95,18 +95,6 @@ function init_phases!(phase_ratios, xci, xvi, circle)
 
     @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., circle)
     @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex, xvi..., circle)
-    return nothing
-end
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) #* <(@all_k(z), 0.0)
     return nothing
 end
 
@@ -190,7 +178,7 @@ function main(igg; nx = 64, ny = 64, figdir = "ShearBands2D_DPCap_test")
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:5
         compute_ρg!(ρg, phase_ratios, rheology, (T = @zeros(ni .+ 2...), P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[end], xvi[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
     end
 
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt, perturbation_C = perturbation_C)

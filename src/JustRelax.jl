@@ -1,3 +1,19 @@
+"""
+    JustRelax
+
+Matrix-free, accelerated pseudo-transient solvers for geodynamic multi-physics problems.
+
+The root module holds what is shared across dimensions and backends: the backend types
+(`CPUBackend`, `CUDABackend`, `AMDGPUBackend`) and their traits, the staggered-grid
+[`Geometry`](@ref), the MPI topology handle [`IGG`](@ref), the field containers, and the
+boundary-condition types. Solvers and kernels live in the dimension-specific submodules
+[`JustRelax.JustRelax2D`](@ref) and [`JustRelax.JustRelax3D`](@ref), one of which a model
+loads alongside this module; I/O lives in [`JustRelax.DataIO`](@ref).
+
+Material properties come from GeoParams.jl, particle advection from JustPIC.jl, kernel
+parallelism from ParallelStencil.jl, and distributed-memory decomposition from
+ImplicitGlobalGrid.jl.
+"""
 module JustRelax
 
 using Adapt
@@ -246,7 +262,58 @@ include("IO/DataIO.jl")
 include("types/type_conversions.jl")
 export Array, copy
 
+"""
+    plot_particles(particles, pPhases; kwargs...)
+
+Scatter the particle positions of a 2D model, colored by phase, and return the
+`Makie.Figure`. Requires a Makie backend (e.g. `using GLMakie` or
+`using CairoMakie`) to be loaded.
+
+# Arguments
+- `particles`: `JustPIC.Particles` whose coordinates are plotted.
+- `pPhases`: per-particle phase, as a cell array.
+
+# Keyword arguments
+- `chain`: `JustPIC.MarkerChain` drawn on top of the particles, e.g. a free surface. Default: `nothing`.
+- `clrmap`: colormap for the phases. Default: `:roma`.
+- `title`: plot title. Default: `"Particle Position"`.
+- `filename`: if given, the figure is also written to this path. Default: `nothing`.
+- `resolution`: figure size in pixels. Default: `(1200, 1200)`.
+- `labelsize`, `titlesize`: font sizes of the axis labels and title. Default: `35`, `50`.
+- `linecolor`, `markersize`: color and marker size of the marker chain. Default: `:black`, `1.0`.
+- `conversion`: divisor applied to the coordinates. Default: `1.0e3`, i.e. m to km.
+- `units`: unit shown in the axis labels. Default: `:km`.
+"""
 function plot_particles end
+
+"""
+    plot_field(data, index, grid; kwargs...)
+
+Heatmap of one field of a 2D cell array, e.g. the volume fraction of a single
+phase, and return the `Makie.Figure`. Requires a Makie backend (e.g.
+`using GLMakie` or `using CairoMakie`) to be loaded.
+
+# Arguments
+- `data`: cell array holding the field, e.g. `phase_ratios.center`.
+- `index`: which entry of each cell to plot, e.g. the phase number.
+- `grid`: tuple of coordinates matching `data`, as `LinRange`s. The `xci` and `xvi` of a
+  uniform [`Geometry`](@ref) qualify; a nonuniform grid stores its coordinates as arrays
+  and is not accepted.
+
+# Keyword arguments
+- `colormap`: colormap of the heatmap. Default: `:roma`.
+- `title`: plot title. Default: `"Field Plot"`.
+- `filename`: if given, the figure is also written to this path. Default: `nothing`.
+- `resolution`: figure size in pixels. Default: `(1200, 1000)`.
+- `labelsize`, `titlesize`: font sizes of the axis labels and title. Default: `35`, `50`.
+- `conversion`: divisor applied to the coordinates. Default: `1.0e3`, i.e. m to km.
+- `units`: unit shown in the axis labels. Default: `:km`.
+
+# Example
+```julia
+f = plot_field(phase_ratios.center, 2, xci; title = "Phase 2 fraction")
+```
+"""
 function plot_field end
 
 export plot_particles, plot_field

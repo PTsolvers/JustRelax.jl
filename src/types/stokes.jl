@@ -43,9 +43,23 @@ struct Vorticity{T}
     yz::Union{T, Nothing}
     xz::Union{T, Nothing}
     xy::T
+    # Cell-centered counterparts, 3D only. The 3D shear components live on cell edges and
+    # each carries its own shape, so routines that need the vorticity on a single uniform
+    # layout — interpolating onto particles, for one — read these instead. `nothing` in 2D,
+    # where `xy` is already a vertex array that can be interpolated directly.
+    yz_c::Union{T, Nothing}
+    xz_c::Union{T, Nothing}
+    xy_c::T
 
-    function Vorticity(yz::Union{T, Nothing}, xz::Union{T, Nothing}, xy::T) where {T}
-        return new{T}(yz, xz, xy)
+    function Vorticity(
+            yz::Union{T, Nothing},
+            xz::Union{T, Nothing},
+            xy::T,
+            yz_c::Union{T, Nothing},
+            xz_c::Union{T, Nothing},
+            xy_c::T,
+        ) where {T}
+        return new{T}(yz, xz, xy, yz_c, xz_c, xy_c)
     end
 end
 
@@ -179,6 +193,9 @@ struct StokesArrays{A, B, C, D, E, F, T}
     ∇U::T
     λ::T
     λv::T
+    λv_yz::Union{T, Nothing}
+    λv_xz::Union{T, Nothing}
+    λv_xy::Union{T, Nothing}
     ΔPψ::T
 end
 

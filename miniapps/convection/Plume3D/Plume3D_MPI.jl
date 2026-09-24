@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -39,20 +39,7 @@ end
 
 using GeoParams, Printf
 
-include("Plume3D_rheology.jl")
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Lithostatic pressure from the local column. `z` holds global coordinates, so this is
-# the same profile on every rank; a cumulative sum along z would only see one subdomain.
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
+include(joinpath(@__DIR__, "Plume3D_rheology.jl"))
 
 ## MAIN SCRIPT ----------------------------------------------------------------------
 
@@ -120,7 +107,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     # Buoyancy forces and lithostatic pressure
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel (@idx ni) init_P!(stokes.P, ρg[end], xci[3])
+    compute_lithostatic_pressure!(stokes.P, ρg[end], di[end], igg)
 
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
@@ -148,9 +135,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     vtk_dir = joinpath(figdir, "vtk")
     # ----------------------------------------------------
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
-    dt₀ = similar(stokes.P)
+    centroid2particle!(pT, thermal.T, particles)
 
     # Buffers for the MPI gather. Each rank contributes its subdomain minus the halo,
     # so the assembled arrays are (n - 2) * dims cells wide in each direction.
@@ -184,13 +169,14 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     Vy_c = @zeros(ni...)
     Vz_c = @zeros(ni...)
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     while (t / (1.0e6 * 3600 * 24 * 365.25)) < 5 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         update_halo!(thermal.T)
         # ------------------------------
@@ -246,9 +232,16 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -280,7 +273,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
             vertex2center!(Vz_c, Vz_v)
             phase_center = [argmax(p) for p in Array(phase_ratios.center)]
 
-            @views T_nohalo .= Array(T_buffer[2:(end - 1), 2:(end - 1), 2:(end - 1)])
+            @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)])
             @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)])
             @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])
             @views εII_nohalo .= Array(stokes.ε.II[2:(end - 1), 2:(end - 1), 2:(end - 1)])

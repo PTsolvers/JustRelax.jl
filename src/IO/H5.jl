@@ -26,9 +26,26 @@ macro namevar(x, T)
 end
 
 """
-    checkpointing_hdf5(dst, stokes, T, η, time, timestep)
+    checkpointing_hdf5(dst, stokes, T, time, timestep; precision = Float32)
 
-Save necessary data in `dst` as and HDF5 file to restart the model from the state at `time`
+Save the state of the model at `time` in `dst` as the HDF5 file `checkpoint.h5`, so that the
+run can be restarted from it with [`load_checkpoint_hdf5`](@ref).
+
+The file holds the velocity components of `stokes` (`Vx`, `Vy`, and `Vz` in 3D), its
+pressure and viscosity, the temperature `T`, and `time`/`timestep`. Fields are transferred
+to the CPU before writing, whatever the backend. The file is written to a temporary
+directory first and moved into place, so an interrupted call leaves any previous checkpoint
+intact.
+
+# Arguments
+- `dst`: Directory the checkpoint is written to; created if it does not exist.
+- `stokes`: `JustRelax.StokesArrays` holding the velocity, pressure, and viscosity fields.
+- `T`: Temperature field.
+- `time`: Simulation time.
+- `timestep`: Time step.
+
+# Keyword arguments
+- `precision`: element type the arrays are converted to before writing.
 """
 function checkpointing_hdf5(dst, stokes, T, time, timestep; precision = Float32)
     !isdir(dst) && mkpath(dst) # create folder in case it does not exist
@@ -72,18 +89,20 @@ Load the state of the simulation from an .h5 file.
 - `T`: The loaded state of the temperature variable.
 - `Vx`: The loaded state of the x-component of the velocity variable.
 - `Vy`: The loaded state of the y-component of the velocity variable.
-- `Vz`: The loaded state of the z-component of the velocity variable.
+- `Vz`: The loaded state of the z-component of the velocity variable, or `nothing` for a
+  2D checkpoint.
 - `η`: The loaded state of the viscosity variable.
 - `t`: The loaded simulation time.
-- `dt`: The loaded simulation time.
+- `dt`: The loaded time step.
+
+All arrays are returned on the CPU, at the `precision` they were written with; move them to
+the device with `PTArray(backend)(A)` before copying them back into a `StokesArrays`. See
+[`checkpointing_hdf5`](@ref) for the writing side.
 
 # Example
 ```julia
-# Define the path to the .h5 file
-file_path = "path/to/your/file.h5"
-
-# Use the load_checkpoint function to load the variables from the file
-P, T, Vx, Vy, Vz, η, t, dt = `load_checkpoint(file_path)``
+file_path = joinpath("path/to/your/output", "checkpoint.h5")
+P, T, Vx, Vy, Vz, η, t, dt = load_checkpoint_hdf5(file_path)
 ```
 """
 function load_checkpoint_hdf5(file_path)
@@ -105,9 +124,10 @@ function load_checkpoint_hdf5(file_path)
 end
 
 """
-    function save_hdf5(dst, fname, data)
+    save_hdf5(dst, fname, data...)
 
-Save `data` as the `fname.h5` HDF5 file in the folder `dst`
+Save each entry of `data` as the `fname.h5` HDF5 file in the folder `dst`, creating the
+folder if it does not exist.
 """
 function save_hdf5(dst, fname, data::Vararg{Any, N}) where {N}
     !isdir(dst) && mkpath(dst) # creat folder in case it does not exist
@@ -131,9 +151,13 @@ function save_hdf5(fname, dim_g, I, comm_cart, info, data::Vararg{Any, N}) where
 end
 
 """
-    function save_hdf5(fname, data)
+    save_hdf5(fname, data...; precision = Float32)
 
-Save `data` as the `fname.h5` HDF5 file
+Save each entry of `data` as the `fname.h5` HDF5 file, one variable per entry, named after
+the variable passed at the call site.
+
+# Keyword arguments
+- `precision`: element type the arrays are converted to before writing.
 """
 function save_hdf5(fname, data::Vararg{Any, N}; precision = Float32) where {N}
     return h5open("$(fname).h5", "w") do file

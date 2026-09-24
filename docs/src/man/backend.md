@@ -48,7 +48,7 @@ const backend_JP = JustPIC.CPU
 
 ```julia [Nvidia GPUs]
 using CUDA, JustRelax, JustPIC
-const backend_JR = CUDABackend
+const backend_JR = JustRelax.CUDABackend
 const backend_JP = CUDA.CUDABackend
 ```
 
@@ -60,7 +60,7 @@ const backend_JP = AMDGPU.ROCBackend
 
 :::
 
-`backend_JR` goes to the JustRelax allocators (`StokesArrays`, `ThermalArrays`, ...), `backend_JP` to the JustPIC ones (`init_particles`, `PhaseRatios`, ...). On Nvidia GPUs the two are the same type: JustRelax dispatches on CUDA.jl's `CUDABackend` rather than defining a tag of its own.
+`backend_JR` goes to the JustRelax allocators (`StokesArrays`, `ThermalArrays`, ...), `backend_JP` to the JustPIC ones (`init_particles`, `PhaseRatios`, ...). The two are always distinct types. On Nvidia GPUs they also share a name: JustRelax and CUDA.jl both export a `CUDABackend`, and `using` both makes the bare name ambiguous, so write the JustRelax tag as `JustRelax.CUDABackend` and the JustPIC one as `CUDA.CUDABackend`.
 
 ## Indexing cell arrays
 

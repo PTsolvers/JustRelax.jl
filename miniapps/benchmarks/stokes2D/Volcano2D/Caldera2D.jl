@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,11 +30,11 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie, CellArrays, Statistics, Dates, JLD2
+using GeoParams, GLMakie, Statistics, Dates, JLD2
 
 # Load file with all the rheology configurations
-include("Caldera_setup.jl")
-include("Caldera_rheology.jl")
+include(joinpath(@__DIR__, "Caldera_setup.jl"))
+include(joinpath(@__DIR__, "Caldera_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -176,7 +176,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         @views hn = 0.5 .* (topo_y[1:(end - 1)] .+ topo_y[2:end])
         @views topo_y[2:(end - 1)] .= 0.5 .* (hn[1:(end - 1)] .+ hn[2:end])
         fill_chain_from_vertices!(chain, PTArray(backend)(topo_y))
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase, (pT,))
     end
     update_phase_ratios!(phase_ratios, particles, pPhases)
 
@@ -276,9 +276,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     ## Plot initial T and P profile
     fig = let
@@ -307,6 +305,8 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     interval = 0
@@ -324,15 +324,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         end
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
-        # clamp!(T_buffer, 273e0, 1223e0)
+        particle2centroid!(thermal.T, pT, particles)
+        # clamp!(thermal.T, 273e0, 1223e0)
         if it > 1  && rem(it, 5) == 0
             # if mod(round(t/(1e3 * 3600 * 24 *365.25); digits=1), 1e3) == 0.0
             println("Simulation eruption at t = $(round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 2)) Kyrs")
             thermal_anomaly!(thermal.T, Ω_T, phase_ratios, T_chamber, T_air, 5, 3, 4, air_phase)
             interval += 1
-            centroid2particle!(pT, T_buffer, particles)
+            centroid2particle!(pT, thermal.T, particles)
         end
         thermal_bcs!(thermal, thermal_bc)
 
@@ -396,9 +395,14 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -411,7 +415,9 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
         # Enforce the updated marker-chain surface before replenishing
         # particles, so phase ratios never observe newly emptied cells.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        update_phases_given_markerchain!(
+            pPhases, chain, particles, origin, di, air_phase, (pT, unwrap(pτ)...)
+        )
 
         # check if we need to inject particles
         center2vertex!(τxx_v, stokes.τ.xx)
@@ -420,7 +426,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
 
         # update phase ratios
@@ -461,7 +467,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     )
                     data_c = (;
                         P = Array(stokes.P),
-                        T = Array(T_buffer),
+                        T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                         viscosity = Array(η_eff),
                         phases = [argmax(p) for p in Array(phase_ratios.center)],
                         Melt_fraction = Array(ϕ_m),

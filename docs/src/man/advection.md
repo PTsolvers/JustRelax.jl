@@ -3,7 +3,7 @@
 ## Particles-in-Cell
 [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) relies on [JustPIC.jl](https://github.com/JuliaGeodynamics/JustPIC.jl) for advections of particles containing material information.
 
-The recommended workflow is now:
+Particles are initialized from the staggered velocity grids stored in `Geometry`:
 
 ```julia
 using JustRelax
@@ -31,7 +31,7 @@ explicitly. For example, in 2D use `ghost_1 = false, ghost_2 = false` (and add
 
 ## Typical particle operations
 
-Common particle operations now follow the compact API used in the tests and examples:
+The common particle operations are:
 
 ```julia
 grid2particle!(pT, T_buffer, particles)

@@ -59,24 +59,22 @@ end
 @parallel_indices (i, j, k) function compute_strain_rate!(
         ∇V::AbstractArray{T, 3}, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, _di
     ) where {T}
-    _dx, _dy, _dz = @dxi(_di, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
-
     @inbounds begin
         # normal components are all located @ cell centers
         if all((i, j, k) .≤ size(εxx))
+            _dx, _dy, _dz = @dxi(_di, i, j, k)
             ∇Vijk = ∇V[i, j, k] * inv(3)
             # Compute ε_xx
-            εxx[i, j, k] = d_xi(Vx) - ∇Vijk
+            εxx[i, j, k] = _d_xi(Vx, _dx, i, j, k) - ∇Vijk
             # Compute ε_yy
-            εyy[i, j, k] = d_yi(Vy) - ∇Vijk
+            εyy[i, j, k] = _d_yi(Vy, _dy, i, j, k) - ∇Vijk
             # Compute ε_zz
-            εzz[i, j, k] = d_zi(Vz) - ∇Vijk
+            εzz[i, j, k] = _d_zi(Vz, _dz, i, j, k) - ∇Vijk
         end
         # Compute ε_yz
         if all((i, j, k) .≤ size(εyz))
+            _dy = @dy(_di, j)
+            _dz = @dz(_di, k)
             εyz[i, j, k] =
                 0.5 * (
                 _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
@@ -85,6 +83,8 @@ end
         end
         # Compute ε_xz
         if all((i, j, k) .≤ size(εxz))
+            _dx = @dx(_di, i)
+            _dz = @dz(_di, k)
             εxz[i, j, k] =
                 0.5 * (
                 _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
@@ -93,6 +93,8 @@ end
         end
         # Compute ε_xy
         if all((i, j, k) .≤ size(εxy))
+            _dx = @dx(_di, i)
+            _dy = @dy(_di, j)
             εxy[i, j, k] =
                 0.5 * (
                 _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +

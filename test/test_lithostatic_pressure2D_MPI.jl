@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -12,15 +12,15 @@ using ParallelStencil
 using ImplicitGlobalGrid
 import ImplicitGlobalGrid: y_g, ny_g
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 const nx, ny = 4, 8
@@ -53,7 +53,7 @@ end
 
 function global_column()
     ρg = @zeros(nx, ny)
-    ρg .= PTArray(backend_JR)([ρg_global(jg(ρg, j)) for _ in 1:nx, j in 1:ny])
+    ρg .= PTArray(backend)([ρg_global(jg(ρg, j)) for _ in 1:nx, j in 1:ny])
     return ρg
 end
 
@@ -74,7 +74,7 @@ function vertical_split()
     end
 
     @testset "variable cell height" begin
-        dz = PTArray(backend_JR)([dz_global(jg(ρg, j)) for j in 1:ny])
+        dz = PTArray(backend)([dz_global(jg(ρg, j)) for j in 1:ny])
         compute_lithostatic_pressure!(P, ρg, dz, igg)
         P_cpu = Array(P)
         for j in 1:ny

@@ -6,9 +6,6 @@ using Enzyme
         do_strain_rate=true,
     )
 
-Example reverse-mode differentiation of the two-dimensional
-`compute_∇V_strain_rate_RP!` ParallelStencil kernel.
-
 `adjoint.ε` and `adjoint.R.RP` are the reverse seeds for the strain-rate and
 pressure-residual outputs. The resulting velocity and pressure sensitivities
 accumulate in `adjoint.V` and `adjoint.P`; all remaining inputs are constant.
@@ -79,13 +76,11 @@ end
 Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
 `adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Velocity,
 pressure, stress, and buoyancy sensitivities accumulate in their corresponding
-adjoint fields. `free_surface_dt` activates the same stabilization term used
-by the forward residual.
+adjoint fields.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni; free_surface_dt = 0
     )
-    dρg = (adjoint.dρgx, adjoint.ρ)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
         stokes.R.Rx,
         stokes.R.Ry,
@@ -112,8 +107,8 @@ function enzyme_compute_PH_residual_V!(
         Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
         Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
         Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
-        Enzyme.DuplicatedNoNeed(ρg[1], dρg[1]),
-        Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
+        Enzyme.DuplicatedNoNeed(ρg[1], adjoint.dρgx),
+        Enzyme.DuplicatedNoNeed(ρg[2], adjoint.ρ),
         Enzyme.Const(_di.center),
         Enzyme.Const(_di.vertex),
         Enzyme.Const(free_surface_dt),
@@ -166,21 +161,32 @@ end
 end
 
 """
-    enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt,
+    enzyme_compute_stress_viscosity_DRYEL!(
+        stokes, adjoint, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt,
+        viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
     )
 
-Differentiate the two-dimensional DYREL constitutive kernel. Stress adjoints in
-`adjoint.τ` are propagated to strain rate and pressure in `adjoint.ε` and
-`adjoint.P`. This is the production equivalent of `diff_calc_stress!` in the
-toy example.
+Differentiate the same fused stress and viscosity-update kernel used by the
+two-dimensional forward solver. Stress and viscosity adjoints are propagated
+to strain rate, pressure, and the previous viscosity iterate.
 """
-function enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt
+function enzyme_compute_stress_viscosity_DRYEL!(
+        stokes,
+        adjoint,
+        θc,
+        γ_eff,
+        rheology,
+        phase_ratios,
+        λ_relaxation,
+        dt,
+        viscosity_relaxation,
+        args,
+        viscosity_cutoff,
+        linear_viscosity,
     )
     ni = size(phase_ratios.vertex)
     periodic = periodic_dims(stokes)
-    @parallel (@idx ni) configcall = compute_stress_DRYEL!(
+    @parallel (@idx ni) configcall = compute_stress_viscosity_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
@@ -197,36 +203,50 @@ function enzyme_compute_stress_DRYEL!(
         stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
+        θc,
+        stokes.R.RP,
+        γ_eff,
         rheology,
         phase_ratios.center,
         phase_ratios.vertex,
         λ_relaxation,
         dt,
+        viscosity_relaxation,
+        args,
+        viscosity_cutoff,
+        linear_viscosity,
         periodic,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_stress_DRYEL!,
-        Enzyme.DuplicatedNoNeed((stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),(adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),),
-        Enzyme.DuplicatedNoNeed((stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),(adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),),
+        compute_stress_viscosity_DRYEL!,
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),(adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c)),
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),(adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
         Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
         Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
         Enzyme.DuplicatedNoNeed(stokes.τ.II, adjoint.τ.II),
-        Enzyme.DuplicatedNoNeed((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),(adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),),
+        Enzyme.DuplicatedNoNeed((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),(adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy)),
         Enzyme.Const((stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)),
         Enzyme.Const(stokes.EII_pl),
         Enzyme.Const(stokes.ε_vol_pl),
         Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
         Enzyme.Const(stokes.λ),
         Enzyme.Const(stokes.λv),
-        Enzyme.Const(stokes.viscosity.η),
-        Enzyme.Const(stokes.viscosity.ηv),
+        Enzyme.DuplicatedNoNeed(stokes.viscosity.η, adjoint.viscosity.η),
+        Enzyme.DuplicatedNoNeed(stokes.viscosity.ηv, adjoint.viscosity.ηv),
         Enzyme.Const(stokes.viscosity.η_vep),
         Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
+        Enzyme.Const(θc),
+        Enzyme.Const(stokes.R.RP),
+        Enzyme.Const(γ_eff),
         Enzyme.Const(rheology),
         Enzyme.Const(phase_ratios.center),
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
+        Enzyme.Const(viscosity_relaxation),
+        Enzyme.Const(args),
+        Enzyme.Const(viscosity_cutoff),
+        Enzyme.Const(linear_viscosity),
         Enzyme.Const(periodic),
     )
     return nothing

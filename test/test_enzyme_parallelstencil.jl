@@ -380,7 +380,7 @@ end
         objective = function (p = 1, I = CartesianIndex(1, 1), perturbed = models[p])
             compute_ρg!(ρg, phases, rheology, args)
             JustRelax2D.compute_∇V_strain_rate_RP!(
-                stokes, dyrel, rheology, phases, grid._di, ni, dt, args, false
+                stokes, dyrel, rheology, phases, grid._di, ni, dt, false; args...
             )
             local_args = JustRelax2D.getindex_NamedTuple(args, Tuple(I)...)
             ratio = phases.center[I][p]
@@ -559,8 +559,41 @@ end
     adjoint.τ.xx .= 1.0
     adjoint.τ.yy .= 1.0
     adjoint.τ.xy .= 1.0
-    JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0
+    JustRelax2D.enzyme_compute_stress_viscosity_DRYEL!(
+        stokes, adjoint, θc, γ_eff, rheology, phase_ratios, 1.0, 1.0,
+        1.0, (;), (-Inf, Inf), true,
+    )
+    @test any(!iszero, adjoint.ε.xx)
+    @test any(!iszero, adjoint.ε.xy)
+
+    nonlinear_rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1.0),
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((
+                PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+            )),
+        ),
+    )
+    nonlinear_args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+    stokes.viscosity.η .= 2.0
+    stokes.viscosity.ηv .= 2.0
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, nonlinear_rheology, phase_ratios, 1.0, 1.0,
+        0.5, nonlinear_args, (-Inf, Inf), false,
+    )
+    adjoint.τ.xx .= 0.0
+    adjoint.τ.yy .= 0.0
+    adjoint.τ.xy .= 0.0
+    adjoint.ε.xx .= 0.0
+    adjoint.ε.yy .= 0.0
+    adjoint.ε.xy .= 0.0
+    adjoint.viscosity.η .= 1.0
+    adjoint.viscosity.ηv .= 1.0
+    JustRelax2D.enzyme_compute_stress_viscosity_DRYEL!(
+        stokes, adjoint, θc, γ_eff, nonlinear_rheology, phase_ratios, 1.0, 1.0,
+        0.5, nonlinear_args, (-Inf, Inf), false,
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)

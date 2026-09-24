@@ -90,7 +90,7 @@ function material_taylor_test(name, igg, ε; n, nt, direction = (1.0, 1.0), fit_
         return_fields = true,
         plot_results = false,
         solver_ϵ = 1.0e-10,
-        verbose = true,
+        verbose = false,
         kwargs...,
     )
 
@@ -157,9 +157,9 @@ end
 function main(
         igg;
         n = 16,
-        ve_steps = 4,
-        shear_steps = 15,
-        ε = 10.0 .^ range(-2, -8; length = 7),
+        ve_steps = 3,
+        shear_steps = 10,
+        ε = 10.0 .^ (-2:-1:-4),
         material_parameters = (:G, :C, :ϕ, :Ψ, :η_vp),
         figdir = joinpath("figures", "Adjoint2D", "TaylorTests"),
     )
@@ -167,18 +167,18 @@ function main(
     viscous_case(igg; kwargs...) = SinkingBlockCase.sinking_block2D(
         igg;
         nx = n, ny = n, ar = 1, plot_results = false,
-        solver_ϵ = 1.0e-10, verbose = true, kwargs...,
+        solver_ϵ = 1.0e-10, verbose = false, kwargs...,
     )
     viscoelastic_case(igg; kwargs...) = SinkingBlockVECase.sinking_block2D_VE(
         igg;
         nx = n, ny = n, ar = 1, nt = ve_steps, plot_results = false,
-        solver_ϵ = 1.0e-10, verbose = true, kwargs...,
+        solver_ϵ = 1.0e-10, verbose = false, kwargs...,
     )
     shear_viscosity_case(igg; kwargs...) =
         ShearBandCase.shear_band2D_adjoint_materials(
         igg;
         nx = n, ny = n, nt = shear_steps, plot_results = false,
-        solver_ϵ = 1.0e-10, verbose = true, kwargs...,
+        solver_ϵ = 1.0e-10, verbose = false, kwargs...,
     )
 
     results = Any[

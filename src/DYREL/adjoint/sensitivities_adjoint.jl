@@ -73,12 +73,8 @@ function compute_sensitivities!(
     stokes_ad.ρ            .= 0.0
     stokes_ad.dρgx         .= 0.0
 
-    @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[
-        2:(size(stokes_ad.R.Rx, 1) + 1), 2:(size(stokes_ad.R.Rx, 2) + 1),
-    ]
-    @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[
-        2:(size(stokes_ad.R.Ry, 1) + 1), 2:(size(stokes_ad.R.Ry, 2) + 1),
-    ]
+    @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(size(stokes_ad.R.Rx, 1) + 1), 2:(size(stokes_ad.R.Rx, 2) + 1)]
+    @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(size(stokes_ad.R.Ry, 1) + 1), 2:(size(stokes_ad.R.Ry, 2) + 1)]
 
     # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
     enzyme_compute_PH_residual_V!(

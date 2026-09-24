@@ -399,6 +399,8 @@ function _solve_DYREL!(
             observation,
             gradients,
             viscosity_cutoff,
+            viscosity_relaxation,
+            linear_viscosity,
             kwargs...,
         )
     end

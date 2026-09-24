@@ -52,7 +52,7 @@ function material_shear_band_rheology(;
             Name = SHEARBAND_PHASE_NAMES[p],
             Phase = p,
             Density = density,
-            Gravity = ConstantGravity(; g = 0.02),
+            Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology((
                 viscosity, elasticity, plasticity,
             )),

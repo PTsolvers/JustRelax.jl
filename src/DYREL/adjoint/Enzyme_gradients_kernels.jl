@@ -166,10 +166,12 @@ end
     return enzyme_material_gradient(viscosity_parameter_objective, material, args...)
 end
 
+# `air_phase` mirrors the forward viscosity update: the variational solver drops that phase from
+# the viscosity average through `viscosity_phase_ratio`; `0` keeps every phase.
 @parallel_indices (I...) function linear_viscosity_parameter_sensitivity_kernel!(
         centers, vertices, parameters, material, rheology, phase::Val{p},
         phase_center, phase_vertex, ε_center, ε_vertex, args,
-        η_seed, ηv_seed, cutoff,
+        η_seed, ηv_seed, cutoff, air_phase::Integer,
     ) where {p}
     Base.@propagate_inbounds @inline AII(A) = begin
         AII_0 = allzero(A...) * eps()
@@ -178,7 +180,7 @@ end
     ni = size(phase_center)
     @inbounds begin
         derivative = enzyme_viscosity_parameter_gradient(
-            material, rheology, phase, phase_vertex[I...],
+            material, rheology, phase, viscosity_phase_ratio(air_phase, phase_vertex[I...]),
             AII((ε_vertex[1][I...], ε_vertex[2][I...], ε_vertex[3][I...])),
             local_viscosity_args_vertex(args, I...), ηv_seed[I...], cutoff,
         )
@@ -186,7 +188,7 @@ end
 
         if all(I .≤ ni)
             derivative = enzyme_viscosity_parameter_gradient(
-                material, rheology, phase, phase_center[I...],
+                material, rheology, phase, viscosity_phase_ratio(air_phase, phase_center[I...]),
                 AII((ε_center[1][I...], ε_center[2][I...], ε_center[3][I...])),
                 local_viscosity_args(args, I...), η_seed[I...], cutoff,
             )
@@ -196,31 +198,47 @@ end
     return nothing
 end
 
+# Local stress evaluation points of the forward kernels. Without a rock ratio every point is
+# evaluated and the vertex viscosity is the stored `ηv`. With one, masked points are skipped and
+# the vertex viscosity is `harm_clamped(η)`, as in the variational stress kernel.
+Base.@propagate_inbounds @inline _stress_vertex_valid(::Nothing, I...) = true
+Base.@propagate_inbounds @inline _stress_vertex_valid(ϕ::JustRelax.RockRatio, I...) = isvalid_v(ϕ, I...)
+Base.@propagate_inbounds @inline _stress_center_valid(::Nothing, I...) = true
+Base.@propagate_inbounds @inline _stress_center_valid(ϕ::JustRelax.RockRatio, I...) = isvalid_c(ϕ, I...)
+Base.@propagate_inbounds @inline _stress_vertex_viscosity(::Nothing, η, ηv, Ic, I) = ηv[I...]
+Base.@propagate_inbounds @inline _stress_vertex_viscosity(::JustRelax.RockRatio, η, ηv, Ic, I) = harm_clamped(η, Ic...)
+
+# Material-parameter sensitivities of the local stress update. The viscosity sensitivities
+# `dη` are accumulated here only without a rock ratio: the variational vertex viscosity is a
+# harmonic mean of four centers, so the caller takes those from the reverse stress kernel
+# instead, which folds them into the centers race-free.
 @parallel_indices (I...) function stress_sensitivity_kernel!(
         centers, vertices, parameters,
         material, p, phase_center, phase_vertex,
         τ_o, τ_ov, ε, EII_pl, P, λ, λv, η, ηv,
         η_gradient, ηv_gradient,
-        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic,
+        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic, ϕ,
     )
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
     ni = size(phase_center)
     @inbounds begin
         Ic = clamped_indices(ni, periodic, I...)
-        ratio = phase_vertex[I...][p]
-        derivative, dη = enzyme_stress_gradients(
-            material,
-            (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
-            (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
-            ηv[I...], av_clamped(P, Ic...), λv[I...], λ_relaxation, dt,
-            av_clamped(EII_pl, Ic...),
-            (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
-            0.0, ratio,
-        )
-        ηv_gradient[I...] += dη
-        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
+        if _stress_vertex_valid(ϕ, I...)
+            ratio = phase_vertex[I...][p]
+            derivative, dη = enzyme_stress_gradients(
+                material,
+                (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
+                (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
+                _stress_vertex_viscosity(ϕ, η, ηv, Ic, I), av_clamped(P, Ic...), λv[I...],
+                λ_relaxation, dt, av_clamped(EII_pl, Ic...),
+                (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
+                0.0, ratio,
+            )
+            isnothing(ϕ) && (ηv_gradient[I...] += dη)
+            store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
+        end
 
-        if all(I .≤ ni)
+        if all(I .≤ ni) && _stress_center_valid(ϕ, I...)
             ratio = phase_center[I...][p]
             derivative, dη = enzyme_stress_gradients(
                 material,
@@ -230,7 +248,7 @@ end
                 (τ_seed[1][I...], τ_seed[2][I...], τ_seed[3][I...]),
                 θ_seed[I...], ratio,
             )
-            η_gradient[I...] += dη
+            isnothing(ϕ) && (η_gradient[I...] += dη)
             store_parameter_gradients!(centers, parameters, material, derivative, p, I)
         end
     end
@@ -263,16 +281,26 @@ end
     return nothing
 end
 
+# rock fraction weighting the continuity residual; `1` without a rock ratio
+Base.@propagate_inbounds @inline _continuity_weight(::Nothing, I...) = 1.0
+Base.@propagate_inbounds @inline _continuity_weight(ϕ::JustRelax.RockRatio, I...) = ϕ.center[I...]
+
+# Density enters twice, with different phase weights: the buoyancy through the `air_phase`
+# corrected ratio of `compute_ρg!`, and the thermal expansion through the raw ratio of the
+# continuity residual, which the variational solver additionally scales by the rock fraction `ϕ`.
 @parallel_indices (I...) function density_parameter_sensitivity_kernel!(
-        centers, parameters, material, p, phase_ratios, args, dρ, λP, ΔT, melt_fraction, dt
+        centers, parameters, material, p, phase_ratios, args, dρ, λP, ΔT, melt_fraction, dt,
+        air_phase::Integer, ϕ,
     )
-    ratio = (@cell phase_ratios[I...])[p]
-    if !iszero(ratio)
+    raw_ratio = @cell phase_ratios[I...]
+    ratio_ρ = correct_phase_ratio(air_phase, raw_ratio)[p]
+    ratio_α = raw_ratio[p] * _continuity_weight(ϕ, I...)
+    if !(iszero(ratio_ρ) && iszero(ratio_α))
         local_args = getindex_NamedTuple(args, I...)
         thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
         α_seed = isnothing(ΔT) ? 0.0 : -λP[I...] * ΔT[(I .+ 1)...] / dt
         derivative = enzyme_density_parameter_gradient(
-            material, local_args, ratio * dρ[I...], ratio * α_seed, thermal_args
+            material, local_args, ratio_ρ * dρ[I...], ratio_α * α_seed, thermal_args
         )
         store_parameter_gradients!(centers, parameters, material, derivative, p, I)
     end

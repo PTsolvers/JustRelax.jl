@@ -65,6 +65,8 @@ solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes,
 """
     solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
         rheology, args, grid, dt, igg; kwargs...)
+    solve_VariationalDYREL!(stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+        rheology, args, grid, dt, igg; adjoint = true, observation, kwargs...)
 
 Solve the 2D variational Stokes problem with DYREL relaxation and the
 `RockRatio` volume weights. This is a separate entry point from
@@ -76,6 +78,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 
 # Arguments (in the following order)
 - `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
+- `stokes_ad`: `JustRelax.AdjointStokesArrays` for the adjoint solve; only needed with
+  `adjoint = true`.
 - `ρg`: buoyancy forces arrays.
 - `dyrel`: DYREL-specific parameters and fields, built with the same `ϕ`.
 - `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
@@ -105,6 +109,13 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
+  history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Default: `false`.
+- `observation`: Observation region of the adjoint objective, as for `solve_DYREL!`. Default: `nothing`.
+- `gradients`: Optional buffers from `material_controls`, filled by the adjoint solve. Default: `(;)`.
+- `η_multiplier`: Optional cell-wise viscosity scaling `(; center, vertex)`, applied right after
+  the rheology-driven viscosity update, for gradient tests. Pair it with `linear_viscosity = true`.
+  Default: `nothing`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.

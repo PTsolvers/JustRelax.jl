@@ -127,11 +127,25 @@ to the coupled Stokes pressure. The adjoint solver requires `args.P === stokes.P
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0
     )
-    dρg = (adjoint.dρgx, adjoint.ρ)
-    foreach(A -> fill!(A, 0.0), dρg)
+    zero_buoyancy_adjoint!(adjoint)
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni; free_surface_dt)
+    buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni)
+    return nothing
+end
+
+# The buoyancy adjoints collect the residual's ρg seeds, so they start from zero on every pass.
+zero_buoyancy_adjoint!(adjoint) = foreach(A -> fill!(A, 0.0), (adjoint.dρgx, adjoint.ρ))
+
+"""
+    buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni; air_phase=0)
+
+Propagate the buoyancy adjoints `adjoint.dρgx`/`adjoint.ρ` through the pressure dependence
+of density into `adjoint.P`. `air_phase` must match the forward buoyancy update, which drops
+that phase from the density average; `0` keeps every phase.
+"""
+function buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni; air_phase::Integer = 0)
     @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
-        adjoint.P, dρg, phases.center, rheology, args
+        adjoint.P, (adjoint.dρgx, adjoint.ρ), phases.center, rheology, args, air_phase
     )
     return nothing
 end
@@ -140,9 +154,13 @@ end
     return fn_ratio(compute_density, rheology, ratio, merge(args, (; P)))
 end
 
-@parallel_indices (I...) function buoyancy_pressure_adjoint_kernel!(dP, dρg, phases, rheology, args)
+# The phase ratio is corrected for `air_phase` exactly as in `compute_ρg_kernel!`; an all-air
+# cell ends up with an all-zero ratio and contributes nothing.
+@parallel_indices (I...) function buoyancy_pressure_adjoint_kernel!(
+        dP, dρg, phases, rheology, args, air_phase::Integer
+    )
     local_args = getindex_NamedTuple(args, I...)
-    ratio = @cell phases[I...]
+    ratio = correct_phase_ratio(air_phase, @cell phases[I...])
     dρdP = Enzyme.autodiff_deferred(
         Enzyme.Reverse,
         Enzyme.Const(density_at_pressure),

@@ -41,10 +41,37 @@ function compute_sensitivities!(
         viscosity_cutoff = (-Inf, Inf),
         free_surface = false,
     )
+    periodic = periodic_dims(stokes)
+    prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
 
+    # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
+    enzyme_compute_PH_residual_V!(
+        stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
+    )
+
+    # Pull back the local stress update to its material parameters and viscosity fields.
+    compute_stress_sensitivities!(
+        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients
+    )
+
+    compute_linear_viscosity_parameter_sensitivities!(
+        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients
+    )
+
+    finish_density_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic)
+
+    return stokes_ad
+end
+
+"""
+    prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
+
+Check and zero the `gradients` buffers, zero the adjoint working arrays and seed the momentum
+residual adjoints with the converged `-λV`, ahead of the sensitivity passes.
+"""
+function prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
     center_dims = (length(rheology), ni...)
     vertex_dims = (length(rheology), (ni .+ 1)...)
-    periodic = periodic_dims(stokes)
     for name in keys(gradients)
         # Check that the parameter is used and its phase-wise buffers fit the grid.
         any(material -> material_parameter_is_used(material, name), rheology) ||
@@ -75,28 +102,31 @@ function compute_sensitivities!(
 
     @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(size(stokes_ad.R.Rx, 1) + 1), 2:(size(stokes_ad.R.Rx, 2) + 1)]
     @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(size(stokes_ad.R.Ry, 1) + 1), 2:(size(stokes_ad.R.Ry, 2) + 1)]
+    return nothing
+end
 
-    # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
-    enzyme_compute_PH_residual_V!(
-        stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
+"""
+    finish_density_sensitivities!(
+        stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic; air_phase=0, ϕ=nothing,
     )
 
-    # Pull back the local stress update to its material parameters and viscosity fields.
-    compute_stress_sensitivities!(
-        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients
+Turn the buoyancy adjoints into the density sensitivity `stokes_ad.ρ`, pull it back to the
+density parameters and fold every vertex gradient into the centers. `air_phase` and `ϕ` must
+match the forward buoyancy update and continuity residual.
+"""
+function finish_density_sensitivities!(
+        stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic;
+        air_phase::Integer = 0, ϕ = nothing,
     )
-
-    compute_linear_viscosity_parameter_sensitivities!(
-        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients
-    )
-
     gravity = compute_gravity(first(rheology))
     gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
     # The residual depends on density through the buoyancy forces ρgx = ρ*gx and
     # ρgy = ρ*gy. The chain rule therefore gives dJ/dρ = gx*dJ/dρgx + gy*dJ/dρgy.
     @. stokes_ad.ρ = gx * stokes_ad.dρgx + gy * stokes_ad.ρ
 
-    compute_density_parameter_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, gradients)
+    compute_density_parameter_sensitivities!(
+        stokes_ad, phase_ratios, rheology, args, dt, gradients; air_phase, ϕ
+    )
     for gradient in values(gradients), p in eachindex(rheology)
         combine_center_vertex_gradient!(gradient.center, gradient.vertex, p, periodic)
     end
@@ -165,7 +195,8 @@ function material_parameter_is_used(material, parameter)
 end
 
 function compute_linear_viscosity_parameter_sensitivities!(
-        stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients
+        stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients;
+        air_phase::Integer = 0,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -181,14 +212,15 @@ function compute_linear_viscosity_parameter_sensitivities!(
             centers, vertices, parameters, material, rheology, Val(p),
             phases.center, phases.vertex,
             @strain_center(stokes), @tensor_vertex(stokes.ε), args,
-            adjoint.viscosity.η, adjoint.viscosity.ηv, viscosity_cutoff,
+            adjoint.viscosity.η, adjoint.viscosity.ηv, viscosity_cutoff, air_phase,
         )
     end
     return nothing
 end
 
 function compute_stress_sensitivities!(
-        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients;
+        ϕ = nothing,
     )
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
@@ -207,7 +239,7 @@ function compute_stress_sensitivities!(
             adjoint.viscosity.η, adjoint.viscosity.ηv,
             (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
             (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            adjoint.θ, λ_relaxation, dt, periodic,
+            adjoint.θ, λ_relaxation, dt, periodic, ϕ,
         )
     end
     return nothing
@@ -237,7 +269,9 @@ function combine_center_vertex_gradient!(
     return center
 end
 
-function compute_density_parameter_sensitivities!(adjoint, phases, rheology, args, dt, gradients)
+function compute_density_parameter_sensitivities!(
+        adjoint, phases, rheology, args, dt, gradients; air_phase::Integer = 0, ϕ = nothing,
+    )
     isempty(gradients) && return nothing
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
@@ -256,7 +290,7 @@ function compute_density_parameter_sensitivities!(adjoint, phases, rheology, arg
 
         @parallel (@idx size(adjoint.ρ)) density_parameter_sensitivity_kernel!(
             centers, density_parameters, material, p, phases.center, args,
-            adjoint.ρ, adjoint.λP, ΔT, melt_fraction, dt,
+            adjoint.ρ, adjoint.λP, ΔT, melt_fraction, dt, air_phase, ϕ,
         )
     end
     return nothing

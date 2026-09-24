@@ -7,6 +7,7 @@
 
 function _solve_VariationalDYREL!(
         stokes::JustRelax.StokesArrays,
+        stokes_ad::Union{Nothing, JustRelax.AdjointStokesArrays},
         ρg,
         dyrel,
         flow_bcs::AbstractFlowBoundaryConditions,
@@ -33,8 +34,15 @@ function _solve_VariationalDYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         free_surface = false,
+        adjoint = false,
+        observation = nothing,
+        gradients = (;),
+        η_multiplier = nothing,
         kwargs...,
     ) where {N}
+
+    adjoint && isnothing(stokes_ad) &&
+        throw(ArgumentError("adjoint = true requires AdjointStokesArrays as the second argument"))
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
@@ -136,6 +144,12 @@ function _solve_VariationalDYREL!(
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
+    # impose a cell-wise viscosity scaling the per-phase rheology cannot express, before `DYREL!`
+    # so the Gershgorin bounds and the preconditioner see the viscosity the solve actually uses
+    if !isnothing(η_multiplier)
+        stokes.viscosity.η .*= η_multiplier.center
+        stokes.viscosity.ηv .*= η_multiplier.vertex
+    end
     compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
@@ -334,6 +348,45 @@ function _solve_VariationalDYREL!(
         @warn "DYREL returned without meeting ϵ — the velocity/pressure fields are not converged" err ϵ iter total_iterMax
     end
 
+    # The adjoint linearizes around the converged state, so it runs before the plastic pressure
+    # correction is absorbed into P and before τ_o is overwritten. ϕ and the masks stay frozen.
+    adjoint_out = if adjoint
+        solve_VariationalDYREL_adjoint!(
+            stokes,
+            stokes_ad,
+            ρg,
+            dyrel,
+            flow_bcs,
+            phase_ratios,
+            ϕ,
+            rheology,
+            args,
+            grid,
+            dt,
+            igg;
+            maskV,
+            maskP,
+            air_phase,
+            λ_relaxation_DR,
+            λ_relaxation_PH,
+            pressure_relaxation,
+            free_surface,
+            iterMax_PH,
+            iterMax_DR,
+            total_iterMax,
+            nout,
+            rel_drop,
+            verbose_PH,
+            verbose_DR,
+            observation,
+            gradients,
+            viscosity_cutoff,
+            viscosity_relaxation,
+            linear_viscosity,
+            kwargs...,
+        )
+    end
+
     # absorb plastic pressure correction into P (mirrors APT: stokes.P .= θ = P + ΔPψ)
     @. stokes.P += stokes.ΔPψ
 
@@ -357,8 +410,27 @@ function _solve_VariationalDYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot, err, iter, converged)
+    out = (; err_evo_it, err_evo_V, err_evo_P, err_evo_tot, err, iter, converged)
+    return adjoint ? (; out..., adjoint = adjoint_out) : out
 
+end
+
+# forward-only entry point: no adjoint arrays
+function _solve_VariationalDYREL!(
+        stokes::JustRelax.StokesArrays,
+        ρg,
+        dyrel,
+        flow_bcs::AbstractFlowBoundaryConditions,
+        phase_ratios::JustPIC.PhaseRatios,
+        ϕ::JustRelax.RockRatio,
+        rheology,
+        args,
+        grid::Geometry,
+        dt,
+        igg::IGG;
+        kwargs...,
+    )
+    return _solve_VariationalDYREL!(stokes, nothing, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg; kwargs...)
 end
 
 # legacy uniform-grid wrapper (di as a spacing tuple / named tuple)

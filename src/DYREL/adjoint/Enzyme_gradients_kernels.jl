@@ -198,47 +198,31 @@ end
     return nothing
 end
 
-# Local stress evaluation points of the forward kernels. Without a rock ratio every point is
-# evaluated and the vertex viscosity is the stored `ηv`. With one, masked points are skipped and
-# the vertex viscosity is `harm_clamped(η)`, as in the variational stress kernel.
-Base.@propagate_inbounds @inline _stress_vertex_valid(::Nothing, I...) = true
-Base.@propagate_inbounds @inline _stress_vertex_valid(ϕ::JustRelax.RockRatio, I...) = isvalid_v(ϕ, I...)
-Base.@propagate_inbounds @inline _stress_center_valid(::Nothing, I...) = true
-Base.@propagate_inbounds @inline _stress_center_valid(ϕ::JustRelax.RockRatio, I...) = isvalid_c(ϕ, I...)
-Base.@propagate_inbounds @inline _stress_vertex_viscosity(::Nothing, η, ηv, Ic, I) = ηv[I...]
-Base.@propagate_inbounds @inline _stress_vertex_viscosity(::JustRelax.RockRatio, η, ηv, Ic, I) = harm_clamped(η, Ic...)
-
-# Material-parameter sensitivities of the local stress update. The viscosity sensitivities
-# `dη` are accumulated here only without a rock ratio: the variational vertex viscosity is a
-# harmonic mean of four centers, so the caller takes those from the reverse stress kernel
-# instead, which folds them into the centers race-free.
 @parallel_indices (I...) function stress_sensitivity_kernel!(
         centers, vertices, parameters,
         material, p, phase_center, phase_vertex,
         τ_o, τ_ov, ε, EII_pl, P, λ, λv, η, ηv,
         η_gradient, ηv_gradient,
-        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic, ϕ,
+        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic,
     )
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
     ni = size(phase_center)
     @inbounds begin
         Ic = clamped_indices(ni, periodic, I...)
-        if _stress_vertex_valid(ϕ, I...)
-            ratio = phase_vertex[I...][p]
-            derivative, dη = enzyme_stress_gradients(
-                material,
-                (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
-                (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
-                _stress_vertex_viscosity(ϕ, η, ηv, Ic, I), av_clamped(P, Ic...), λv[I...],
-                λ_relaxation, dt, av_clamped(EII_pl, Ic...),
-                (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
-                0.0, ratio,
-            )
-            isnothing(ϕ) && (ηv_gradient[I...] += dη)
-            store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
-        end
+        ratio = phase_vertex[I...][p]
+        derivative, dη = enzyme_stress_gradients(
+            material,
+            (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
+            (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
+            ηv[I...], av_clamped(P, Ic...), λv[I...], λ_relaxation, dt,
+            av_clamped(EII_pl, Ic...),
+            (τv_seed[1][I...], τv_seed[2][I...], τv_seed[3][I...]),
+            0.0, ratio,
+        )
+        ηv_gradient[I...] += dη
+        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
 
-        if all(I .≤ ni) && _stress_center_valid(ϕ, I...)
+        if all(I .≤ ni)
             ratio = phase_center[I...][p]
             derivative, dη = enzyme_stress_gradients(
                 material,
@@ -248,7 +232,7 @@ Base.@propagate_inbounds @inline _stress_vertex_viscosity(::JustRelax.RockRatio,
                 (τ_seed[1][I...], τ_seed[2][I...], τ_seed[3][I...]),
                 θ_seed[I...], ratio,
             )
-            isnothing(ϕ) && (η_gradient[I...] += dη)
+            η_gradient[I...] += dη
             store_parameter_gradients!(centers, parameters, material, derivative, p, I)
         end
     end

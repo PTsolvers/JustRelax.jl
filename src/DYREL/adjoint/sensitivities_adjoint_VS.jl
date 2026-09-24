@@ -47,7 +47,7 @@ function compute_sensitivities!(
     # Pull back the local stress update to its material parameters. This only reads the stress
     # seeds, so it has to run before the reverse stress kernel below consumes them.
     compute_stress_sensitivities!(
-        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients; ϕ
+        stokes, stokes_ad, phase_ratios, ϕ, rheology, λ_relaxation, dt, periodic, gradients
     )
 
     # viscosity sensitivity: the reverse stress kernel folds the harmonic vertex viscosity back
@@ -63,4 +63,31 @@ function compute_sensitivities!(
     )
 
     return stokes_ad
+end
+
+# Masked counterpart of `compute_stress_sensitivities!`: material parameters only, the viscosity
+# sensitivity comes from the reverse variational stress kernel.
+function compute_stress_sensitivities!(
+        stokes, adjoint, phases, ϕ::JustRelax.RockRatio, rheology, λ_relaxation, dt, periodic,
+        gradients,
+    )
+    names = keys(gradients)
+    centers = map(entry -> entry.center, gradients)
+    vertices = map(entry -> entry.vertex, gradients)
+    for (p, material) in enumerate(rheology)
+        parameters = _resolve_parameter_paths(material, names, _stress_parameter_paths)
+
+        @parallel (@idx size(phases.vertex)) stress_sensitivity_kernel!(
+            centers, vertices, parameters,
+            material, p, phases.center, phases.vertex,
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
+            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
+            stokes.EII_pl, stokes.P, stokes.λ, stokes.λv, stokes.viscosity.η,
+            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
+            adjoint.θ, λ_relaxation, dt, periodic, ϕ,
+        )
+    end
+    return nothing
 end

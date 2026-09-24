@@ -257,9 +257,13 @@ function sinking_block2D_VE(
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        # injected particles take their stress and vorticity from the grid
+        # injected particles take their stress from the cell-center stress. JustPIC interpolates
+        # vertex fields as ghosted arrays, so the center shear stress τ.xy_c is used instead of
+        # the vertex τ.xy. Their vorticity is not needed: `rotate_stress!` refreshes it (and the
+        # stress) from the grid on every particle before rotating.
+        pτxx, pτyy, pτxy, _ = unwrap(pτ)
         inject_particles_phase!(
-            particles, pPhases, unwrap(pτ), (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy)
+            particles, pPhases, (pτxx, pτyy, pτxy), (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

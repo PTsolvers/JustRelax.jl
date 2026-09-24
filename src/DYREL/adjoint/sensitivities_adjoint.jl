@@ -219,8 +219,7 @@ function compute_linear_viscosity_parameter_sensitivities!(
 end
 
 function compute_stress_sensitivities!(
-        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients;
-        ϕ = nothing,
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
     )
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
@@ -239,7 +238,7 @@ function compute_stress_sensitivities!(
             adjoint.viscosity.η, adjoint.viscosity.ηv,
             (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
             (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            adjoint.θ, λ_relaxation, dt, periodic, ϕ,
+            adjoint.θ, λ_relaxation, dt, periodic,
         )
     end
     return nothing

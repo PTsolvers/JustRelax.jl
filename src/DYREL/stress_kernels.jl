@@ -192,6 +192,38 @@ end
         ν, visc_args, cutoff, linear_viscosity,
         periodic,
     )
+    compute_stress_viscosity_DRYEL_point!(
+        τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, λ, λv, η, ηv, η_vep, ΔPψ,
+        θc, RP, γ_eff, rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
+        ν, visc_args, cutoff, linear_viscosity, periodic, I...,
+    )
+    return nothing
+end
+
+# Body of the 2D fused stress + viscosity kernel at vertex/center `I`. It is a separate function
+# so the adjoint can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+@inline function compute_stress_viscosity_DRYEL_point!(
+        τ,
+        τ_v,
+        τ_o,
+        τ_ov,
+        τII,
+        ε,
+        ε_pl,
+        EII_pl,
+        ε_vol_pl,
+        P,
+        λ,
+        λv,
+        η,
+        ηv,
+        η_vep,
+        ΔPψ,
+        θc, RP, γ_eff,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
+        ν, visc_args, cutoff, linear_viscosity,
+        periodic, I::Vararg{Integer, 2},
+    )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
 
@@ -848,6 +880,35 @@ end
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         periodic,
+    )
+    compute_stress_DRYEL_point!(
+        τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, λ, λv, η, η_vep, ΔPψ, ϕ,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, periodic, I...,
+    )
+    return nothing
+end
+
+# Body of the variational stress kernel at vertex/center `I`. It is a separate function so the
+# adjoint can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+@inline function compute_stress_DRYEL_point!(
+        τ,
+        τ_v,
+        τ_o,
+        τ_ov,
+        τII,
+        ε,
+        ε_pl,
+        EII_pl,
+        ε_vol_pl,
+        P,
+        λ,
+        λv,
+        η,
+        η_vep,
+        ΔPψ,
+        ϕ::JustRelax.RockRatio,
+        rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
+        periodic, I::Vararg{Integer, 2},
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4

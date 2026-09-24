@@ -25,28 +25,9 @@ function enzyme_compute_∇V_strain_rate_RP!(
     ΔT = haskey(args, :ΔT) ? args.ΔT : nothing
     melt_fraction = haskey(args, :melt_fraction) ? args.melt_fraction : nothing
 
-    @parallel (@idx ni .+ 1) configcall = compute_∇V_strain_rate_RP!(
-        stokes.ε.xx,
-        stokes.ε.yy,
-        stokes.ε.xy,
-        stokes.V.Vx,
-        stokes.V.Vy,
-        stokes.R.RP,
-        stokes.P,
-        stokes.P0,
-        stokes.Q,
-        dyrel.ηb,
-        _di.vertex,
-        _di.velocity...,
-        rheology,
-        phase_ratios.center,
-        ΔT,
-        melt_fraction,
-        dt,
-        do_strain_rate,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_∇V_strain_rate_RP!,
+    enzyme_reverse_rowwise!(
+        compute_∇V_strain_rate_RP_point!,
+        ni .+ 1,
         Enzyme.DuplicatedNoNeed(stokes.ε.xx, adjoint.ε.xx),
         Enzyme.DuplicatedNoNeed(stokes.ε.yy, adjoint.ε.yy),
         Enzyme.DuplicatedNoNeed(stokes.ε.xy, adjoint.ε.xy),
@@ -81,23 +62,9 @@ adjoint fields.
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni; free_surface_dt = 0
     )
-    @parallel (@idx ni) configcall = compute_PH_residual_V!(
-        stokes.R.Rx,
-        stokes.R.Ry,
-        stokes.V.Vx,
-        stokes.V.Vy,
-        stokes.P,
-        stokes.ΔPψ,
-        stokes.τ.xx,
-        stokes.τ.yy,
-        stokes.τ.xy,
-        ρg...,
-        _di.center,
-        _di.vertex,
-        free_surface_dt,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_PH_residual_V!,
+    enzyme_reverse_rowwise!(
+        compute_PH_residual_V_point!,
+        ni,
         Enzyme.DuplicatedNoNeed(stokes.R.Rx, adjoint.R.Rx),
         Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
         Enzyme.DuplicatedNoNeed(stokes.V.Vx, adjoint.V.Vx),
@@ -202,41 +169,10 @@ function enzyme_compute_stress_viscosity_DRYEL!(
         viscosity_cutoff,
         linear_viscosity,
     )
-    ni = size(phase_ratios.vertex)
     periodic = periodic_dims(stokes)
-    @parallel (@idx ni) configcall = compute_stress_viscosity_DRYEL!(
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
-        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
-        stokes.τ.II,
-        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
-        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),
-        stokes.EII_pl,
-        stokes.ε_vol_pl,
-        stokes.P,
-        stokes.λ,
-        stokes.λv,
-        stokes.viscosity.η,
-        stokes.viscosity.ηv,
-        stokes.viscosity.η_vep,
-        stokes.ΔPψ,
-        θc,
-        stokes.R.RP,
-        γ_eff,
-        rheology,
-        phase_ratios.center,
-        phase_ratios.vertex,
-        λ_relaxation,
-        dt,
-        viscosity_relaxation,
-        args,
-        viscosity_cutoff,
-        linear_viscosity,
-        periodic,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_stress_viscosity_DRYEL!,
+    enzyme_reverse_rowwise!(
+        compute_stress_viscosity_DRYEL_point!,
+        size(phase_ratios.vertex),
         Enzyme.DuplicatedNoNeed((stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),(adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c)),
         Enzyme.DuplicatedNoNeed((stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),(adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
         Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),

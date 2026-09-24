@@ -59,6 +59,38 @@ end
         dt,
         do_strain_rate,
     ) where {T}
+    compute_∇V_strain_rate_RP_point!(
+        εxx, εyy, εxy, Vx, Vy, RP, P, P0, Q, ηb, ϕ, _di_vertex, _di_vx, _di_vy, rheology,
+        phase_ratio, ΔT, melt_fraction, dt, do_strain_rate, i, j,
+    )
+    return nothing
+end
+
+# Body of `compute_∇V_strain_rate_RP!` at point (i, j). It is a separate function so the adjoint
+# can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+@inline function compute_∇V_strain_rate_RP_point!(
+        εxx::AbstractArray{T, 2},
+        εyy,
+        εxy,
+        Vx,
+        Vy,
+        RP,
+        P,
+        P0,
+        Q,
+        ηb,
+        ϕ::JustRelax.RockRatio,
+        _di_vertex,
+        _di_vx,
+        _di_vy,
+        rheology,
+        phase_ratio,
+        ΔT,
+        melt_fraction,
+        dt,
+        do_strain_rate,
+        i::Integer, j::Integer,
+    ) where {T}
 
     third = T(1) / T(3)
 
@@ -140,6 +172,32 @@ end
         _di_center,
         _di_vertex,
         dt,
+    ) where {T}
+    compute_PH_residual_V_point!(
+        Rx, Ry, Vx, Vy, P, ΔPψ, τxx, τyy, τxy, ρgx, ρgy, ϕ, _di_center, _di_vertex, dt, i, j,
+    )
+    return nothing
+end
+
+# Body of `compute_PH_residual_V!` at point (i, j). It is a separate function so the adjoint
+# can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+@inline function compute_PH_residual_V_point!(
+        Rx::AbstractArray{T, 2},
+        Ry,
+        Vx,
+        Vy,
+        P,
+        ΔPψ,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vertex,
+        dt,
+        i::Integer, j::Integer,
     ) where {T}
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose

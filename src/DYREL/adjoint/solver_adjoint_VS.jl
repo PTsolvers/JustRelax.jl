@@ -76,8 +76,12 @@ function solve_VariationalDYREL_adjoint!(
     norm_trim(A) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - 1)), dim)...]
     maskRi = ntuple(d -> norm_trim(maskV[d]), dim)
     adjoint_Ri = ntuple(d -> norm_trim(adjoint_velocity_residuals[d]), dim)
+    # adjoint velocity unknowns on the same reduced space, for the scale of the continuity check
+    λV = (stokes_ad.λV.Vx, stokes_ad.λV.Vy)
+    λVi = ntuple(d -> @views(λV[d][2:(size(maskV[d], 1) + 1), 2:(size(maskV[d], 2) + 1)]), dim)
     nV = ntuple(d -> max(sum_mpi(maskRi[d]), 1), dim)
     nP = max(sum_mpi(maskP), 1)
+    lx = grid.max_li
 
     # Reuse the forward DYREL parameters, but not its iteration history.
     dyrel.dVxdτ .= 0
@@ -88,8 +92,6 @@ function solve_VariationalDYREL_adjoint!(
     # Iteration loop
     err_min = Inf
     errV0 = ntuple(_ -> 1.0, dim)
-    errPt0 = 1.0
-    errV00 = ntuple(_ -> 1.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -112,27 +114,28 @@ function solve_VariationalDYREL_adjoint!(
 
         # Residual check
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
-        errPt = masked_norm_mpi(maskP, stokes_ad.P) / √(nP)
-        # Purely relative criteria: the adjoint residuals carry the units of the problem (with
-        # dimensional viscosities the continuity adjoint is ~1e-18 from the start), so an absolute
-        # floor would accept an unconverged pressure. The objective seeds only some velocity
-        # components, so both are measured against the largest initial velocity residual, and
-        # the continuity adjoint, still zero on the first pass, against its value on the second.
+        # Scale-free criteria, so that ϵ does not depend on the units of the problem. The
+        # objective seeds only some velocity components, so the momentum adjoints are measured
+        # against the largest initial one. The continuity adjoint is the divergence of λV and,
+        # like the forward `RP·lx/Vspan`, is measured against the λV scale over the domain length.
+        # (Relative to its own initial value instead, it would have to drop by ϵ, which the
+        # Powell–Hestenes iteration only reaches after many passes.)
         if isone(itPH)
             errV0 = ntuple(_ -> maximum(errV) + eps(), dim)
-            errPt0 = errPt + eps()
         end
-        if itPH == 2
-            errPt0 = errPt + eps()
-        end
-        err = maximum((ntuple(d -> errV[d] / errV0[d], dim)..., errPt / errPt0))
+        # not `nonzero_span`: its absolute threshold is far above a dimensional λV (~dx²/η);
+        # λV is exactly zero only on the first pass
+        λVspan = maximum(map(masked_value_scale, maskV, λVi))
+        λVspan = iszero(λVspan) ? one(λVspan) : λVspan
+        errPt = masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan
+        err = maximum((ntuple(d -> errV[d] / errV0[d], dim)..., errPt))
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
                 ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
@@ -186,13 +189,9 @@ function solve_VariationalDYREL_adjoint!(
             # Residual check
             if iszero(iter % nout)
                 errV = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
-                if iter == nout
-                    errV_scale = maximum(errV) + eps()
-                    errV00 = ntuple(_ -> errV_scale, dim)
-                end
-
-                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
-                err = maximum(errV_ratio)
+                # same reference as the outer check: relative to the value after the first `nout`
+                # iterations, a residual already at round-off by then can never drop by `rel_drop`
+                err = maximum(ntuple(d -> errV[d] / errV0[d], dim))
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 if verbose_DR && igg.me == 0

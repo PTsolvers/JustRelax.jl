@@ -89,3 +89,40 @@ end
     end
     return nothing
 end
+
+"""
+    enzyme_reverse_rowwise!(f, n, args...)
+
+Reverse-mode differentiate the point function `f(args..., i, j)` over the 2D index range
+`1:n[1] × 1:n[2]`, with `args` given as Enzyme annotations.
+
+Differentiating a whole `@parallel_indices` kernel makes Enzyme differentiate its threaded loop,
+which stores every point's intermediate values on a heap tape and is ~100× slower than the
+forward kernel. Differentiating one point at a time keeps the tape on the stack. The shadow
+accumulation into neighbouring points is then parallelized by row coloring, which requires `f`
+to touch at most two consecutive rows `j + o`, `j + o + 1` of each array from row `j` (a fixed
+offset `o` per array, e.g. centers `j-1:j` and vertices `j:j+1` for the stress kernels). Rows of
+equal parity are then disjoint and run in parallel. The first and last row can wrap across a
+periodic seam, so they run on a single thread before and after. CPU only.
+"""
+function enzyme_reverse_rowwise!(f::F, n::NTuple{2, Integer}, args::Vararg{Any, N}) where {F, N}
+    nx, ny = n
+    # the serial first row also compiles the reverse pass before any thread needs it
+    _enzyme_reverse_row!(f, 1, nx, args...)
+    for first_row in (2, 3)
+        Threads.@threads for j in first_row:2:(ny - 1)
+            _enzyme_reverse_row!(f, j, nx, args...)
+        end
+    end
+    ny > 1 && _enzyme_reverse_row!(f, ny, nx, args...)
+    return nothing
+end
+
+function _enzyme_reverse_row!(f::F, j, nx, args::Vararg{Any, N}) where {F, N}
+    for i in 1:nx
+        Enzyme.autodiff(
+            Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const, args..., Enzyme.Const(i), Enzyme.Const(j)
+        )
+    end
+    return nothing
+end

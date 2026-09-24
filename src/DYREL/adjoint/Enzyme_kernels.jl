@@ -79,9 +79,11 @@ end
 Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
 `adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs; pressure and
 stress sensitivities accumulate in `adjoint.P`, `adjoint.θ`, and
-`adjoint.τ`. Buoyancy is constant in this pass.
+`adjoint.τ`, while buoyancy sensitivities accumulate in `adjoint.dρgx`
+and `adjoint.ρ`.
 """
 function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+    dρg = (adjoint.dρgx, adjoint.ρ)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
         stokes.R.Rx,
         stokes.R.Ry,
@@ -103,42 +105,28 @@ function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
         Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
         Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
         Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
-        Enzyme.Const(ρg[1]),
-        Enzyme.Const(ρg[2]),
+        Enzyme.DuplicatedNoNeed(ρg[1], dρg[1]),
+        Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
         Enzyme.Const(_di.center),
         Enzyme.Const(_di.vertex),
     )
     return nothing
 end
 
-# A distinct pressure array is a prescribed input, not the Stokes unknown.
-function buoyancy_uses_stokes_pressure(stokes, args)
-    P = get(args, :P, nothing)
-    P === stokes.P && return true
-    if P isa AbstractArray && Base.mightalias(P, stokes.P)
-        throw(ArgumentError("pass stokes.P directly in args.P for the buoyancy pressure adjoint; overlapping views are not supported"))
-    end
-    return false
-end
-
 """
     enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args, pressure_dependent_buoyancy
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args
     )
 
-Reverse the momentum residual and its pressure-dependent buoyancy. The reusable
-buoyancy-sensitivity buffers are read from `adjoint` when `pressure_dependent_buoyancy`
-is true. Accumulate the additional pressure derivative before either the outer residual
-check or the inner Schur-complement correction.
+Reverse the momentum residual and propagate its buoyancy sensitivity through density
+to the coupled Stokes pressure. The adjoint solver requires `args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args, pressure_dependent_buoyancy
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args
     )
-    pressure_dependent_buoyancy ||
-        return enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
     dρg = (adjoint.dρgx, adjoint.ρ)
     foreach(A -> fill!(A, 0.0), dρg)
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
+    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
     @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
         adjoint.P, dρg, phases.center, rheology, args
     )
@@ -208,21 +196,12 @@ function enzyme_compute_stress_DRYEL!(
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_stress_DRYEL!,
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-        ),
-        Enzyme.DuplicatedNoNeed(
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-        ),
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),(adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),),
+        Enzyme.DuplicatedNoNeed((stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),(adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),),
         Enzyme.Const((stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c)),
         Enzyme.Const((stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy)),
         Enzyme.DuplicatedNoNeed(stokes.τ.II, adjoint.τ.II),
-        Enzyme.DuplicatedNoNeed(
-            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
-            (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
-        ),
+        Enzyme.DuplicatedNoNeed((stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),(adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),),
         Enzyme.Const((stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy)),
         Enzyme.Const(stokes.EII_pl),
         Enzyme.Const(stokes.ε_vol_pl),

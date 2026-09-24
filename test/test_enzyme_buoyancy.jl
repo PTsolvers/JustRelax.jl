@@ -21,7 +21,6 @@ end
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
-    dρg = (@zeros(ni...), @zeros(ni...))
     stokes.P .= reshape(collect(1.0:prod(ni)), ni) ./ 10
     T = reshape(collect(1.0:20.0), ni .+ 2) ./ 10
     seedx = reshape(sin.(1:length(stokes.R.Rx)), size(stokes.R.Rx))
@@ -32,7 +31,7 @@ end
         Compressible_Density(; ρ0 = 3.0, β = 0.2, P0 = 0.1),
     )
     for gravity in (ConstantGravity(; g = 1.4), DippingGravity(40.0, 0.0, 1.4)),
-            pressure_dependent in (true, false), coupled in (true, false)
+            pressure_dependent in (true, false)
         rheology = ntuple(2) do p
             SetMaterialParams(;
                 Phase = p,
@@ -40,10 +39,7 @@ end
                 Gravity = gravity,
             )
         end
-        args = (; T, P = coupled ? stokes.P : copy(stokes.P))
-        active = JustRelax2D.buoyancy_uses_stokes_pressure(stokes, args)
-        @test active == coupled
-        scratch = active ? dρg : nothing
+        args = (; T, P = stokes.P)
         objective = function ()
             compute_ρg!(ρg, phases, rheology, args)
             @parallel (@idx ni) JustRelax2D.compute_PH_residual_V!(
@@ -60,9 +56,10 @@ end
             adjoint.P .= 0.37
             adjoint.R.Rx .= seedx
             adjoint.R.Ry .= seedy
-            fill!.(dρg, 123.0)
+            adjoint.dρgx .= 123.0
+            adjoint.ρ .= 123.0
             JustRelax2D.enzyme_compute_PH_residual_V!(
-                stokes, adjoint, ρg, grid._di, ni, rheology, phases, args, scratch
+                stokes, adjoint, ρg, grid._di, ni, rheology, phases, args
             )
             isnothing(previous) || @test adjoint.P ≈ previous
             previous = copy(adjoint.P)
@@ -82,13 +79,10 @@ end
         adjoint.R.Rx .= seedx
         adjoint.R.Ry .= seedy
         JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
-        if coupled && pressure_dependent
+        if pressure_dependent
             @test maximum(abs, adjoint.P .- previous) > 1.0e-3
         else
             @test adjoint.P ≈ previous
         end
     end
-    @test !JustRelax2D.buoyancy_uses_stokes_pressure(stokes, (; T))
-    @test !JustRelax2D.buoyancy_uses_stokes_pressure(stokes, (; T, P = 0.5))
-    @test_throws ArgumentError JustRelax2D.buoyancy_uses_stokes_pressure(stokes, (; T, P = view(stokes.P, :, :)))
 end

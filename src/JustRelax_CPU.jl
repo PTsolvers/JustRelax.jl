@@ -47,7 +47,7 @@ module JustRelax2D
     include("DYREL/solver.jl")
     export solve_DYREL!, DYREL
 
-    include("DYREL/adjoint/velocity_kernels_adjoint.jl")
+    include("DYREL/adjoint/adjoint_helpers.jl")
     include("DYREL/adjoint/Enzyme_kernels.jl")
     include("DYREL/adjoint/Enzyme_gradients_kernels.jl")
     include("DYREL/adjoint/sensitivities_adjoint.jl")

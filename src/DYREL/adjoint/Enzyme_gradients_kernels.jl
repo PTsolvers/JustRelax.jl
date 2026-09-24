@@ -75,45 +75,6 @@ cached fields back to the user-facing angles in degrees.
     end
 end
 
-"""
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
-
-Differentiate the momentum residual with respect to pressure, stress, and the
-two buoyancy-force arrays. The residual seeds are read from `adjoint.R`;
-sensitivities accumulate in `adjoint.P`, `adjoint.τ`, `adjoint.dρgx`, and
-`adjoint.ρ`.
-"""
-function enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, _di, ni)
-    dρg = (adjoint.dρgx, adjoint.ρ)
-    @parallel (@idx ni) configcall = compute_PH_residual_V!(
-        stokes.R.Rx,
-        stokes.R.Ry,
-        stokes.P,
-        stokes.ΔPψ,
-        stokes.τ.xx,
-        stokes.τ.yy,
-        stokes.τ.xy,
-        ρg...,
-        _di.center,
-        _di.vertex,
-    ) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        compute_PH_residual_V!,
-        Enzyme.DuplicatedNoNeed(stokes.R.Rx, adjoint.R.Rx),
-        Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
-        Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
-        Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
-        Enzyme.DuplicatedNoNeed(stokes.τ.yy, adjoint.τ.yy),
-        Enzyme.DuplicatedNoNeed(stokes.τ.xy, adjoint.τ.xy),
-        Enzyme.DuplicatedNoNeed(ρg[1], dρg[1]),
-        Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
-        Enzyme.Const(_di.center),
-        Enzyme.Const(_di.vertex),
-    )
-    return nothing
-end
-
 # Pick the thermal-expansion accessor the density model actually provides: the
 # melt-dependent models take the melt fraction, while the plain ones (PT_Density and
 # friends) only define the single-argument method.

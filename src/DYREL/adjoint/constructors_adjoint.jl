@@ -19,11 +19,6 @@ pointwise, phase-wise layout:
 The center and vertex contributions remain separate during sensitivity evaluation. After
 all paths have been accumulated, the transpose of the center-to-vertex interpolation is
 added to `center`; `vertex` retains the uncombined contribution for diagnostics.
-
-Pass the result as `gradients` to `solve_DYREL!`. Gradients are derivatives with respect to the numeric
-GeoParams parameter values, including the buoyancy and thermal pressure-residual
-contributions, with previous-step state held fixed. A parameter that a phase's model does
-not define has zero gradient for that phase.
 """
 function material_controls(
         ::Type{CPUBackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};

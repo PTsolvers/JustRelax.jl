@@ -179,6 +179,7 @@ function shear_band2D_adjoint_materials(
         verbose = true,
         rheology = material_shear_band_rheology(),
         final_rheology = nothing,
+        η_multiplier = nothing,
     )
     ni = nx, ny
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -261,6 +262,7 @@ function shear_band2D_adjoint_materials(
     for step in 1:nt
         run_adjoint = adjoint && step == nt
         step_rheology = step == nt && !isnothing(final_rheology) ? final_rheology : rheology
+        step_η_multiplier = step == nt ? η_multiplier : nothing
         solve_DYREL!(
             stokes,
             stokes_ad,
@@ -283,6 +285,7 @@ function shear_band2D_adjoint_materials(
             viscosity_relaxation = 1,
             viscosity_cutoff,
             linear_viscosity = true,
+            η_multiplier = step_η_multiplier,
             adjoint = run_adjoint,
             observation,
             gradients = run_adjoint ? gradients : (;),
@@ -314,6 +317,10 @@ function shear_band2D_adjoint_materials(
         cost,
         gradients = material_gradients,
         phase_gradients,
+        viscosity_gradient = Array(stokes_ad.viscosity.η),
+        viscosity_gradient_vertex = Array(stokes_ad.viscosity.ηv),
+        viscosity = Array(stokes.viscosity.η),
+        viscosity_vertex = Array(stokes.viscosity.ηv),
         yielded_center = Array(stokes.λ .> 0),
         yielded_vertex = Array(stokes.λv .> 0),
         target_parameters,

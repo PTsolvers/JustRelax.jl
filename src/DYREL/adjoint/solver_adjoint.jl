@@ -54,6 +54,9 @@ function solve_DYREL_adjoint!(
     _di = grid._di
     ni = size(stokes.P)
 
+    get(args, :P, nothing) === stokes.P ||
+        throw(ArgumentError("the adjoint solve requires args.P === stokes.P"))
+
     igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (DYREL) ########\n")
 
     # Reuse the forward DYREL parameters, but not its iteration history.
@@ -69,8 +72,6 @@ function solve_DYREL_adjoint!(
     ϵ = dyrel.ϵ
     err = 2 * ϵ
 
-    pressure_dependent_buoyancy = buoyancy_uses_stokes_pressure(stokes, args)
-
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
 
@@ -82,8 +83,7 @@ function solve_DYREL_adjoint!(
         observation.target[observation.i, observation.j] .= -1.0
 
         enzyme_compute_PH_residual_V!(
-            stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args,
-            pressure_dependent_buoyancy,
+            stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args
         )
         enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt)
         enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
@@ -137,8 +137,7 @@ function solve_DYREL_adjoint!(
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
 
             enzyme_compute_PH_residual_V!(
-                stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args,
-                pressure_dependent_buoyancy,
+                stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args
             )
             enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_DR, dt)
             enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)

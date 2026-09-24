@@ -75,7 +75,7 @@ function compute_sensitivities!(
     @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
 
     # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
-    enzyme_compute_PH_residual_V_sensitivity!(stokes, stokes_ad, ρg, _di, ni)
+    enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
 
     # Pull back the local stress update to its material parameters and viscosity fields.
     compute_stress_sensitivities!(

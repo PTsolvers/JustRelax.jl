@@ -512,16 +512,6 @@ end
     JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
     @test any(!iszero, adjoint.P)
     @test any(!iszero, adjoint.τ.xy)
-
-    adjoint.R.Rx .= 1.0
-    adjoint.R.Ry .= 1.0
-    adjoint.P .= 0.0
-    adjoint.τ.xy .= 0.0
-    adjoint.dρgx .= 0.0
-    adjoint.ρ .= 0.0
-    JustRelax2D.enzyme_compute_PH_residual_V_sensitivity!(stokes, adjoint, ρg, grid._di, ni)
-    @test any(!iszero, adjoint.P)
-    @test any(!iszero, adjoint.τ.xy)
     @test any(!iszero, adjoint.dρgx)
     @test any(!iszero, adjoint.ρ)
 

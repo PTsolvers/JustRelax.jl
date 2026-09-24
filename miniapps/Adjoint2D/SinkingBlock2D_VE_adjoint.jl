@@ -151,9 +151,11 @@ function sinking_block2D_VE(
     particles = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
-    # temperature
+    # material phase
     pPhases, = init_cell_arrays(particles, Val(1))
-    particle_args = (pPhases,)
+    # deviatoric stress and vorticity, so the elastic stress history moves with the material
+    pτ = StressParticles(particles)
+    particle_args = (pPhases, unwrap(pτ)...)
     # Rectangular density anomaly
     xc_anomaly = 0.0      # centred horizontally (domain spans -lx/2 .. lx/2)
     yc_anomaly = -ly / 4  # centred vertically; `init_phases!` takes it as a depth
@@ -206,6 +208,10 @@ function sinking_block2D_VE(
 
         AdjointSolve = adjoint && it == nt
         step_η_multiplier = it == nt ? η_multiplier : nothing
+
+        # hand the advected and rotated particle stress to the solver as τ_o
+        stress2grid!(stokes, pτ, particles)
+
         # Stokes solver ----------------
         args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
         solve_DYREL!(
@@ -235,6 +241,8 @@ function sinking_block2D_VE(
             adjoint = AdjointSolve,
             observation = observation,
         )
+        # put the new stress on the particles and rotate it over the step just solved
+        rotate_stress!(pτ, stokes, particles, dt)
         dt = compute_dt(stokes, di, igg) * 0.1
         # ------------------------------
 
@@ -249,9 +257,14 @@ function sinking_block2D_VE(
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
+        # injected particles take their stress and vorticity from the grid
+        inject_particles_phase!(
+            particles, pPhases, unwrap(pτ), (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy)
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+        # buoyancy follows the advected phases
+        compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
 
         if plot_results && it in (0, nt)

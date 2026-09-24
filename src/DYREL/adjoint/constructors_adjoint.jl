@@ -48,9 +48,25 @@ function AdjointStokesArrays(::Type{CPUBackend}, ni::NTuple{N, Integer}) where {
     return AdjointStokesArrays(ni)
 end
 
-AdjointStokesArrays(ni::Vararg{Integer, N}) where {N} = AdjointStokesArrays(tuple(ni...))
+function AdjointStokesArrays(
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, bcs::AbstractFlowBoundaryConditions
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic_dims(bcs))
+end
 
-function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
+function AdjointStokesArrays(
+        ::Type{CPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic)
+end
+
+AdjointStokesArrays(ni::Vararg{Integer, N}) where {N} = AdjointStokesArrays(tuple(ni...))
+AdjointStokesArrays(ni::NTuple{N, Integer}) where {N} =
+    AdjointStokesArrays(ni, ntuple(_ -> false, Val(N)))
+
+function AdjointStokesArrays(
+        ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}
+    ) where {N}
     P = @zeros(ni...)
     θ = @zeros(ni...)
     λP = @zeros(ni...)
@@ -64,7 +80,7 @@ function AdjointStokesArrays(ni::NTuple{N, Integer}) where {N}
     EII_pl = @zeros(ni...)
     viscosity = Viscosity(ni)
     τ_o = SymmetricTensor(ni...)
-    R = Residual(ni...)
+    R = Residual(ni, periodic)
     U = Displacement(ni...)
     ω = Vorticity(ni...)
     η = @zeros(ni...)

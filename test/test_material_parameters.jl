@@ -80,6 +80,14 @@ end
     )
 end
 
+@testset "Periodic adjoint allocation" begin
+    ni = (4, 3)
+    periodic = (true, false)
+    adjoint = AdjointStokesArrays(CPUBackend, ni, periodic)
+    @test size(adjoint.R.Rx) == ni
+    @test size(adjoint.R.Ry) == (ni[1], ni[2] - 1)
+end
+
 # `combine_center_vertex_gradient!` has to be the exact transpose of `center2vertex!`,
 # otherwise the elastic gradient is wrong wherever the two grids disagree -- which is
 # every boundary cell. The adjoint identity <center2vertex!(c), v̄> == <c, pullback(v̄)>
@@ -114,4 +122,26 @@ end
     @test_throws DimensionMismatch JustRelax2D.combine_center_vertex_gradient!(
         @zeros(1, 3, 3), @zeros(1, 3, 3), 1
     )
+
+    for periodic in ((true, false), (false, true), (true, true))
+        nx, ny = 4, 3
+        c = rand(nx, ny)
+        v̄ = rand(nx + 1, ny + 1)
+        v = zeros(nx + 1, ny + 1)
+        for iv in axes(v, 1), jv in axes(v, 2)
+            iv_eff = periodic[1] ? iv : clamp(iv, 2, nx)
+            jv_eff = periodic[2] ? jv : clamp(jv, 2, ny)
+            i0 = periodic[1] ? mod1(iv_eff - 1, nx) : iv_eff - 1
+            ic = periodic[1] ? mod1(iv_eff, nx) : iv_eff
+            j0 = periodic[2] ? mod1(jv_eff - 1, ny) : jv_eff - 1
+            jc = periodic[2] ? mod1(jv_eff, ny) : jv_eff
+            v[iv, jv] = 0.25 * (c[i0, j0] + c[ic, jc] + c[i0, jc] + c[ic, j0])
+        end
+
+        c̄ = @zeros(1, nx, ny)
+        seed = @zeros(1, nx + 1, ny + 1)
+        copyto!(seed, reshape(v̄, 1, nx + 1, ny + 1))
+        JustRelax2D.combine_center_vertex_gradient!(c̄, seed, 1, periodic)
+        @test sum(v .* v̄) ≈ sum(c .* Array(c̄)[1, :, :])
+    end
 end

@@ -11,6 +11,29 @@ using JustRelax, JustRelax.JustRelax2D
     return nothing
 end
 
+@testset "Free-surface stabilization adjoint" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ρg = (@zeros(ni...), @zeros(ni...))
+    ρg[2] .= reshape(collect(1.0:prod(ni)), ni)
+    Ry_seed = reshape(cos.(1:length(adjoint.R.Ry)), size(adjoint.R.Ry))
+    adjoint.R.Ry .= Ry_seed
+    free_surface_dt = 0.3
+
+    JustRelax2D.enzyme_compute_PH_residual_V!(
+        stokes, adjoint, ρg, grid._di, ni; free_surface_dt
+    )
+
+    expected = zero(adjoint.V.Vy)
+    for i in axes(adjoint.R.Ry, 1), j in axes(adjoint.R.Ry, 2)
+        dρgdy = (ρg[2][i, j + 1] - ρg[2][i, j]) * grid._di.center[2]
+        expected[i + 1, j + 1] = Ry_seed[i, j] * dρgdy * free_surface_dt
+    end
+    @test adjoint.V.Vy ≈ expected
+end
+
 # Reverse the actual momentum residual, including the original buoyancy evaluation,
 # and compare its pressure column with finite differences at every cell.
 @testset "Pressure-density-buoyancy adjoint" begin

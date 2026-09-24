@@ -37,7 +37,10 @@ function solve_DYREL_adjoint!(
         igg;
         λ_relaxation_DR,
         λ_relaxation_PH,
-        iterMax,
+        pressure_relaxation,
+        free_surface,
+        iterMax_PH,
+        iterMax_DR,
         total_iterMax,
         nout,
         rel_drop,
@@ -49,10 +52,19 @@ function solve_DYREL_adjoint!(
         kwargs...,
     ) where {N}
     dim = Val(N)
-    v_dofs = velocity_dofs(dim)
+    v_dofs = velocity_dofs(dim, periodic_dims(stokes))
     p_dof = pressure_dof(dim)
     _di = grid._di
     ni = size(stokes.P)
+    adjoint_velocity_residuals = (
+        @view(stokes_ad.V.Vx[2:(size(stokes.R.Rx, 1) + 1), 2:(size(stokes.R.Rx, 2) + 1)]),
+        @view(stokes_ad.V.Vy[2:(size(stokes.R.Ry, 1) + 1), 2:(size(stokes.R.Ry, 2) + 1)]),
+    )
+
+    size(stokes_ad.R.Rx) == size(stokes.R.Rx) &&
+        size(stokes_ad.R.Ry) == size(stokes.R.Ry) || throw(
+        ArgumentError("stokes and stokes_ad must use the same periodic boundary allocation")
+    )
 
     get(args, :P, nothing) === stokes.P ||
         throw(ArgumentError("the adjoint solve requires args.P === stokes.P"))
@@ -75,7 +87,7 @@ function solve_DYREL_adjoint!(
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
 
-    for itPH in 1:1000
+    for itPH in 1:Int(iterMax_PH)
 
         initialize_adjoint_iteration!(stokes_ad, ni)
 
@@ -83,17 +95,15 @@ function solve_DYREL_adjoint!(
         observation.target[observation.i, observation.j] .= -1.0
 
         enzyme_compute_PH_residual_V!(
-            stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args
+            stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
+            free_surface_dt = dt * free_surface,
         )
         enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_PH, dt)
         enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
         enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
 
         # Residual check
-        errV = (
-            norm_mpi(@view(stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)])) / √(v_dofs[1]),
-            norm_mpi(@view(stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)])) / √(v_dofs[2]),
-        )
+        errV = ntuple(d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim)
         errPt = norm_mpi(stokes_ad.P) / √(p_dof)
         if isone(itPH)
             errV0 = map(x -> x + eps(), errV)
@@ -127,7 +137,7 @@ function solve_DYREL_adjoint!(
 
         ϵ_vel = err * rel_drop
         itPT = 0
-        while (err > ϵ_vel && itPT ≤ iterMax)
+        while (err > ϵ_vel && itPT ≤ iterMax_DR)
             itPT += 1
             iter += 1
 
@@ -137,7 +147,8 @@ function solve_DYREL_adjoint!(
             observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
 
             enzyme_compute_PH_residual_V!(
-                stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args
+                stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
+                free_surface_dt = dt * free_surface,
             )
             enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, λ_relaxation_DR, dt)
             enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
@@ -164,9 +175,8 @@ function solve_DYREL_adjoint!(
             )
 
             if iszero(iter % nout)
-                errV = (
-                    norm_mpi(@view(stokes_ad.V.Vx[2:(end - 1), 2:(end - 1)])) / √(v_dofs[1]),
-                    norm_mpi(@view(stokes_ad.V.Vy[2:(end - 1), 2:(end - 1)])) / √(v_dofs[2]),
+                errV = ntuple(
+                    d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim
                 )
             end
 
@@ -188,7 +198,7 @@ function solve_DYREL_adjoint!(
 
         end
 
-        @. stokes_ad.λP += dyrel.γ_eff * stokes_ad.P
+        @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P
 
         iter > total_iterMax && break
     end
@@ -196,7 +206,7 @@ function solve_DYREL_adjoint!(
     # sensitivity evaluation
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg,
-        gradients, args; viscosity_cutoff,
+        gradients, args; viscosity_cutoff, free_surface,
     )
 
     # Do not carry adjoint iteration history into the next forward solve.

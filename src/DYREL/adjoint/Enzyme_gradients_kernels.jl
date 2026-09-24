@@ -201,12 +201,12 @@ end
         material, p, phase_center, phase_vertex,
         τ_o, τ_ov, ε, EII_pl, P, λ, λv, η, ηv,
         η_gradient, ηv_gradient,
-        τ_seed, τv_seed, θ_seed, λ_relaxation, dt,
+        τ_seed, τv_seed, θ_seed, λ_relaxation, dt, periodic,
     )
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
     ni = size(phase_center)
     @inbounds begin
-        Ic = clamped_indices(ni, I...)
+        Ic = clamped_indices(ni, periodic, I...)
         ratio = phase_vertex[I...][p]
         derivative, dη = enzyme_stress_gradients(
             material,
@@ -237,23 +237,26 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function combine_center_vertex_gradient_kernel!(center, vertex, p)
+@parallel_indices (i, j) function combine_center_vertex_gradient_kernel!(
+        center, vertex, p, periodic
+    )
     nx, ny = size(center, 2), size(center, 3)
     total = zero(eltype(center))
     @inbounds begin
-        # Vertex (iv, jv) was written from the four centers around (clamp(iv, 2, nx),
-        # clamp(jv, 2, ny)), so center (i, j) collects every vertex whose clamped index
-        # is one of (i, j), (i+1, j), (i, j+1), (i+1, j+1).
-        for jc in max(j, 2):min(j + 1, ny)
-            jv_lo = jc == 2 ? 1 : jc
-            jv_hi = jc == ny ? ny + 1 : jc
-            for ic in max(i, 2):min(i + 1, nx)
-                iv_lo = ic == 2 ? 1 : ic
-                iv_hi = ic == nx ? nx + 1 : ic
-                for jv in jv_lo:jv_hi, iv in iv_lo:iv_hi
-                    total += vertex[p, iv, jv]
-                end
-            end
+        iv_left = periodic[1] ? (i == nx ? 1 : 0) : (i == 2 ? 1 : 0)
+        iv_right = periodic[1] ? (i == 1 ? nx + 1 : 0) : (i == nx - 1 ? nx + 1 : 0)
+        jv_bot = periodic[2] ? (j == ny ? 1 : 0) : (j == 2 ? 1 : 0)
+        jv_top = periodic[2] ? (j == 1 ? ny + 1 : 0) : (j == ny - 1 ? ny + 1 : 0)
+        for iv in (i, i + 1, iv_left, iv_right), jv in (j, j + 1, jv_bot, jv_top)
+            (iszero(iv) || iszero(jv)) && continue
+            iv_eff = periodic[1] ? iv : clamp(iv, 2, nx)
+            jv_eff = periodic[2] ? jv : clamp(jv, 2, ny)
+            i0 = periodic[1] ? mod1(iv_eff - 1, nx) : iv_eff - 1
+            ic = periodic[1] ? mod1(iv_eff, nx) : iv_eff
+            j0 = periodic[2] ? mod1(jv_eff - 1, ny) : jv_eff - 1
+            jc = periodic[2] ? mod1(jv_eff, ny) : jv_eff
+            weight = ((i0 == i) + (ic == i)) * ((j0 == j) + (jc == j))
+            total += weight * vertex[p, iv, jv]
         end
         center[p, i, j] += total / 4
     end

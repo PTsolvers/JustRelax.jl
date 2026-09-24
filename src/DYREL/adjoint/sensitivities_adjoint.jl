@@ -39,10 +39,12 @@ function compute_sensitivities!(
         args = (;),
         ;
         viscosity_cutoff = (-Inf, Inf),
+        free_surface = false,
     )
 
     center_dims = (length(rheology), ni...)
     vertex_dims = (length(rheology), (ni .+ 1)...)
+    periodic = periodic_dims(stokes)
     for name in keys(gradients)
         # Check that the parameter is used and its phase-wise buffers fit the grid.
         any(material -> material_parameter_is_used(material, name), rheology) ||
@@ -71,15 +73,21 @@ function compute_sensitivities!(
     stokes_ad.ρ            .= 0.0
     stokes_ad.dρgx         .= 0.0
 
-    @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(end - 1), 2:(end - 1)]
-    @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(end - 1), 2:(end - 1)]
+    @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[
+        2:(size(stokes_ad.R.Rx, 1) + 1), 2:(size(stokes_ad.R.Rx, 2) + 1),
+    ]
+    @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[
+        2:(size(stokes_ad.R.Ry, 1) + 1), 2:(size(stokes_ad.R.Ry, 2) + 1),
+    ]
 
     # differntiates momentum equation w.r.t. stress, pressure and plastic pressuure correction
-    enzyme_compute_PH_residual_V!(stokes, stokes_ad, ρg, _di, ni)
+    enzyme_compute_PH_residual_V!(
+        stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
+    )
 
     # Pull back the local stress update to its material parameters and viscosity fields.
     compute_stress_sensitivities!(
-        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, gradients
+        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients
     )
 
     compute_linear_viscosity_parameter_sensitivities!(
@@ -94,7 +102,7 @@ function compute_sensitivities!(
 
     compute_density_parameter_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, gradients)
     for gradient in values(gradients), p in eachindex(rheology)
-        combine_center_vertex_gradient!(gradient.center, gradient.vertex, p)
+        combine_center_vertex_gradient!(gradient.center, gradient.vertex, p, periodic)
     end
 
     return stokes_ad
@@ -184,7 +192,7 @@ function compute_linear_viscosity_parameter_sensitivities!(
 end
 
 function compute_stress_sensitivities!(
-        stokes, adjoint, phases, rheology, λ_relaxation, dt, gradients
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
     )
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
@@ -203,31 +211,33 @@ function compute_stress_sensitivities!(
             adjoint.viscosity.η, adjoint.viscosity.ηv,
             (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
             (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            adjoint.θ, λ_relaxation, dt,
+            adjoint.θ, λ_relaxation, dt, periodic,
         )
     end
     return nothing
 end
 
 """
-    combine_center_vertex_gradient!(center, vertex, p)
+    combine_center_vertex_gradient!(center, vertex, p, periodic = (false, false))
 
 Fold phase `p`'s vertex gradient into its center gradient, the exact adjoint of
 [`center2vertex!`](@ref): each interior vertex is the average of its four surrounding
-centers and each boundary vertex copies the nearest interior one, which the clamped index
-reproduces.
+centers. Nonperiodic boundary vertices copy the nearest interior value; periodic seam
+vertices use the corresponding wrapped centers.
 
 Written as a gather over centers rather than a scatter from vertices, so that no two
 threads accumulate into the same cell.
 """
-function combine_center_vertex_gradient!(center, vertex, p)
+function combine_center_vertex_gradient!(
+        center, vertex, p, periodic = (false, false)
+    )
     ni = size(center)[2:end]
     size(vertex)[2:end] == ni .+ 1 || throw(
         DimensionMismatch(
             "the vertex gradient must be one point larger than the center gradient"
         ),
     )
-    @parallel (@idx ni) combine_center_vertex_gradient_kernel!(center, vertex, p)
+    @parallel (@idx ni) combine_center_vertex_gradient_kernel!(center, vertex, p, periodic)
     return center
 end
 

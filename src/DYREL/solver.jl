@@ -55,13 +55,12 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
-function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs)
-    out = solve_DYREL!(backend(stokes), stokes, args...; kwargs)
-    return out
+function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    return solve_DYREL!(backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs))
 end
 
 # entry point for extensions
-solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs...) = _solve_DYREL!(stokes, args...; kwargs...)
+solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes, args...; kwargs...)
 
 """
     solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
@@ -388,7 +387,10 @@ function _solve_DYREL!(
             igg;
             λ_relaxation_DR,
             λ_relaxation_PH,
-            iterMax,
+            pressure_relaxation,
+            free_surface,
+            iterMax_PH,
+            iterMax_DR,
             total_iterMax,
             nout,
             rel_drop,

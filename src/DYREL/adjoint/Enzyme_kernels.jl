@@ -77,16 +77,20 @@ end
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
 
 Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs; pressure and
-stress sensitivities accumulate in `adjoint.P`, `adjoint.θ`, and
-`adjoint.τ`, while buoyancy sensitivities accumulate in `adjoint.dρgx`
-and `adjoint.ρ`.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Velocity,
+pressure, stress, and buoyancy sensitivities accumulate in their corresponding
+adjoint fields. `free_surface_dt` activates the same stabilization term used
+by the forward residual.
 """
-function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+function enzyme_compute_PH_residual_V!(
+        stokes, adjoint, ρg, _di, ni; free_surface_dt = 0
+    )
     dρg = (adjoint.dρgx, adjoint.ρ)
     @parallel (@idx ni) configcall = compute_PH_residual_V!(
         stokes.R.Rx,
         stokes.R.Ry,
+        stokes.V.Vx,
+        stokes.V.Vy,
         stokes.P,
         stokes.ΔPψ,
         stokes.τ.xx,
@@ -95,11 +99,14 @@ function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
         ρg...,
         _di.center,
         _di.vertex,
+        free_surface_dt,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_PH_residual_V!,
         Enzyme.DuplicatedNoNeed(stokes.R.Rx, adjoint.R.Rx),
         Enzyme.DuplicatedNoNeed(stokes.R.Ry, adjoint.R.Ry),
+        Enzyme.DuplicatedNoNeed(stokes.V.Vx, adjoint.V.Vx),
+        Enzyme.DuplicatedNoNeed(stokes.V.Vy, adjoint.V.Vy),
         Enzyme.DuplicatedNoNeed(stokes.P, adjoint.P),
         Enzyme.DuplicatedNoNeed(stokes.ΔPψ, adjoint.θ),
         Enzyme.DuplicatedNoNeed(stokes.τ.xx, adjoint.τ.xx),
@@ -109,6 +116,7 @@ function enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
         Enzyme.DuplicatedNoNeed(ρg[2], dρg[2]),
         Enzyme.Const(_di.center),
         Enzyme.Const(_di.vertex),
+        Enzyme.Const(free_surface_dt),
     )
     return nothing
 end
@@ -122,11 +130,11 @@ Reverse the momentum residual and propagate its buoyancy sensitivity through den
 to the coupled Stokes pressure. The adjoint solver requires `args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0
     )
     dρg = (adjoint.dρgx, adjoint.ρ)
     foreach(A -> fill!(A, 0.0), dρg)
-    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni; free_surface_dt)
     @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
         adjoint.P, dρg, phases.center, rheology, args
     )
@@ -171,6 +179,7 @@ function enzyme_compute_stress_DRYEL!(
         stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt
     )
     ni = size(phase_ratios.vertex)
+    periodic = periodic_dims(stokes)
     @parallel (@idx ni) configcall = compute_stress_DRYEL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
@@ -193,6 +202,7 @@ function enzyme_compute_stress_DRYEL!(
         phase_ratios.vertex,
         λ_relaxation,
         dt,
+        periodic,
     ) ParallelStencil.AD.autodiff_deferred!(
         Enzyme.set_runtime_activity(Enzyme.Reverse),
         compute_stress_DRYEL!,
@@ -217,6 +227,7 @@ function enzyme_compute_stress_DRYEL!(
         Enzyme.Const(phase_ratios.vertex),
         Enzyme.Const(λ_relaxation),
         Enzyme.Const(dt),
+        Enzyme.Const(periodic),
     )
     return nothing
 end

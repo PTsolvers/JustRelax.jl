@@ -8,8 +8,9 @@ of Larionov, Batty and Bridson (2017), with the physical geodynamic body-force
 terms and JustRelax's pseudo-transient iteration added separately.
 
 The equations and operators described on this page are the 2D ones, which is
-what the tests and miniapps exercise. `solve_VariationalStokes!` also has a
-3D method, built on the same weights, that no test or miniapp covers. Both are
+what the miniapps exercise. `solve_VariationalStokes!` also has a 3D method,
+built on the same weights and limited to uniform grids; it is tested against the
+standard 3D solver at full rock fraction and with a flat free surface. Both are
 implemented in
 [`src/variational_stokes/`](https://github.com/PTsolvers/JustRelax.jl/tree/main/src/variational_stokes).
 

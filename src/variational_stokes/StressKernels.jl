@@ -11,6 +11,7 @@
         τshear_ov::NTuple{1}, # shear tensor components @ vertices
         Pr,
         Pr_c,
+        Pf,
         η,
         λ,
         λv,
@@ -33,6 +34,7 @@
     @inbounds if isvalid_v(ϕ, I...)
         # interpolate to ith vertex
         Pv_ij = av_clamped(Pr, Ic...)
+        Pfv_ij = sample_Pf(Pf, av_clamped, Pv_ij, Ic...)
         εxxv_ij = av_clamped(ε[1], Ic...)
         εyyv_ij = av_clamped(ε[2], Ic...)
         τxxv_ij = av_clamped(τ[1], Ic...)
@@ -62,7 +64,7 @@
         # Solve the cap return map; retain the analytical DP correction.
         λv[I...], dQdτijv, dQdPv = plastic_correction(
             rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
-            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[I...], relλ, is_pl,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[I...], relλ, is_pl; Pf = Pfv_ij,
         )
 
         if !iszero(λv[I...])
@@ -103,7 +105,7 @@
             # Solve the cap return map; retain the analytical DP correction.
             λ[I...], dQdτij, dQdP = plastic_correction(
                 rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
-                ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl,
+                ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl; Pf = sample_Pf(Pf, getindex, Pr[I...], I...),
             )
 
             τII_ij = if !iszero(λ[I...])
@@ -162,6 +164,7 @@ end
         τshear_ov::NTuple{3}, # shear tensor components @ vertices
         Pr,
         Pr_c,
+        Pf,
         η,
         λ,
         λv::NTuple{3},
@@ -189,6 +192,7 @@ end
         # interpolate to ith vertex
         ηv_ij = harm_clamped_yz(η, Ic...)
         Pv_ij = av_clamped_yz(Pr, Ic...)
+        Pfv_ij = sample_Pf(Pf, av_clamped_yz, Pv_ij, Ic...)
         EIIv_ij = av_clamped_yz(EII, Ic...)
         εxxv_ij = av_clamped_yz(ε[1], Ic...)
         εyyv_ij = av_clamped_yz(ε[2], Ic...)
@@ -233,7 +237,7 @@ end
         # Solve the cap return map; retain the analytical DP correction.
         λv[1][I...], dQdτijv, dQdPv = plastic_correction(
             rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
-            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[1][I...], relλ, is_pl,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[1][I...], relλ, is_pl; Pf = Pfv_ij,
         )
 
         if !iszero(λv[1][I...])
@@ -255,6 +259,7 @@ end
         ηv_ij = harm_clamped_xz(η, Ic...)
         EIIv_ij = av_clamped_xz(EII, Ic...)
         Pv_ij = av_clamped_xz(Pr, Ic...)
+        Pfv_ij = sample_Pf(Pf, av_clamped_xz, Pv_ij, Ic...)
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
         εyyv_ij = av_clamped_xz(ε[2], Ic...)
         εzzv_ij = av_clamped_xz(ε[3], Ic...)
@@ -296,7 +301,7 @@ end
         # Solve the cap return map; retain the analytical DP correction.
         λv[2][I...], dQdτijv, dQdPv = plastic_correction(
             rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
-            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[2][I...], relλ, is_pl,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[2][I...], relλ, is_pl; Pf = Pfv_ij,
         )
 
         if !iszero(λv[2][I...])
@@ -318,6 +323,7 @@ end
         ηv_ij = harm_clamped_xy(η, Ic...)
         EIIv_ij = av_clamped_xy(EII, Ic...)
         Pv_ij = av_clamped_xy(Pr, Ic...)
+        Pfv_ij = sample_Pf(Pf, av_clamped_xy, Pv_ij, Ic...)
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
         εyyv_ij = av_clamped_xy(ε[2], Ic...)
         εzzv_ij = av_clamped_xy(ε[3], Ic...)
@@ -360,7 +366,7 @@ end
         # Solve the cap return map; retain the analytical DP correction.
         λv[3][I...], dQdτijv, dQdPv = plastic_correction(
             rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
-            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[3][I...], relλ, is_pl,
+            ηv_ij * dτ_rv, Kv * dt, η_regv, λv[3][I...], relλ, is_pl; Pf = Pfv_ij,
         )
 
         if !iszero(λv[3][I...])
@@ -400,7 +406,7 @@ end
         # Solve the cap return map; retain the analytical DP correction.
         λ[I...], dQdτij, dQdP = plastic_correction(
             rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
-            ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl,
+            ηij * dτ_r, K * dt, η_reg, λ[I...], relλ, is_pl; Pf = sample_Pf(Pf, getindex, Pr[I...], I...),
         )
 
         if !iszero(λ[I...])
@@ -461,6 +467,7 @@ end
         τshear_ov::NTuple{1}, # shear tensor components @ vertices
         Pr,
         Pr_c,
+        Pf,
         η,
         λ,
         λv,
@@ -483,6 +490,7 @@ end
     if isvalid_v(ϕ, I...)
         # interpolate to ith vertex
         Pv_ij = av_clamped(Pr, Ic...)
+        Pfv_ij = sample_Pf(Pf, av_clamped, Pv_ij, Ic...)
         εxxv_ij = av_clamped(ε[1], Ic...)
         εyyv_ij = av_clamped(ε[2], Ic...)
         Δεxxv_ij = av_clamped(Δε[1], Ic...)
@@ -514,7 +522,7 @@ end
         # Solve the cap return map; retain the analytical DP correction.
         λv[I...], dQdτijv, dQdPv = plastic_correction(
             rheology, phase, τijv .+ dτijv, Pv_ij, EIIv_ij,
-            ηv_ij * dτ_rv * dt, Kv * dt, η_regv, λv[I...], relλ, is_pl,
+            ηv_ij * dτ_rv * dt, Kv * dt, η_regv, λv[I...], relλ, is_pl; Pf = Pfv_ij,
         )
 
         if !iszero(λv[I...])
@@ -556,7 +564,7 @@ end
             # Solve the cap return map; retain the analytical DP correction.
             λ[I...], dQdτij, dQdP = plastic_correction(
                 rheology, phase, τij .+ dτij, Pr[I...], EII_ij,
-                ηij * dτ_r * dt, K * dt, η_reg, λ[I...], relλ, is_pl,
+                ηij * dτ_r * dt, K * dt, η_reg, λ[I...], relλ, is_pl; Pf = sample_Pf(Pf, getindex, Pr[I...], I...),
             )
 
             τII_ij = if !iszero(λ[I...])

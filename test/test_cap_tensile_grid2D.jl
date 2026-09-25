@@ -36,7 +36,7 @@ const pT = -0.5     # tensile strength of the cap
 # Homogeneous volumetric extension of a single-phase box: the only way to
 # accommodate the imposed ∇V is elastic decompression, so the pressure walks
 # into tension until the tensile cap opens the material (mode-I).
-function tensile_box(; with_cap::Bool, multiphase = true, nx = 32, ny = 32, nsteps = 8, finalize_mpi = true)
+function tensile_box(; with_cap::Bool, solver = :pt, Pf = 0.0, nx = 32, ny = 32, nsteps = 8, finalize_mpi = true)
     init_mpi = JustRelax.MPI.Initialized() ? false : true
     igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
@@ -84,6 +84,7 @@ function tensile_box(; with_cap::Bool, multiphase = true, nx = 32, ny = 32, nste
 
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+    iszero(Pf) || (args = (; args..., Pf = @fill(Pf, ni...)))
 
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
 
@@ -102,10 +103,19 @@ function tensile_box(; with_cap::Bool, multiphase = true, nx = 32, ny = 32, nste
     for _ in 1:nsteps
         # the single-phase path goes through `compute_τ_nonlinear!`, the multiphase one
         # through `update_stresses_center_vertex_ps!`; both must record the opening
-        iters = if multiphase
+        iters = if solver === :pt
             solve!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg; kwargs)
-        else
+        elseif solver === :pt_single
             solve!(stokes, pt_stokes, grid, flow_bcs, ρg, rheology[1], args, dt, igg; kwargs)
+        elseif solver === :variational
+            ϕ = RockRatio(backend, ni)
+            update_rock_ratio!(ϕ, phase_ratios, 0)
+            solve_VariationalStokes!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ, rheology, args, dt, igg; kwargs)
+        elseif solver === :dyrel
+            dyrel = JustRelax2D.DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-6)
+            solve_DYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs = (; verbose_PH = false, verbose_DR = false))
+        else
+            error("unknown solver $solver")
         end
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε_pl)
@@ -165,10 +175,29 @@ end
         @test cap.Pmin > nocap.Pmin
 
         # the single-phase stress kernel must record the opening too
-        single = tensile_box(; with_cap = true, multiphase = false)
+        single = tensile_box(; with_cap = true, solver = :pt_single, finalize_mpi = false)
         @test single.ε_vol_extrema[2] > 0
         @test single.EVol_max > 0
         @test single.Pmin > pT - 0.05
+
+        # DYREL starts from an exactly zero momentum residual here (homogeneous extension)
+        dy = tensile_box(; with_cap = true, solver = :dyrel, finalize_mpi = false)
+        @test dy.ε_vol_extrema[2] > 0
+        @test dy.Pmin > pT - 0.05
+        @test isapprox(dy.Pmin, cap.Pmin; rtol = 1.0e-2)
+    end
+end
+
+# `args.Pf` shifts the cap: it opens at the effective pressure P - Pf = pT
+@testset "Fluid pressure moves the tensile cap ($solver)" for solver in (:pt, :pt_single, :variational, :dyrel)
+    @suppress begin
+        Pf = 0.3
+        dry = tensile_box(; with_cap = true, solver, finalize_mpi = false)
+        wet = tensile_box(; with_cap = true, solver, Pf, finalize_mpi = false)
+        @test all(isfinite, (wet.Pmin, wet.Pmax))
+        @test wet.ε_vol_extrema[2] > 0
+        @test wet.Pmin > pT + Pf - 0.05
+        @test wet.Pmin > dry.Pmin + Pf / 2
     end
 end
 

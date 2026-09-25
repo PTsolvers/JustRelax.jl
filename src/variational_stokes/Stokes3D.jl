@@ -174,6 +174,7 @@ function _solve_VS!(
                 (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
                 θ,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 stokes.viscosity.η,
                 λ,
                 (λv_yz, λv_xz, λv_xy),

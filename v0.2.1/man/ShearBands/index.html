@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Shear Bands · JustRelax.jl</title><meta name="title" content="Shear Bands · JustRelax.jl"/><meta property="og:title" content="Shear Bands · JustRelax.jl"/><meta property="twitter:title" content="Shear Bands · JustRelax.jl"/><meta name="description" content="Documentation for JustRelax.jl."/><meta property="og:description" content="Documentation for JustRelax.jl."/><meta property="twitter:description" content="Documentation for JustRelax.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">JustRelax.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">User guide</span><ul><li><a class="tocitem" href="../installation/">Installation</a></li><li><a class="tocitem" href="../backend/">Backend</a></li><li><a class="tocitem" href="../equations/">Equations</a></li><li><a class="tocitem" href="../advection/">Advection</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../Blankenbach/">Blankenbach</a></li><li class="is-active"><a class="tocitem" href>Shear Bands</a><ul class="internal"><li class="toplevel"><a class="tocitem" href="#Initialize-packages"><span>Initialize packages</span></a></li><li class="toplevel"><a class="tocitem" href="#Script"><span>Script</span></a></li><li><a class="tocitem" href="#Model-domain"><span>Model domain</span></a></li><li><a class="tocitem" href="#Physical-properties-using-GeoParams"><span>Physical properties using GeoParams</span></a></li><li><a class="tocitem" href="#Rheology"><span>Rheology</span></a></li><li class="toplevel"><a class="tocitem" href="#Phase-anomaly"><span>Phase anomaly</span></a></li><li><a class="tocitem" href="#Stokes-arrays"><span>Stokes arrays</span></a></li><li><a class="tocitem" href="#Initialize-viscosity-fields"><span>Initialize viscosity fields</span></a></li><li><a class="tocitem" href="#Boundary-conditions"><span>Boundary conditions</span></a></li><li><a class="tocitem" href="#Pseuo-transient-coefficients"><span>Pseuo-transient coefficients</span></a></li><li><a class="tocitem" href="#Just-before-solving-the-problem..."><span>Just before solving the problem...</span></a></li><li><a class="tocitem" href="#Advancing-one-time-step"><span>Advancing one time step</span></a></li><li class="toplevel"><a class="tocitem" href="#Visualization"><span>Visualization</span></a></li><li><a class="tocitem" href="#Fields"><span>Fields</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../listfunctions/">List of functions</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Shear Bands</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Shear Bands</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/PTsolvers/JustRelax.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/PTsolvers/JustRelax.jl/blob/main/docs/src/man/ShearBands.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="ShearBand-benchmark"><a class="docs-heading-anchor" href="#ShearBand-benchmark">ShearBand benchmark</a><a id="ShearBand-benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#ShearBand-benchmark" title="Permalink"></a></h1><p>Shear Band benchmark to test the visco-elasto-plastic rheology implementation in JustRelax.jl</p><h1 id="Initialize-packages"><a class="docs-heading-anchor" href="#Initialize-packages">Initialize packages</a><a id="Initialize-packages-1"></a><a class="docs-heading-anchor-permalink" href="#Initialize-packages" title="Permalink"></a></h1><p>Load JustRelax necessary modules and define backend.</p><pre><code class="language-julia hljs">using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = CPUBackend</code></pre><p>We will also use <code>ParallelStencil.jl</code> to write some device-agnostic helper functions:</p><pre><code class="language-julia hljs">using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)</code></pre><p>and will use <a href="https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main">GeoParams.jl</a> to define and compute physical properties of the materials:</p><pre><code class="language-julia hljs">using GeoParams</code></pre><h1 id="Script"><a class="docs-heading-anchor" href="#Script">Script</a><a id="Script-1"></a><a class="docs-heading-anchor-permalink" href="#Script" title="Permalink"></a></h1><h2 id="Model-domain"><a class="docs-heading-anchor" href="#Model-domain">Model domain</a><a id="Model-domain-1"></a><a class="docs-heading-anchor-permalink" href="#Model-domain" title="Permalink"></a></h2><pre><code class="language-julia hljs">nx = ny      = 64                       # number of cells per dimension
+igg          = IGG(
+    init_global_grid(nx, ny, 1; init_MPI= true)...
+)                                       # initialize MPI grid
+ly           = 1.0                      # domain length in y
+lx           = ly                       # domain length in x
+ni           = nx, ny                   # number of cells
+li           = lx, ly                   # domain length in x- and y-
+di           = @. li / ni               # grid step in x- and -y
+origin       = 0.0, 0.0                 # origin coordinates
+grid         = Geometry(ni, li; origin = origin)
+(; xci, xvi) = grid                     # nodes at the center and vertices of the cells
+dt           = Inf</code></pre><h2 id="Physical-properties-using-GeoParams"><a class="docs-heading-anchor" href="#Physical-properties-using-GeoParams">Physical properties using GeoParams</a><a id="Physical-properties-using-GeoParams-1"></a><a class="docs-heading-anchor-permalink" href="#Physical-properties-using-GeoParams" title="Permalink"></a></h2><pre><code class="language-julia hljs">τ_y     = 1.6           # yield stress. If do_DP=true, τ_y stand for the cohesion: c*cos(ϕ)
+ϕ       = 30            # friction angle
+C       = τ_y           # Cohesion
+η0      = 1.0           # viscosity
+G0      = 1.0           # elastic shear modulus
+Gi      = G0/(6.0-4.0)  # elastic shear modulus perturbation
+εbg     = 1.0           # background strain-rate
+η_reg   = 8e-3          # regularisation &quot;viscosity&quot;
+dt      = η0/G0/4.0     # assumes Maxwell time of 4
+el_bg   = ConstantElasticity(; G=G0, Kb=4)
+el_inc  = ConstantElasticity(; G=Gi, Kb=4)
+visc    = LinearViscous(; η=η0)
+pl      = DruckerPrager_regularised(;  # non-regularized plasticity
+    C    = C,
+    ϕ    = ϕ,
+    η_vp = η_reg,
+    Ψ    = 0
+)</code></pre><h2 id="Rheology"><a class="docs-heading-anchor" href="#Rheology">Rheology</a><a id="Rheology-1"></a><a class="docs-heading-anchor-permalink" href="#Rheology" title="Permalink"></a></h2><pre><code class="language-julia hljs">    rheology = (
+        # Low density phase
+        SetMaterialParams(;
+            Phase             = 1,
+            Density           = ConstantDensity(; ρ = 0.0),
+            Gravity           = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_bg, pl)),
+            Elasticity        = el_bg,
+
+        ),
+        # High density phase
+        SetMaterialParams(;
+            Density           = ConstantDensity(; ρ = 0.0),
+            Gravity           = ConstantGravity(; g = 0.0),
+            CompositeRheology = CompositeRheology((visc, el_inc, pl)),
+            Elasticity        = el_inc,
+        ),
+    )</code></pre><h1 id="Phase-anomaly"><a class="docs-heading-anchor" href="#Phase-anomaly">Phase anomaly</a><a id="Phase-anomaly-1"></a><a class="docs-heading-anchor-permalink" href="#Phase-anomaly" title="Permalink"></a></h1><p>Helper function to initialize material phases with <code>ParallelStencil.jl</code></p><pre><code class="language-julia hljs">function init_phases!(phase_ratios, xci, radius)
+    ni      = size(phase_ratios.center)
+    origin  = 0.5, 0.5
+
+    @parallel_indices (i, j) function init_phases!(phases, xc, yc, o_x, o_y, radius)
+        x, y = xc[i], yc[j]
+        if ((x-o_x)^2 + (y-o_y)^2) &gt; radius^2
+            JustRelax.@cell phases[1, i, j] = 1.0
+            JustRelax.@cell phases[2, i, j] = 0.0
+
+        else
+            JustRelax.@cell phases[1, i, j] = 0.0
+            JustRelax.@cell phases[2, i, j] = 1.0
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phase_ratios.center, xci..., origin..., radius)
+end
+</code></pre><p>and finally we need the phase ratios at the cell centers:</p><pre><code class="language-julia hljs">phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+init_phases!(phase_ratios, xci, radius)</code></pre><h2 id="Stokes-arrays"><a class="docs-heading-anchor" href="#Stokes-arrays">Stokes arrays</a><a id="Stokes-arrays-1"></a><a class="docs-heading-anchor-permalink" href="#Stokes-arrays" title="Permalink"></a></h2><p>Stokes arrays object</p><pre><code class="language-julia hljs">stokes = StokesArrays(backend_JR, ni)</code></pre><h2 id="Initialize-viscosity-fields"><a class="docs-heading-anchor" href="#Initialize-viscosity-fields">Initialize viscosity fields</a><a id="Initialize-viscosity-fields-1"></a><a class="docs-heading-anchor-permalink" href="#Initialize-viscosity-fields" title="Permalink"></a></h2><p>We initialize the buoyancy forces and viscosity</p><pre><code class="language-julia hljs">ρg               = @zeros(ni...), @zeros(ni...)
+η                = @ones(ni...)
+args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+compute_ρg!(ρg[2], phase_ratios, rheology, args)
+compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))</code></pre><p>where <code>(-Inf, Inf)</code> is the viscosity cutoff.</p><h2 id="Boundary-conditions"><a class="docs-heading-anchor" href="#Boundary-conditions">Boundary conditions</a><a id="Boundary-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Boundary-conditions" title="Permalink"></a></h2><pre><code class="language-julia hljs">    flow_bcs     = FlowBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true),
+        no_slip   = (left = false, right = false, top = false, bot=false),
+    )
+    stokes.V.Vx .= PTArray([ x*εbg for x in xvi[1], _ in 1:ny+2])
+    stokes.V.Vy .= PTArray([-y*εbg for _ in 1:nx+2, y in xvi[2]])
+    flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+    update_halo!(stokes.V.Vx, stokes.V.Vy)
+</code></pre><h2 id="Pseuo-transient-coefficients"><a class="docs-heading-anchor" href="#Pseuo-transient-coefficients">Pseuo-transient coefficients</a><a id="Pseuo-transient-coefficients-1"></a><a class="docs-heading-anchor-permalink" href="#Pseuo-transient-coefficients" title="Permalink"></a></h2><pre><code class="language-julia hljs">pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)</code></pre><h2 id="Just-before-solving-the-problem..."><a class="docs-heading-anchor" href="#Just-before-solving-the-problem...">Just before solving the problem...</a><a id="Just-before-solving-the-problem...-1"></a><a class="docs-heading-anchor-permalink" href="#Just-before-solving-the-problem..." title="Permalink"></a></h2><p>In this benchmark we want to keep track of τII, the total time <code>ttot</code>, and the analytical elastic solution <code>sol</code></p><pre><code class="language-julia hljs"> solution(ε, t, G, η) = 2 * ε * η * (1 - exp(-G * t / η))</code></pre><p>and store their time history in the vectors:</p><pre><code class="language-julia hljs">    τII        = Float64[]
+    sol        = Float64[]
+    ttot       = Float64[]</code></pre><h2 id="Advancing-one-time-step"><a class="docs-heading-anchor" href="#Advancing-one-time-step">Advancing one time step</a><a id="Advancing-one-time-step-1"></a><a class="docs-heading-anchor-permalink" href="#Advancing-one-time-step" title="Permalink"></a></h2><ol><li>Solve stokes</li></ol><pre><code class="language-julia hljs">solve!(
+    stokes,
+    pt_stokes,
+    di,
+    flow_bcs,
+    ρg,
+    phase_ratios,
+    rheology,
+    args,
+    dt,
+    igg;
+    kwargs = (;
+        iterMax          = 150e3,
+        nout             = 200,
+        viscosity_cutoff = (-Inf, Inf),
+        verbose          = true
+    )
+)</code></pre><ol><li>calculate the second invariant and push to history vectors</li></ol><pre><code class="language-julia hljs">tensor_invariant!(stokes.ε)
+push!(τII, maximum(stokes.τ.xx))
+
+
+it += 1
+t  += dt
+
+push!(sol, solution(εbg, t, G0, η0))
+push!(ttot, t)</code></pre><h1 id="Visualization"><a class="docs-heading-anchor" href="#Visualization">Visualization</a><a id="Visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Visualization" title="Permalink"></a></h1><p>We will use <code>Makie.jl</code> to visualize the results</p><pre><code class="language-julia hljs">using GLMakie</code></pre><h2 id="Fields"><a class="docs-heading-anchor" href="#Fields">Fields</a><a id="Fields-1"></a><a class="docs-heading-anchor-permalink" href="#Fields" title="Permalink"></a></h2><pre><code class="language-julia hljs"> # visualisation of high density inclusion
+th    = 0:pi/50:3*pi;
+xunit = @. radius * cos(th) + 0.5;
+yunit = @. radius * sin(th) + 0.5;
+
+fig   = Figure(size = (1600, 1600), title = &quot;t = $t&quot;)
+ax1   = Axis(fig[1,1], aspect = 1, title = L&quot;\tau_{II}&quot;, titlesize=35)
+ax2   = Axis(fig[2,1], aspect = 1, title = L&quot;E_{II}&quot;, titlesize=35)
+ax3   = Axis(fig[1,2], aspect = 1, title = L&quot;\log_{10}(\varepsilon_{II})&quot;, titlesize=35)
+ax4   = Axis(fig[2,2], aspect = 1)
+heatmap!(ax1, xci..., Array(stokes.τ.II) , colormap=:batlow)
+heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
+heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)) , colormap=:batlow)
+lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
+lines!(ax4, ttot, τII, color = :black)
+lines!(ax4, ttot, sol, color = :red)
+hidexdecorations!(ax1)
+hidexdecorations!(ax3)
+save(joinpath(figdir, &quot;$(it).png&quot;), fig)
+fig</code></pre><h3 id="Final-model"><a class="docs-heading-anchor" href="#Final-model">Final model</a><a id="Final-model-1"></a><a class="docs-heading-anchor-permalink" href="#Final-model" title="Permalink"></a></h3><p>Shear Bands evolution in a 2D visco-elasto-plastic rheology model <img src="../../assets/movies/DP_nx2058_2D.gif" alt="Shearbands"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../Blankenbach/">« Blankenbach</a><a class="docs-footer-nextpage" href="../listfunctions/">List of functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Wednesday 29 May 2024 10:24">Wednesday 29 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -187,7 +187,7 @@ end
         @test all(Array(stokes.R.RP) .≈ expected_RP)
 
         θc = copy(dyrel.P_num)
-        JR3K.compute_stress_viscosity_DRYEL!(
+        JR3K.compute_stress_viscosity_DYREL!(
             stokes, θc, dyrel.γ_eff, local_rheology, local_phases,
             1.0, local_dt, 1.0, args, (-Inf, Inf), false,
         )
@@ -329,7 +329,7 @@ end
     θc = @zeros(ni...)
     γ_eff = @zeros(ni...)
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-    JR3K.compute_stress_viscosity_DRYEL!(
+    JR3K.compute_stress_viscosity_DYREL!(
         stokes, θc, γ_eff, rheology, phase_ratios,
         1.0, dt, 1.0, args, (-Inf, Inf), true,
     )
@@ -348,7 +348,7 @@ end
     stokes.τ.yz .= 0.0
     stokes.τ.xz .= 0.0
     stokes.τ.xy .= 0.0
-    JR3K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1.0, dt)
+    JR3K.compute_stress_DYREL!(stokes, rheology, phase_ratios, 1.0, dt)
 
     @test Array(stokes.τ.yz) ≈ ones(size(stokes.τ.yz))
     @test Array(stokes.τ.xz) ≈ fill(2.0, size(stokes.τ.xz))
@@ -543,7 +543,7 @@ end
                     end
                     flow_bcs!(stokes, flow_bcs)
                     JR3K.compute_∇V_strain_rate_RP!(stokes, dyrel, gersh_rheology, phase_ratios, grid._di, ni, dt; linear_args...)
-                    JR3K.compute_stress_viscosity_DRYEL!(
+                    JR3K.compute_stress_viscosity_DYREL!(
                         stokes, θc, dyrel.γ_eff, gersh_rheology, phase_ratios,
                         1.0, dt, 1.0, linear_args, (-Inf, Inf), true,
                     )

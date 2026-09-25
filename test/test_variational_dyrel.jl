@@ -316,7 +316,7 @@ end
 end
 
 @testset "Variational DYREL vertex viscosity" begin
-    # `compute_stress_DRYEL!` builds the vertex stress from the harmonic mean of the
+    # `compute_stress_DYREL!` builds the vertex stress from the harmonic mean of the
     # four surrounding cell viscosities, so the Gershgorin diagonal has to sample the
     # same combination. Sampling an independently computed vertex viscosity instead
     # preconditions a different operator wherever the viscosity is heterogeneous.

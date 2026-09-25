@@ -1,10 +1,10 @@
-compute_stress_DRYEL!(stokes, rheology, phase_ratios, λ_relaxation, dt) =
-    compute_stress_DRYEL!(Val(ndims(stokes.P)), stokes, rheology, phase_ratios, λ_relaxation, dt)
+compute_stress_DYREL!(stokes, rheology, phase_ratios, λ_relaxation, dt) =
+    compute_stress_DYREL!(Val(ndims(stokes.P)), stokes, rheology, phase_ratios, λ_relaxation, dt)
 
-compute_stress_viscosity_DRYEL!(
+compute_stress_viscosity_DYREL!(
     stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
 ) =
-    compute_stress_viscosity_DRYEL!(
+    compute_stress_viscosity_DYREL!(
     Val(ndims(stokes.P)), stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
 )
 
@@ -13,7 +13,7 @@ compute_stress_viscosity_DRYEL!(
 @inline reset_dyrel_vertex_λ!(λv) = λv .= 0.0
 @inline reset_dyrel_vertex_λ!(λv::Tuple) = foreach(A -> A .= 0.0, λv)
 
-function compute_stress_DRYEL!(
+function compute_stress_DYREL!(
         ::Val{2},
         stokes,
         rheology,
@@ -23,7 +23,7 @@ function compute_stress_DRYEL!(
     )
 
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_DRYEL!(
+    @parallel (@idx ni) compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),        # vertices
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),    # centers
@@ -46,7 +46,7 @@ function compute_stress_DRYEL!(
     return nothing
 end
 
-@parallel_indices (I...) function compute_stress_DRYEL!(
+@parallel_indices (I...) function compute_stress_DYREL!(
         τ,
         τ_v,
         τ_o,
@@ -120,16 +120,16 @@ end
 end
 
 ## FUSED STRESS + τII-VISCOSITY UPDATE
-# Same as `compute_stress_DRYEL!` but, unless `linear_viscosity`, also refreshes the creep
+# Same as `compute_stress_DYREL!` but, unless `linear_viscosity`, also refreshes the creep
 # viscosities η (center) / ηv (vertex) from the freshly-computed stress, reusing the in-register
 # τ instead of relaunching a kernel that reads the stress tensor back. The τII-viscosity update
 # is purely local (same cell), so this is race-free and needs no halo.
-function compute_stress_viscosity_DRYEL!(
+function compute_stress_viscosity_DYREL!(
         ::Val{2},
         stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
     )
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
+    @parallel (@idx ni) compute_stress_viscosity_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),        # vertices
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),    # centers
@@ -171,7 +171,7 @@ end
     return clamp(ηi, cutoff...)
 end
 
-@parallel_indices (I...) function compute_stress_viscosity_DRYEL!(
+@parallel_indices (I...) function compute_stress_viscosity_DYREL!(
         τ,
         τ_v,
         τ_o,
@@ -262,7 +262,7 @@ end
 end
 
 # 3D Kernel
-function compute_stress_DRYEL!(
+function compute_stress_DYREL!(
         ::Val{3},
         stokes,
         rheology,
@@ -272,7 +272,7 @@ function compute_stress_DRYEL!(
     )
 
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_DRYEL!(
+    @parallel (@idx ni) compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
@@ -302,7 +302,7 @@ function compute_stress_DRYEL!(
     return nothing
 end
 
-@parallel_indices (I...) function compute_stress_DRYEL!(
+@parallel_indices (I...) function compute_stress_DYREL!(
         τ_c,
         τ_shear,
         τ_o_c,
@@ -474,7 +474,7 @@ end
     return nothing
 end
 
-function compute_stress_viscosity_DRYEL!(
+function compute_stress_viscosity_DYREL!(
         ::Val{3},
         stokes,
         θc,
@@ -490,7 +490,7 @@ function compute_stress_viscosity_DRYEL!(
     )
 
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_viscosity_DRYEL!(
+    @parallel (@idx ni) compute_stress_viscosity_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
@@ -527,7 +527,7 @@ function compute_stress_viscosity_DRYEL!(
     return nothing
 end
 
-@parallel_indices (I...) function compute_stress_viscosity_DRYEL!(
+@parallel_indices (I...) function compute_stress_viscosity_DYREL!(
         τ_c,
         τ_shear,
         τ_o_c,
@@ -806,9 +806,9 @@ end
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
+function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt)
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_DRYEL!(
+    @parallel (@idx ni) compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),        # vertices
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),    # centers
@@ -831,7 +831,7 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
     return nothing
 end
 
-@parallel_indices (I...) function compute_stress_DRYEL!(
+@parallel_indices (I...) function compute_stress_DYREL!(
         τ,
         τ_v,
         τ_o,

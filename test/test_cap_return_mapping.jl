@@ -54,7 +54,7 @@ end
     end
     @testset "AD Jacobian and state forwarding" begin
         x = SVector(0.4, -0.3, 0.2)
-        f = y -> JRCap.cap_residual(y, rheology, 1, 0.0, SVector(1.0, -0.8), 0.5, 4.0, 0.1)
+        f = y -> JRCap.cap_residual(y, rheology, 1, 0.0, SVector(1.0, -0.8), 0.5, 4.0, 0.1, 0.0)
         J = @inferred ForwardDiff.jacobian(f, x)
         @test J isa SMatrix{3, 3, Float64, 9}
         h = 1.0e-6
@@ -174,6 +174,27 @@ end
                 # Dilatant flow: yielding pushes the pressure away from tension.
                 r.λ > 0 && @test r.dp ≥ 0
             end
+        end
+    end
+
+    @testset "Fluid pressure enters as the effective pressure P - Pf" begin
+        cap, _ = cap_material_ve(; Ψ = 5.0)
+        dp_mat, _ = dp_material()
+        for JR in (JustRelax.JustRelax2D, JustRelax.JustRelax3D), material in (cap, dp_mat)
+            N = JR === JustRelax.JustRelax2D ? 3 : 6
+            old = ntuple(_ -> 0.0, N)
+            for shear in (0.0, 1.0, 4.0), (P, Pf) in ((0.5, 1.3), (2.0, 1.5), (2.0, 0.0))
+                strain = ntuple(i -> i == N ? shear : 0.0, N)
+                wet = JR._compute_local_stress(strain, old, 1.0, P, 1.0, 4.0, 0.0, 1.0, material, 1.0, 0.0, Pf)
+                dry = JR._compute_local_stress(strain, old, 1.0, P - Pf, 1.0, 4.0, 0.0, 1.0, material, 1.0, 0.0)
+                for k in eachindex(wet, dry)
+                    @test wet[k] ≈ dry[k] atol = 1.0e-10
+                end
+            end
+            # Pf lowers the effective pressure enough to turn an elastic state into a yielding one
+            strain = ntuple(i -> i == N ? 1.0 : 0.0, N)
+            @test iszero(JR._compute_local_stress(strain, old, 1.0, 3.0, 1.0, 4.0, 0.0, 1.0, material, 1.0, 0.0)[2N + 2])
+            @test JR._compute_local_stress(strain, old, 1.0, 3.0, 1.0, 4.0, 0.0, 1.0, material, 1.0, 0.0, 3.0)[2N + 2] > 0
         end
     end
 

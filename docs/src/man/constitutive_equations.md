@@ -95,6 +95,17 @@ $\begin{align}
 
 Note that since we are using an iterative method to solve the APT Stokes equation, the non-linearities are dealt by the iterative scheme. Othwersie, one would need to solve a non-linear problem to compute $\dot\lambda$, which requires to compute $\frac{\partial F}{\partial \dot\lambda}$
 
+### Fluid pressure
+
+A prescribed fluid (pore) pressure $P_f$ lowers the pressure seen by the yield function and the flow potential to the effective pressure $P - P_f$, for example $F = \tau_{II} - \left( (P - P_f) \sin{\phi} + C \cos{\phi} \right)$. Pass it as a cell-centered field `Pf` in the `args` NamedTuple given to the solver:
+
+```julia
+Pf = @zeros(ni...)   # same size as stokes.P
+args = (; T = thermal.Tc, P = stokes.P, dt = dt, Pf = Pf)
+```
+
+All Stokes solvers (`solve!`, `solve_VariationalStokes!`, `solve_DYREL!`, `solve_VariationalDYREL!`) read it. Momentum and continuity use the total pressure $P$. Without a `Pf` entry, $P_f = 0$.
+
 # Selecting the constitutive model in JustRelax.jl
 
 All the local calculations corresponding to the effective rheology are implemented in GeoParams.jl. The composite rheology is implemented using the `CompositeRheology` object. An example of how to set up the a visco-elasto-viscoplastic rheology is shown below:

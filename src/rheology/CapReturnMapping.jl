@@ -38,11 +38,36 @@ function reject_incompressible_cap(rheology, solver)
     return nothing
 end
 
+"""
+    fluid_pressure(args)
+    fluid_pressure(args, P)
+
+Fluid pressure `args.Pf`, or `nothing` when `args` has no `Pf` entry (`Pf = 0`).
+
+Plastic yield and flow are evaluated at the effective pressure `P - Pf`; momentum and
+continuity use the total pressure `P`. The two-argument form also checks that `Pf` is a
+cell-centered field of the same size as `P`.
+"""
+@inline fluid_pressure(args::NamedTuple{names}) where {names} = :Pf in names ? args.Pf : nothing
+fluid_pressure(args, P) = check_fluid_pressure(fluid_pressure(args), P)
+
+check_fluid_pressure(::Nothing, P) = nothing
+function check_fluid_pressure(Pf, P)
+    size(Pf) == size(P) ||
+        throw(DimensionMismatch("fluid pressure `Pf` must be a cell-centered field of size $(size(P)), got $(size(Pf))"))
+    return Pf
+end
+
+# Fluid pressure at the point where `P` was sampled as `f(P, I...)`; `nothing` means dry.
+@inline sample_Pf(::Nothing, f, P, I...) = zero(P)
+@inline sample_Pf(Pf, f, P, I...) = f(Pf, I...)
+
 # GeoParams' invariant derivative returns Aτ = (∂Q/∂τII)/2. Using the scalar
 # interface also avoids the GeoParams tensor wrappers dropping pressure kwargs
 # (JuliaGeodynamics/GeoParams.jl#348).
-@inline function cap_invariants(v::AbstractPlasticity, s, p, EII)
-    args = (; P = p, τII = s, EII, Pf = zero(EII), perturbation_C = one(EII))
+# `Pf` is the fluid pressure: GeoParams evaluates yield and flow at `p - Pf`.
+@inline function cap_invariants(v::AbstractPlasticity, s, p, EII, Pf)
+    args = (; P = p, τII = s, EII, Pf, perturbation_C = one(EII))
     return SVector(
         GeoParams.compute_yieldfunction(v; args...),
         GeoParams.∂Q∂τII(v, s; args...),
@@ -51,11 +76,11 @@ end
 end
 
 # Adapter for the older cell-centered stress path.
-@inline function update_cap_stress!(τ, τII, τ_old, ε, ε_pl, η_vep, λ, rheology, phase, P, EII, η, dτ_r, _Gdt, Kdt, ηvp, I...)
+@inline function update_cap_stress!(τ, τII, τ_old, ε, ε_pl, η_vep, λ, rheology, phase, P, EII, η, dτ_r, _Gdt, Kdt, ηvp, I...; Pf = zero(P))
     τij, τold, εij = cache_tensors(τ, τ_old, ε, I...)
     dτij, _ = compute_stress_increment_and_trial(τij, τold, η, εij, _Gdt, dτ_r)
     trial = τij .+ dτij
-    λ[I...], g, Qp = plastic_correction(rheology, phase, trial, P, EII, η * dτ_r, Kdt, ηvp, λ[I...], one(P), true)
+    λ[I...], g, Qp = plastic_correction(rheology, phase, trial, P, EII, η * dτ_r, Kdt, ηvp, λ[I...], one(P), true; Pf)
     rate = λ[I...] .* g
     corrected = trial .- (2 * η * dτ_r) .* rate
     correct_stress!(τ, corrected, I...)
@@ -66,38 +91,38 @@ end
     return P + Kdt * volume_rate, volume_rate
 end
 
-@generated function cap_invariants(elements::Tuple, s, p, EII)
+@generated function cap_invariants(elements::Tuple, s, p, EII, Pf)
     N = length(elements.parameters)
     return quote
         Base.@inline
         Base.@nexprs $N i -> begin
             v = elements[i]
-            isplastic(v) && return cap_invariants(v, s, p, EII)
+            isplastic(v) && return cap_invariants(v, s, p, EII, Pf)
         end
         # Match the existing phase-weighted yield/flow convention.
         return SVector(s, zero(s), zero(s))
     end
 end
 
-@inline cap_invariants(rheology, phase::Integer, s, p, EII) =
-    cap_invariants(rheology[phase].CompositeRheology[1].elements, s, p, EII)
+@inline cap_invariants(rheology, phase::Integer, s, p, EII, Pf) =
+    cap_invariants(rheology[phase].CompositeRheology[1].elements, s, p, EII, Pf)
 
-@inline function cap_invariants(rheology, ratio, s, p, EII)
+@inline function cap_invariants(rheology, ratio, s, p, EII, Pf)
     values = map(rheology, Tuple(ratio)) do r, w
         iszero(w) && return SVector(zero(s), zero(s), zero(s))
-        return w * cap_invariants(r.CompositeRheology[1].elements, s, p, EII)
+        return w * cap_invariants(r.CompositeRheology[1].elements, s, p, EII, Pf)
     end
     return reduce(+, values)
 end
 
-@inline function cap_residual(x, rheology, phase, EII, trial, η, Kdt, ηvp)
+@inline function cap_residual(x, rheology, phase, EII, trial, η, Kdt, ηvp, Pf)
     s, p, λ = x
-    F, Aτ, Ap = cap_invariants(rheology, phase, s, p, EII)
+    F, Aτ, Ap = cap_invariants(rheology, phase, s, p, EII, Pf)
     return SVector(s - trial[1] + 2 * η * λ * Aτ, p - trial[2] - Kdt * λ * Ap, F - ηvp * λ)
 end
 
-function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; maxiter = 40) where {T}
-    F, _, _ = cap_invariants(rheology, phase, s, p, EII)
+function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; Pf = zero(T), maxiter = 40) where {T}
+    F, _, _ = cap_invariants(rheology, phase, s, p, EII, Pf)
     x = SVector(s, p, zero(T))
     F <= 0 && return x, true
     # Dilatant cap flow needs a finite elastic volumetric compliance.
@@ -105,7 +130,7 @@ function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; max
     scale = max(abs(s), abs(p), abs(F), eps(T))
     tolerance = 100 * eps(T)
     trial = SVector(s, p)
-    residual = y -> cap_residual(y, rheology, phase, EII, trial, η, Kdt, ηvp) / scale
+    residual = y -> cap_residual(y, rheology, phase, EII, trial, η, Kdt, ηvp, Pf) / scale
     r = residual(x)
     for _ in 1:maxiter
         maximum(abs, r) <= tolerance && return x, true
@@ -133,11 +158,12 @@ end
 
 # Shared by PT (η = viscosity*dτ_r) and DYREL (η = Maxwell viscosity).
 # Keep the analytical, relaxed Drucker-Prager correction for non-cap materials.
-@inline function plastic_correction(rheology, phase, τtrial::NTuple{N, T}, P, EII, η, Kdt, ηvp, λold, relλ, is_pl) where {N, T}
+# Yield and flow are evaluated at the effective pressure `P - Pf`; `P` itself stays total.
+@inline function plastic_correction(rheology, phase, τtrial::NTuple{N, T}, P, EII, η, Kdt, ηvp, λold, relλ, is_pl; Pf = zero(P)) where {N, T}
     s = second_invariant(τtrial)
     if has_tensile_cap(rheology, phase)
-        x, converged = cap_return_mapping(rheology, phase, s, P, EII, η, Kdt, ηvp)
-        _, Aτ, Ap = cap_invariants(rheology, phase, x[1], x[2], EII)
+        x, converged = cap_return_mapping(rheology, phase, s, P, EII, η, Kdt, ηvp; Pf)
+        _, Aτ, Ap = cap_invariants(rheology, phase, x[1], x[2], EII, Pf)
         direction = iszero(s) ? zero(T) : Aτ / s
         g = ntuple(i -> direction * τtrial[i], Val(N))
         # NaNs propagate through the stress/pressure residual to the existing
@@ -147,8 +173,8 @@ end
         # iterations (+15% at relλ = 0.2, +75% at 0.05 on the DPCap shear band).
         return converged ? x[3] : T(NaN), g, -Ap
     end
-    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII)
-    F = compute_yieldfunction_phase(rheology, phase; P, τII = s, EII)
+    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
+    F = compute_yieldfunction_phase(rheology, phase; P, τII = s, EII, Pf)
     volume = isinf(Kdt) ? zero(T) : Kdt * Fp * Qp
     λ = if is_pl && !iszero(s) && F > 0
         (1 - relλ) * λold + relλ * F / (η + ηvp + volume)

@@ -6,6 +6,7 @@ function _compute_τ_nonlinear!(
         ε::NTuple{N1, T},
         ε_pl::NTuple{N1, T},
         P,
+        Pf,
         ηij,
         η_vep,
         λ,
@@ -28,7 +29,7 @@ function _compute_τ_nonlinear!(
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
 
     # yield stress (GeoParams could be used here...)
-    τy = @inbounds max(C * cosϕ + P[I...] * sinϕ, 0)
+    τy = @inbounds max(C * cosϕ + (P[I...] - sample_Pf(Pf, getindex, P[I...], I...)) * sinϕ, 0)
 
     # check if yielding; if so, compute plastic strain rate (λdQdτ),
     # plastic stress increment (dτ_pl), and update the plastic

@@ -39,7 +39,8 @@ function reject_incompressible_cap(rheology, solver)
 end
 
 # GeoParams' invariant derivative returns Aτ = (∂Q/∂τII)/2. Using the scalar
-# interface also avoids older GeoParams tensor wrappers dropping pressure kwargs.
+# interface also avoids the GeoParams tensor wrappers dropping pressure kwargs
+# (JuliaGeodynamics/GeoParams.jl#348).
 @inline function cap_invariants(v::AbstractPlasticity, s, p, EII)
     args = (; P = p, τII = s, EII, Pf = zero(EII), perturbation_C = one(EII))
     return SVector(

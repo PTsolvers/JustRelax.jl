@@ -61,6 +61,17 @@ end
 # entry point for extensions
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
 
+# The 3D kernels take every derivative with `_di.center`, indexed by cell. On a nonuniform
+# grid that vector holds one spacing fewer than there are cells.
+function require_uniform_spacing(grid::Geometry{3}, solver)
+    grid._di.center isa NTuple{3, Number} || throw(
+        ArgumentError(
+            "$solver supports only uniform grids in 3D; build `grid` with `Geometry(ni, li; origin)`"
+        )
+    )
+    return nothing
+end
+
 function _solve!(
         stokes::JustRelax.StokesArrays,
         pt_stokes,
@@ -86,6 +97,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η) = stokes.viscosity
@@ -268,6 +280,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -321,7 +334,7 @@ function _solve!(
                 pt_stokes.θ_dτ,
                 args
             )
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
@@ -515,6 +528,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -571,7 +585,7 @@ function _solve!(
                 args,
             )
 
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 

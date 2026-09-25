@@ -69,8 +69,14 @@ diagnose a state between time steps.
 stress updates, including their variational forms. It solves the stress invariant,
 physical pressure and plastic multiplier together, including tensile opening at
 zero deviatoric stress. The Jacobian is computed with ForwardDiff on StaticArrays.
-Active cap plasticity requires a finite, positive bulk modulus and timestep.
-Ordinary Drucker–Prager materials retain their analytical correction.
+Active cap plasticity requires a finite, positive bulk modulus and timestep;
+the Stokes solvers throw before iterating when a phase combines
+`DruckerPragerCap` with an incompressible elasticity.
+Ordinary Drucker–Prager materials retain their analytical correction. After each
+solve, the plastic multiplier is available in `stokes.λ` (and `stokes.λv` at
+vertices in 2D). Both the cone and the cap are evaluated at the effective pressure
+`P - Pf` when a fluid pressure is passed; see
+[Fluid pressure](@ref "Fluid pressure").
 
 Viscosity remains fixed within each local return map and is updated by the existing
 outer rheology iteration. Softening history is fixed during the solve and accumulated

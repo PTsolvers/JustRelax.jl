@@ -101,7 +101,7 @@ A prescribed fluid (pore) pressure $P_f$ lowers the pressure seen by the yield f
 
 ```julia
 Pf = @zeros(ni...)   # same size as stokes.P
-args = (; T = thermal.Tc, P = stokes.P, dt = dt, Pf = Pf)
+args = (; T = thermal.Tc, P = stokes.P, dt, Pf)
 ```
 
 All Stokes solvers (`solve!`, `solve_VariationalStokes!`, `solve_DYREL!`, `solve_VariationalDYREL!`) read it. Momentum and continuity use the total pressure $P$. Without a `Pf` entry, $P_f = 0$.

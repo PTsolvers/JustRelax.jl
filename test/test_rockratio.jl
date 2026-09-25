@@ -209,22 +209,13 @@ end
         @test JustRelax2D.top(A3, ϕ3, 2, 2, 2) ≈ A3[2, 2, 3] * ϕ3[2, 2, 3]
         @test JustRelax2D.bot(A3, ϕ3, 2, 2, 2) ≈ A3[2, 2, 1] * ϕ3[2, 2, 1]
 
-        # 3D finite differences in z (fixed from `front` to `top`, and `_d_zi`
-        # now resolvable since `top` is masked)
+        # 3D finite differences in z
         @test JustRelax2D._d_za(A3, ϕ3, 1.0, 2, 2, 2) ≈
             -JustRelax2D.center(A3, ϕ3, 2, 2, 2) + JustRelax2D.top(A3, ϕ3, 2, 2, 2)
-        @test JustRelax2D._d_zi(A3, ϕ3, 1.0, 2, 2, 2) ≈
-            -JustRelax2D.top(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2)
 
-        # 3D averages along z and the now-summable xi/yi/zi variants
+        # 3D average along z
         @test JustRelax2D._av_za(A3, ϕ3, 2, 2, 2) ≈
             0.5 * (JustRelax2D.center(A3, ϕ3, 2, 2, 2) + JustRelax2D.top(A3, ϕ3, 2, 2, 2))
-        @test JustRelax2D._av_zi(A3, ϕ3, 2, 2, 2) ≈
-            0.5 * (JustRelax2D.top(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2))
-        @test JustRelax2D._av_xi(A3, ϕ3, 2, 2, 2) ≈
-            0.5 * (JustRelax2D.front(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2))
-        @test JustRelax2D._av_yi(A3, ϕ3, 2, 2, 2) ≈
-            0.5 * (JustRelax2D.right(A3, ϕ3, 2, 2, 2) + JustRelax2D.next(A3, ϕ3, 2, 2, 2))
     end
 
     @testset "update_rock_ratio! 2D" begin

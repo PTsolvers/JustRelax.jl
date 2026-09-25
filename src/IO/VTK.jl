@@ -375,7 +375,12 @@ Save a vector of points as a line in a VTK file.
 - `pvd::Union{Nothing, String}`: Optional ParaView collection filename for time series
 - `t::Number`: Time value (default: 0.0)
 """
-save_marker_chain(fname::String, chain; conversion = 1.0e3, pvd::Union{Nothing, String} = nothing, t::Number = 0.0) = save_marker_chain(fname, chain.cell_vertices ./ conversion, chain.h_vertices ./ conversion; pvd = pvd, t = t)
+function save_marker_chain(fname::String, chain; conversion = 1.0e3, pvd::Union{Nothing, String} = nothing, t::Number = 0.0)
+    # the writer runs on the host, so a GPU chain has to be copied over first
+    cell_vertices = Array(chain.cell_vertices) ./ conversion
+    h_vertices = Array(chain.h_vertices) ./ conversion
+    return save_marker_chain(fname, cell_vertices, h_vertices; pvd = pvd, t = t)
+end
 
 function save_marker_chain(
         fname::String, cell_vertices::Union{LinRange{Float64}, Vector{Float64}}, h_vertices::Vector{Float64};

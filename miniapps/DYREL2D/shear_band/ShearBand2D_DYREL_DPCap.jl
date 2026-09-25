@@ -1,14 +1,18 @@
-using GeoParams, CairoMakie
 using JustRelax, JustRelax.JustRelax2D
+
+using GeoParams
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
 
 const backend = CPUBackend
 
-using JustPIC, JustPIC._2D
-import JustPIC._2D.GridGeometryUtils as GGU
+using JustPIC
+import JustPIC.GridGeometryUtils as GGU
 
-const backend_JP = JustPIC.CPUBackend
+const backend_JP = JustPIC.CPU
+
+using Pkg; Pkg.activate("miniapps")
+using CairoMakie
 
 # HELPER FUNCTIONS ----------------------------------- ----------------------------
 @inline function tensile_cap_params(sinϕ::T, cosϕ::T, sinψ::T, C::T, pT::T) where {T}

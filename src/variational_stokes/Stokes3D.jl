@@ -34,12 +34,14 @@ connectivity rule the weights encode.
 - `nout`: Output frequency for residuals. Default: `500`.
 - `verbose`: Print iteration info. Default: `true`.
 - `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 4)`.
+- `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalStokes!(stokes::JustRelax.StokesArrays, args...; kwargs...)
     reject_periodic_bcs(flow_bcs_of(args), "`solve_VariationalStokes!`")
+    reject_incompressible_cap(rheology_of(args), "`solve_VariationalStokes!`")
     return solve_VariationalStokes!(
         backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
     )
@@ -70,6 +72,7 @@ function _solve_VS!(
         verbose = true,
         viscosity_relaxation = 1.0e-2,
         viscosity_cutoff = (-Inf, Inf),
+        free_surface = false,
         kwargs...,
     ) where {N}
 
@@ -82,6 +85,7 @@ function _solve_VS!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve_VariationalStokes!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -111,7 +115,7 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, air_phase, viscosity_cutoff)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -123,7 +127,7 @@ function _solve_VS!(
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
-            compute_P!(
+            compute_variational_P!(
                 θ,
                 stokes.P0,
                 stokes.R.RP,
@@ -131,14 +135,15 @@ function _solve_VS!(
                 stokes.Q,
                 ητ,
                 rheology,
-                phase_ratios.center,
+                phase_ratios,
+                ϕ,
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
                 args,
             )
 
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di
             )
 
@@ -169,6 +174,7 @@ function _solve_VS!(
                 (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
                 θ,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 stokes.viscosity.η,
                 λ,
                 (λv_yz, λv_xz, λv_xy),
@@ -190,24 +196,23 @@ function _solve_VS!(
             update_halo!(stokes.τ.xy)
             free_surface_stress_bcs!(stokes, flow_bcs, Val(3))
 
-            @hide_communication b_width begin # communication/computation overlap
-                @parallel compute_V!(
-                    @velocity(stokes)...,
-                    @residuals(stokes.R)...,
-                    stokes.P,
-                    ρg...,
-                    @stress(stokes)...,
-                    ητ,
-                    pt_stokes.ηdτ,
-                    ϕ,
-                    _di,
-                )
-                # apply boundary conditions
-                velocity2displacement!(stokes, dt)
-                flow_bcs!(stokes, flow_bcs)
-                free_surface_bcs!(stokes, flow_bcs, η_vep, di.velocity..., Val(3))
-                update_halo!(@velocity(stokes)...)
-            end
+            @parallel (@idx ni .+ 1) compute_V!(
+                @velocity(stokes)...,
+                @residuals(stokes.R)...,
+                stokes.P,
+                ρg...,
+                @stress(stokes)...,
+                ητ,
+                pt_stokes.ηdτ,
+                ϕ,
+                _di,
+                dt * free_surface,
+            )
+            # apply boundary conditions
+            velocity2displacement!(stokes, dt)
+            flow_bcs!(stokes, flow_bcs)
+            free_surface_bcs!(stokes, flow_bcs, η_vep, grid.di.velocity..., Val(3))
+            update_halo!(@velocity(stokes)...)
         end
 
         iter += 1
@@ -260,6 +265,10 @@ function _solve_VS!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
+    stokes.λv_yz .= λv_yz
+    stokes.λv_xz .= λv_xz
+    stokes.λv_xy .= λv_xy
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

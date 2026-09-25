@@ -19,12 +19,12 @@ end
     return nothing
 end
 
-function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false)
+function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false, friction = 0.0, Pf = nothing)
     ni = (8, 8)
     grid = Geometry(ni, (1.0, 1.0))
     creep = LinearViscous(; η = 1.0)
     composite = plastic ?
-        CompositeRheology((creep, DruckerPrager_regularised(; C = 0.5, ϕ = 0.0, η_vp = 0.1, Ψ = 0.0))) :
+        CompositeRheology((creep, DruckerPrager_regularised(; C = 0.5, ϕ = friction, η_vp = 0.1, Ψ = 0.0))) :
         CompositeRheology((creep,))
     rheology = (
         SetMaterialParams(;
@@ -42,6 +42,7 @@ function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = fal
     ρg = @zeros(ni...), @zeros(ni...)
     dt = 1.0
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt)
+    Pf === nothing || (args = (; args..., Pf))
     flow_bcs = VelocityBoundaryConditions(;
         free_slip = (left = true, right = true, top = true, bot = true),
     )
@@ -394,6 +395,22 @@ end
     @test all(isfinite, stokes.λ)
     @test minimum(stokes.λ) ≥ 0.0
     @test isfinite(result.err)
+end
+
+@testset "DYREL fluid pressure (variational = $variational)" for variational in (true, false)
+    ni = (8, 8)
+    run(Pf) = _full_volume_dyrel(TEST_IGG; variational, plastic = true, friction = 30.0, Pf)[1]
+    dry = run(nothing)
+    zero_Pf = run(@zeros(ni...))
+    wet = run(@fill(0.5, ni...))
+
+    @test zero_Pf.P == dry.P
+    @test zero_Pf.λ == dry.λ
+    # Pf lowers the effective pressure, so the frictional cone yields more.
+    @test all(isfinite, wet.P)
+    @test maximum(wet.λ) > maximum(dry.λ)
+    @test maximum(wet.τ.II) < maximum(dry.τ.II)
+    @test_throws "fluid pressure `Pf` must be a cell-centered field" run(@zeros(ni .+ 1...))
 end
 
 @testset "Variational DYREL thermal and melt dispatch" begin

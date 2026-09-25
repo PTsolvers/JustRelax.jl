@@ -63,6 +63,27 @@ The Stokes and thermal solvers call the first three internally when they are
 given `rheology`; calling them directly is useful to initialize a model or to
 diagnose a state between time steps.
 
+## Tensile cap plasticity
+
+`DruckerPragerCap` uses a local damped Newton return map in the PT and DYREL
+stress updates, including their variational forms. It solves the stress invariant,
+physical pressure and plastic multiplier together, including tensile opening at
+zero deviatoric stress. The Jacobian is computed with ForwardDiff on StaticArrays.
+Active cap plasticity requires a finite, positive bulk modulus and timestep;
+the Stokes solvers throw before iterating when a phase combines
+`DruckerPragerCap` with an incompressible elasticity.
+Ordinary Drucker–Prager materials retain their analytical correction. After each
+solve, the plastic multiplier is available in `stokes.λ` (and `stokes.λv` at
+vertices in 2D). Both the cone and the cap are evaluated at the effective pressure
+`P - Pf` when a fluid pressure is passed; see
+[Fluid pressure](@ref "Fluid pressure").
+
+Viscosity remains fixed within each local return map and is updated by the existing
+outer rheology iteration. Softening history is fixed during the solve and accumulated
+after the physical timestep. An unsuccessful local solve propagates nonfinite
+stresses to the solver's residual checks; it is not accepted as an elastic state.
+See [Constitutive equations](@ref) for the material laws.
+
 ## Multiple phases per cell
 
 With particles, a cell rarely holds a single phase. `PhaseRatios` stores the

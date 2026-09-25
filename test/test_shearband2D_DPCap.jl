@@ -141,6 +141,7 @@ function ShearBand2D_DPCap()
 
     t, it = 0.0, 0
     local iters
+    τII = similar(stokes.τ.II)
 
     # ~25 Maxwell-time steps are needed before τII reaches the yield envelope
     while it < 10
@@ -162,6 +163,9 @@ function ShearBand2D_DPCap()
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
+        # τII as the stress update left it, before `tensor_invariant!` recomputes it
+        # from the vertex-averaged shear stress
+        copyto!(τII, stokes.τ.II)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         tensor_invariant!(stokes.τ)
@@ -169,6 +173,14 @@ function ShearBand2D_DPCap()
         it += 1
         t += dt
     end
+
+    # Converged states satisfy F(τII, P) = η_vp λ̇ where plastic and F ≤ 0 elsewhere
+    # (Popov et al., 2025, Eq. 42); both phases share `pl`.
+    P, λ = Array(stokes.P), Array(stokes.λ)
+    F = map(Array(τII), P) do s, p
+        compute_yieldfunction(pl; P = p, τII = s, EII = 0.0, Pf = 0.0, perturbation_C = 1.0)
+    end
+    active = λ .> 0
 
     finalize_global_grid(; finalize_MPI = true)
 
@@ -180,6 +192,9 @@ function ShearBand2D_DPCap()
         Pmax = maximum(Array(stokes.P)),
         EVol_max = maximum(abs, Array(stokes.EVol_pl)),
         ε_vol_extrema = extrema(Array(stokes.ε_vol_pl)),
+        n_active = count(active),
+        consistency = maximum(abs, F[active] .- η_reg .* λ[active]) / C,
+        F_elastic = maximum(F[.!active]) / C,
     )
 end
 
@@ -198,5 +213,8 @@ end
         # ε_vol_pl = -λ * dQ/dP; with ψ > 0, dQ/dP < 0, so ε_vol_pl ≥ 0 (dilation)
         @test out.ε_vol_extrema[1] ≥ 0.0
         @test out.ε_vol_extrema[2] > 0.0
+        @test out.n_active > 0
+        @test out.consistency < 1.0e-6
+        @test out.F_elastic < 1.0e-6
     end
 end

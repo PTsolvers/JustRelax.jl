@@ -54,11 +54,23 @@ Dispatches on the CPU/CUDA/AMDGPU backend selected by `stokes`.
 """
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
     reject_periodic_bcs(flow_bcs_of(args), "the 3D `solve!` pseudo-transient solver")
+    reject_incompressible_cap(rheology_of(args), "the 3D `solve!` pseudo-transient solver")
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
 # entry point for extensions
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
+
+# The 3D kernels take every derivative with `_di.center`, indexed by cell. On a nonuniform
+# grid that vector holds one spacing fewer than there are cells.
+function require_uniform_spacing(grid::Geometry{3}, solver)
+    grid._di.center isa NTuple{3, Number} || throw(
+        ArgumentError(
+            "$solver supports only uniform grids in 3D; build `grid` with `Geometry(ni, li; origin)`"
+        )
+    )
+    return nothing
+end
 
 function _solve!(
         stokes::JustRelax.StokesArrays,
@@ -85,6 +97,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η) = stokes.viscosity
@@ -267,6 +280,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -320,7 +334,7 @@ function _solve!(
                 pt_stokes.θ_dτ,
                 args
             )
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
@@ -343,7 +357,9 @@ function _solve!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 θ,
                 η,
                 @ones(ni...),
@@ -447,6 +463,7 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -512,6 +529,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -568,7 +586,7 @@ function _solve!(
                 args,
             )
 
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
@@ -598,6 +616,7 @@ function _solve!(
                 (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
                 θ,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 stokes.viscosity.η,
                 λ,
                 (λv_yz, λv_xz, λv_xy),
@@ -687,6 +706,10 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
+    stokes.λv_yz .= λv_yz
+    stokes.λv_xz .= λv_xz
+    stokes.λv_xy .= λv_xy
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

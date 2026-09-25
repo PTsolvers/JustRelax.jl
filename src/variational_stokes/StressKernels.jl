@@ -246,7 +246,7 @@ end
             ε_pl[4][I...] = 0.0
         end
     else
-        τyzv[I...] = zero(eltype(T))
+        all(I .≤ size(τyzv)) && (τyzv[I...] = zero(eltype(T)))
     end
 
     ## xz
@@ -309,7 +309,7 @@ end
             ε_pl[5][I...] = 0.0
         end
     else
-        τxzv[I...] = zero(eltype(T))
+        all(I .≤ size(τxzv)) && (τxzv[I...] = zero(eltype(T)))
     end
 
     ## xy
@@ -373,7 +373,7 @@ end
             ε_pl[6][I...] = 0.0
         end
     else
-        τxyv[I...] = zero(eltype(T))
+        all(I .≤ size(τxyv)) && (τxyv[I...] = zero(eltype(T)))
     end
 
     ## center

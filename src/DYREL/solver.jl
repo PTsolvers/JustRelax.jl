@@ -517,7 +517,7 @@ function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
 
     numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
     denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
-    return abs(numerator) / denominator
+    return rayleigh_quotient(numerator, denominator)
 end
 
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})

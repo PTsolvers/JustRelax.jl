@@ -180,6 +180,8 @@ function shear_band2D_adjoint_materials(
         rheology = material_shear_band_rheology(),
         final_rheology = nothing,
         η_multiplier = nothing,
+        # run the same problem through the variational solver, with rock everywhere (ϕ = 1)
+        variational = false,
     )
     ni = nx, ny
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -249,32 +251,24 @@ function shear_band2D_adjoint_materials(
         take(joinpath(figdir, "forward"))
         take(joinpath(figdir, "gradients"))
     end
-    dyrel = DYREL(
-        backend,
-        stokes,
-        rheology,
-        phase_ratios,
-        grid.di,
-        dt;
-        ϵ = solver_ϵ,
-    )
+    ϕ = if variational
+        rock = RockRatio(backend, ni)
+        foreach(A -> fill!(A, 1.0), (rock.center, rock.vertex, rock.Vx, rock.Vy))
+        rock
+    else
+        nothing
+    end
+    dyrel = if variational
+        DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = solver_ϵ)
+    else
+        DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = solver_ϵ)
+    end
 
     for step in 1:nt
         run_adjoint = adjoint && step == nt
         step_rheology = step == nt && !isnothing(final_rheology) ? final_rheology : rheology
         step_η_multiplier = step == nt ? η_multiplier : nothing
-        solve_DYREL!(
-            stokes,
-            stokes_ad,
-            ρg,
-            dyrel,
-            flow_bcs,
-            phase_ratios,
-            step_rheology,
-            args,
-            grid,
-            dt,
-            igg;
+        solver_kwargs = (;
             verbose_PH = verbose,
             verbose_DR = false,
             iterMax = 50.0e3,
@@ -290,6 +284,17 @@ function shear_band2D_adjoint_materials(
             observation,
             gradients = run_adjoint ? gradients : (;),
         )
+        if variational
+            solve_VariationalDYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, step_rheology, args,
+                grid, dt, igg; solver_kwargs...,
+            )
+        else
+            solve_DYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, step_rheology, args,
+                grid, dt, igg; solver_kwargs...,
+            )
+        end
         tensor_invariant!(stokes.τ)
         if plot_results && step in (1, nt)
             plot_material_shear_band_state(figdir, step, grid, stokes, phase_ratios)

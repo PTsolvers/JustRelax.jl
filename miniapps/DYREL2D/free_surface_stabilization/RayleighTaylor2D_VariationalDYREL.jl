@@ -193,7 +193,9 @@ function main(igg, nx, ny)
     t, it = 0.0, 0
     dt = 10.0e3 * (3600 * 24 * 365.25)
     dt_max = 25.0e3 * (3600 * 24 * 365.25)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+    # γfact = 100: the free surface admits a uniform volumetric pressure mode that the
+    # Powell-Hestenes loop removes only slowly with the default penalty (γfact = 20)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6, γfact = 100.0)
 
     while it < 200
 

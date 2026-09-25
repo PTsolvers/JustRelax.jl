@@ -159,7 +159,7 @@ function main(
         n = 16,
         ve_steps = 3,
         shear_steps = 10,
-        ε = 10.0 .^ (-2:-1:-4),
+        ε = 10.0 .^ (-3:-1:-4),
         material_parameters = (:G, :C, :ϕ, :Ψ, :η_vp),
         figdir = joinpath("figures", "Adjoint2D", "TaylorTests"),
     )

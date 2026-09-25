@@ -86,6 +86,8 @@ function sinking_block2D(
         plot_results = true,
         solver_ϵ = 1.0e-6,
         verbose = true,
+        # run the same problem through the variational solver, with rock everywhere (ϕ = 1)
+        variational = false,
     )
 
     # Nondimensional domain ------------------------------
@@ -173,7 +175,18 @@ function sinking_block2D(
     update_halo!(@velocity(stokes)...)
 
     plot_results && take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = solver_ϵ)
+    ϕ = if variational
+        rock = RockRatio(backend, ni)
+        foreach(A -> fill!(A, 1.0), (rock.center, rock.vertex, rock.Vx, rock.Vy))
+        rock
+    else
+        nothing
+    end
+    dyrel = if variational
+        DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = solver_ϵ)
+    else
+        DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = solver_ϵ)
+    end
     observation = (;
         field = :Vy,
         center = (xc_anomaly, yc_anomaly),
@@ -184,18 +197,7 @@ function sinking_block2D(
     while it < 1
         # Stokes solver ----------------
         args = (; T = @ones(ni .+ 2...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
-        solve_DYREL!(
-            stokes,
-            stokes_ad,
-            ρg,
-            dyrel,
-            flow_bcs,
-            phase_ratios,
-            rheology,
-            args,
-            grid,
-            dt,
-            igg;
+        solver_kwargs = (;
             verbose_PH = verbose,
             verbose_DR = false,
             iterMax = 50.0e3,
@@ -205,12 +207,24 @@ function sinking_block2D(
             λ_relaxation_DR = 1,
             viscosity_relaxation = 1,
             viscosity_cutoff = viscosity_cutoff,
-            # a cell-wise multiplier only survives if the τII viscosity refresh is switched off
-            linear_viscosity = !isnothing(η_multiplier),
+            # a cell-wise multiplier only survives if the τII viscosity refresh is switched off;
+            # the variational adjoint requires it (the rheology is linear either way)
+            linear_viscosity = variational || !isnothing(η_multiplier),
             η_multiplier = η_multiplier,
             adjoint = adjoint,
             observation = observation,
         )
+        if variational
+            solve_VariationalDYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,
+                dt, igg; solver_kwargs...,
+            )
+        else
+            solve_DYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid,
+                dt, igg; solver_kwargs...,
+            )
+        end
         dt = compute_dt(stokes, di, igg) * 0.8
         # ------------------------------
 

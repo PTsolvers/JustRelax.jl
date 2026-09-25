@@ -627,6 +627,9 @@ neighbour, so a vertex-centred average degenerates to the one-sided average of t
 do exist. A direction listed in `periodic` has no edge: the cell on the far side of the seam is
 a real neighbour, so the index wraps onto it and both copies of the seam plane see the same
 stencil. Omitting `periodic` clamps every direction.
+
+In 3D the raw `I` is appended: arrays with `n + 1` entries along a vertex direction must be
+indexed with it, since clamping to the `n` cells would drop their last plane.
 """
 Base.@propagate_inbounds @inline _clamped_index(i, n, periodic::Bool) =
     ifelse(periodic, mod1(i, n), clamp(i, 1, n))
@@ -645,7 +648,7 @@ Base.@propagate_inbounds @inline function clamped_indices(
     k0 = _clamped_index(k - 1, nz, pz)
     kc = _clamped_index(k, nz, pz)
     k1 = _clamped_index(k + 1, nz, pz)
-    return i0, j0, k0, ic, jc, kc, i1, j1, k1
+    return i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k
 end
 
 Base.@propagate_inbounds @inline clamped_indices(ni::NTuple{3, Integer}, i, j, k) =
@@ -675,31 +678,41 @@ Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc,
     return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
-# on yz
-Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, jc, k0] + A[i1, jc, k0] + A[ic, jc, kc] + A[i1, jc, kc])
+# Averages of one shear component onto the edge of another. Along the directions in which
+# both edges sit on vertices, or the averaged component sits on vertices, the raw indices
+# `i, j, k` address all `n + 1` planes; only cell-centred directions are clamped.
+
+# on yz (x-centre i, y-vertex j, z-vertex k)
+Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on xy edges (x-vertex, y-vertex, z-centre)
+    return 0.25 * (A[i, j, k0] + A[i + 1, j, k0] + A[i, j, kc] + A[i + 1, j, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_yz_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, j0, kc] + A[i1, j0, kc] + A[ic, jc, kc] + A[i1, jc, kc])
+Base.@propagate_inbounds @inline function av_clamped_yz_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on xz edges (x-vertex, y-centre, z-vertex)
+    return 0.25 * (A[i, j0, k] + A[i + 1, j0, k] + A[i, jc, k] + A[i + 1, jc, k])
 end
 
-# on xz
-Base.@propagate_inbounds @inline function av_clamped_xz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, jc, k0] + A[ic, j1, k0] + A[ic, jc, kc] + A[ic, j1, kc])
+# on xz (x-vertex i, y-centre j, z-vertex k)
+Base.@propagate_inbounds @inline function av_clamped_xz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on xy edges (x-vertex, y-vertex, z-centre)
+    return 0.25 * (A[i, j, k0] + A[i, j + 1, k0] + A[i, j, kc] + A[i, j + 1, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xz_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[ic, j1, kc] + A[i0, j1, kc])
+Base.@propagate_inbounds @inline function av_clamped_xz_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on yz edges (x-centre, y-vertex, z-vertex)
+    return 0.25 * (A[i0, j, k] + A[ic, j, k] + A[ic, j + 1, k] + A[i0, j + 1, k])
 end
 
-# on xy
-Base.@propagate_inbounds @inline function av_clamped_xy_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, j0, kc] + A[ic, jc, kc] + A[ic, j0, k1] + A[ic, jc, k1])
+# on xy (x-vertex i, y-vertex j, z-centre k)
+Base.@propagate_inbounds @inline function av_clamped_xy_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on xz edges (x-vertex, y-centre, z-vertex)
+    return 0.25 * (A[i, j0, k] + A[i, jc, k] + A[i, j0, k + 1] + A[i, jc, k + 1])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xy_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[i0, jc, k1] + A[ic, jc, k1])
+Base.@propagate_inbounds @inline function av_clamped_xy_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1, i, j, k)
+    # A on yz edges (x-centre, y-vertex, z-vertex)
+    return 0.25 * (A[i0, j, k] + A[ic, j, k] + A[i0, j, k + 1] + A[ic, j, k + 1])
 end
 
 # 3D kernel

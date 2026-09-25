@@ -100,12 +100,13 @@ function solve_VariationalDYREL_adjoint!(
     observation = observation_mask(stokes_ad, grid, observation)
     check_observation_mask(observation, maskV, maskP)
 
+    converged = false
     for itPH in 1:Int(iterMax_PH)
 
         initialize_adjoint_iteration!(stokes_ad, ni)
 
         # Init observation points
-        observation.target[observation.i, observation.j] .= -1.0
+        seed_observation!(observation)
 
         variational_adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni,
@@ -139,7 +140,10 @@ function solve_VariationalDYREL_adjoint!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        if err < ϵ
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -158,7 +162,7 @@ function solve_VariationalDYREL_adjoint!(
             initialize_adjoint_iteration!(stokes_ad, ni)
 
             # Init observation points
-            observation.field !== :P && (observation.target[observation.i, observation.j] .= -1.0)
+            observation.field !== :P && seed_observation!(observation)
 
             variational_adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
@@ -206,6 +210,9 @@ function solve_VariationalDYREL_adjoint!(
 
         iter > total_iterMax && break
     end
+    if !converged && igg.me == 0
+        @warn "adjoint DYREL returned without meeting ϵ — the sensitivities are not converged" err ϵ iter total_iterMax
+    end
 
     # sensitivity evaluation
     compute_sensitivities!(
@@ -241,7 +248,7 @@ end
 # The objective must only read unknowns of the reduced system: an observed velocity in an
 # eliminated (air) row is not a degree of freedom of the forward solve.
 function check_observation_mask(observation, maskV, maskP)
-    (; field, i, j) = observation
+    (; field, i, j, weights) = observation
     mask, offset = if field === :Vx
         Array(maskV[1]), 1
     elseif field === :Vy
@@ -250,7 +257,9 @@ function check_observation_mask(observation, maskV, maskP)
         Array(maskP), 0
     end
     valid(a, b) = checkbounds(Bool, mask, a - offset, b - offset) && mask[a - offset, b - offset]
-    all(valid(a, b) for a in i, b in j) || throw(
+    # a weighted objective only reads the nodes it weights
+    nodes = isnothing(weights) ? ((a, b) for a in i, b in j) : (Tuple(I) for I in findall(!iszero, Array(weights)))
+    all(n -> valid(n...), nodes) || throw(
         ArgumentError("the observation region must lie in the rock part of the domain; some $field nodes are masked out")
     )
     return nothing

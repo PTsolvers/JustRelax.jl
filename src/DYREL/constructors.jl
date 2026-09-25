@@ -292,8 +292,18 @@ end
 
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
     ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, ϕ, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, ϕ, rock_mean_viscosity(stokes.viscosity.η, ϕ), γfact, dt)
     return nothing
+end
+
+# Mean of the finite viscosities over the rock cells, across all ranks. Eliminated (air) cells
+# are left out: they are not part of the solve, and their weak viscosity would shrink the
+# penalty of the whole domain.
+function rock_mean_viscosity(η, ϕ::JustRelax.RockRatio)
+    in_rock(ηᵢ, ϕᵢ) = ϕᵢ > 0 && isfinite(ηᵢ)
+    total = sum_mpi((ηᵢ, ϕᵢ) -> in_rock(ηᵢ, ϕᵢ) ? ηᵢ : zero(ηᵢ), η, ϕ.center)
+    count = sum_mpi((ηᵢ, ϕᵢ) -> in_rock(ηᵢ, ϕᵢ) ? one(ηᵢ) : zero(ηᵢ), η, ϕ.center)
+    return iszero(count) ? one(total) : total / count
 end
 
 # `ηb` holds the same material quantity as the full-volume solver: the rock fraction
@@ -310,15 +320,19 @@ end
 # fraction back in (`γ_eff * RP` and the single center-fraction factor used by the
 # Gershgorin bound), so no second volume-fraction factor is introduced; `isvalid_c`
 # guarantees the divisor is positive.
-@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
+#
+# As in the full-volume solver, the penalty is scaled by a single global viscosity (the mean over
+# the rock cells), not the local one: a local penalty cannot relax the pressure of a weak body
+# enclosed by strong material, e.g. a plume in the mantle, whose pressure mode is resisted by the
+# strong surroundings.
+@parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, ϕ::JustRelax.RockRatio, η_mean, γfact, dt)
 
     if isvalid_c(ϕ, I...)
         ratios = @cell phase_ratios_center[I...]
         Kbdt = fn_ratio(get_bulk_modulus, rheology, ratios) * dt
         ηb[I...] = Kbdt
 
-        η_local = η[I...]
-        γ_num = γfact * (isinf(η_local) ? η_mean : η_local)
+        γ_num = γfact * η_mean
         γ_phy = isinf(Kbdt) ? γ_num : Kbdt
         γ_eff[I...] = γ_phy * γ_num / (γ_phy + γ_num) / ϕ.center[I...]
     else

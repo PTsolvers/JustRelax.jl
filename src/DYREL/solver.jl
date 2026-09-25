@@ -38,6 +38,10 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
   history-dependent state. Default: `false`.
+- `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
+  `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
+  field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
+  observed field (see `observation_mask`). `field` is `:Vx`, `:Vy` or `:P`. Default: `nothing`.
 - `gradients`: Optional buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the actual material parameters. `G` is returned
   on the center grid; phase-specific density-parameter gradients have size `(nphases, ni...)`. Default:
@@ -111,7 +115,7 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
   history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Default: `false`.
-- `observation`: Observation region of the adjoint objective, as for `solve_DYREL!`. Default: `nothing`.
+- `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
 - `gradients`: Optional buffers from `material_controls`, filled by the adjoint solve. Default: `(;)`.
 - `η_multiplier`: Optional cell-wise viscosity scaling `(; center, vertex)`, applied right after
   the rheology-driven viscosity update, for gradient tests. Pair it with `linear_viscosity = true`.
@@ -131,7 +135,7 @@ solve_VariationalDYREL!(::CPUBackendTrait, stokes, args...; kwargs) =
 
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
-        stokes_ad::JustRelax.AdjointStokesArrays,
+        stokes_ad::Union{Nothing, JustRelax.AdjointStokesArrays},
         ρg,
         dyrel,
         flow_bcs::AbstractFlowBoundaryConditions,
@@ -164,6 +168,9 @@ function _solve_DYREL!(
         kwargs...,
     ) where {N}
 
+    adjoint && isnothing(stokes_ad) &&
+        throw(ArgumentError("adjoint = true requires AdjointStokesArrays as the second argument"))
+
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
     @copy stokes.P0 stokes.P
@@ -175,6 +182,7 @@ function _solve_DYREL!(
     _di = grid._di
     di_center = di.center
     ni = size(stokes.P)
+    lx = grid.max_li
 
     igg.me == 0 && @printf("\n######## Running forward Stokes solver (DYREL) ########\n")
 
@@ -201,7 +209,6 @@ function _solve_DYREL!(
     err = 1.0
     errV0 = ntuple(_ -> 1.0, dim)
     errPt0 = 1.0
-    errV00 = ntuple(_ -> 1.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -267,17 +274,21 @@ function _solve_DYREL!(
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
-        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
-        errPt = norm_mpi(stokes.R.RP) / √(p_dof)
-        if isone(itPH)
+        # Scale-free, as in the variational solver: momentum residuals against the pressure span
+        # over the domain length, continuity against the velocity scale. (The relative-or-absolute
+        # form used before accepted any residual that is small in the problem's units, e.g. a
+        # continuity residual of ~1e-16 1/s for velocities of ~1e-9 m/s.)
+        Pspan = nonzero_span(maximum_mpi(stokes.P) - minimum_mpi(stokes.P))
+        Vscale = maximum(V -> max(maximum_mpi(V), -minimum_mpi(V)), @velocity(stokes))
+        Vspan = continuity_velocity_scale(Vscale, Pspan, lx, maximum_mpi(stokes.viscosity.η), ϵ)
+        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]) / Pspan * lx, dim)
+        RP_rms = norm_mpi(stokes.R.RP) / √(p_dof)
+        errPt = RP_rms * lx / Vspan
+        if itPH ≤ 2
             errV0 = map(x -> x + eps(), errV)
             errPt0 = errPt + eps()
         end
-        if itPH == 2
-            errPt0 = errPt + eps()
-        end
-        errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
-        err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
+        err = maximum((errV..., errPt))
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -299,9 +310,12 @@ function _solve_DYREL!(
             err_min = err
         end
 
-        ϵ_vel = err * rel_drop
+        # Target a drop of `errV`, the residual the loop below measures, as in the variational
+        # solver; `max(…, ϵ)` guards a zero momentum residual, `Inf` forces a first check.
+        ϵ_vel = max(maximum(errV) * rel_drop, ϵ)
+        err_vel = Inf
         itPT = 0
-        while (err > ϵ_vel && itPT ≤ iterMax_DR)
+        while (err_vel > ϵ_vel && itPT ≤ iterMax_DR)
             itPT += 1
             itg += 1
             iter += 1
@@ -344,25 +358,20 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
+                # D·(stored residual) is the raw momentum residual; normalized exactly like the
+                # outer check, so ϵ_vel compares like with like. P is fixed within a pass, so the
+                # outer Pspan is still current here.
+                errV_in = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]) / Pspan * lx, dim)
+                err_vel = maximum(errV_in)
+                isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 
-                if iter == nout
-                    errV_scale = maximum(errV) + eps()
-                    errV00 = ntuple(_ -> errV_scale, dim)
-                end
-
-                errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
-                err = maximum(errV_ratio)
-                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
-
-                push!(err_evo_tot, err)
-                push!(err_evo_V, maximum(errV_ratio))
-                push!(err_evo_P, errPt / errPt0)
+                push!(err_evo_tot, err_vel)
+                push!(err_evo_V, err_vel)
+                push!(err_evo_P, errPt)
                 push!(err_evo_it, iter)
 
-                # @printf("it = %d, iter = %d, ϵ_vel = %1.3e, err = %1.3e norm[Rx=%1.3e, Ry=%1.3e] \n", itPT, iter, ϵ_vel, err, errVx, errVy)
                 if verbose_DR && igg.me == 0
-                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+                    @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err_vel)
                 end
                 λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
@@ -444,6 +453,23 @@ function _solve_DYREL!(
 
 end
 
+# forward-only entry point: no adjoint arrays
+function _solve_DYREL!(
+        stokes::JustRelax.StokesArrays,
+        ρg,
+        dyrel,
+        flow_bcs::AbstractFlowBoundaryConditions,
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args,
+        grid::Geometry,
+        dt,
+        igg::IGG;
+        kwargs...,
+    )
+    return _solve_DYREL!(stokes, nothing, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs...)
+end
+
 function _solve_DYREL!(
         stokes::JustRelax.StokesArrays,
         ρg,
@@ -518,6 +544,20 @@ end
 # norm is exactly zero for boundary-driven flow, the pressure span for pure shear. `errPt` has such
 # a fallback (see `_solve_VariationalDYREL!`); `errV` does not.
 @inline nonzero_span(s) = abs(s) ≤ sqrt(eps(typeof(s))) ? one(s) : s
+
+# Velocity scale of the continuity check `errPt = RP·lx/V`: the velocity magnitude, floored at a
+# small fraction of the velocity the pressure span could drive through the stiffest material,
+# `Vref = Pspan·lx/η_max`. A field at rest carries round-off noise only, `RP ≈ c·eps·Vref/lx` with
+# c ≲ 1, where `errPt` would otherwise compare noise with noise and never converge. Flooring at
+# `10·eps/ϵ·Vref` makes that noise read as `≈ 0.1·c·ϵ`, for any tolerance. A moving field is far
+# above the floor (2e-9·Vref at ϵ = 1e-6), and even one below it has its relative continuity
+# error off by only `floor/V`. The floor does not depend on `dt`, which in a viscous solve can be
+# an arbitrary placeholder.
+@inline function continuity_velocity_scale(Vscale, Pspan, lx, η_max, ϵ)
+    floor_fraction = min(one(Vscale), 10 * eps(typeof(Vscale)) / ϵ)
+    V = max(Vscale, floor_fraction * Pspan * lx / η_max)
+    return iszero(V) || !isfinite(V) ? one(V) : V
+end
 @inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
 
 @inline function masked_extrema(mask, A)

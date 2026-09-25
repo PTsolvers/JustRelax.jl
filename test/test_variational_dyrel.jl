@@ -304,15 +304,22 @@ end
     ϕ.center[3, 1] = 0.05
 
     ηb, γ_eff = @zeros(ni...), @zeros(ni...)
-    η = @ones(ni...)
     @parallel (@idx ni) JustRelax2D.compute_bulk_viscosity_and_penalty!(
-        ηb, γ_eff, rheology, phase_ratios.center, η, ϕ, 1.0, 4.0, 1.0
+        ηb, γ_eff, rheology, phase_ratios.center, ϕ, 1.0, 4.0, 1.0
     )
 
     @test all(γ_eff .* ϕ.center .≈ γ_eff[1, 1])
     # The bulk viscosity is a coefficient of the continuity equation, not a step
     # length, and stays the plain material value.
     @test all(ηb .≈ ηb[1, 1])
+
+    # The penalty is scaled by one viscosity for the whole rock domain, so a weak
+    # inclusion is relaxed as fast as its strong surroundings. Air cells are not part of
+    # the solve and are left out of that mean.
+    ϕ_air = RockRatio(CPUBackend, ni)
+    foreach(f -> fill!(getfield(ϕ_air, f), 1.0), (:center, :vertex, :Vx, :Vy))
+    ϕ_air.center[3, 1] = 0.0
+    @test JustRelax2D.rock_mean_viscosity(reshape([2.0, 0.5, 1.0e-6], ni), ϕ_air) ≈ 1.25
 end
 
 @testset "Variational DYREL vertex viscosity" begin

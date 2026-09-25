@@ -189,18 +189,15 @@ function _solve_VariationalDYREL!(
         # otherwise set the scale. maskV[d] is shaped like the residuals, i.e. the interior of
         # the velocity arrays.
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
-        Vspan = nonzero_span(maximum(map(masked_value_scale, maskV, Vi)))
+        # not `nonzero_span`: its absolute threshold (√eps) is far above a dimensional velocity
+        # (~1e-9 m/s), which it would replace by 1 and so deflate `errPt` by the velocity itself
+        Vscale = maximum(map(masked_value_scale, maskV, Vi))
+        η_max = maximum_mpi(ifelse.(maskP, stokes.viscosity.η, zero(eltype(stokes.viscosity.η))))
+        Vspan = continuity_velocity_scale(Vscale, Pspan, lx, η_max, ϵ)
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
         RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt))
-        # Convergence additionally accepts a continuity residual that is negligible in absolute
-        # terms: a field at rest has no velocity scale, so `Vspan` collapses to the residual-level
-        # noise and `errPt` stops carrying information. `RP` is a divergence, so `RP·dt` is the
-        # volumetric strain the step would accumulate — dimensionless and solution-independent.
-        # Only the convergence test uses it; `err` continues to drive the tolerance schedule below,
-        # which is tuned against the relative form.
-        err_converged = max(maximum(errV), min(errPt, RP_rms * dt))
 
         if itPH ≤ 2
             errV0 = map(x -> x + eps(), errV)
@@ -216,7 +213,7 @@ function _solve_VariationalDYREL!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
-        if err_converged < ϵ && itPH > 1
+        if err < ϵ && itPH > 1
             converged = true
             break
         end

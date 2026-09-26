@@ -13,14 +13,16 @@ export benchmark_cases, dashboard_main, main, print_comparison, run_benchmarks, 
     write_results
 
 const REPOSITORY_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
-const PERFORMANCE_MODEL_VERSION = "justrelax_teff_v1"
+const PERFORMANCE_MODEL_VERSION = "justrelax_teff_v2"
 const REPOSITORY_URL = "https://github.com/PTsolvers/JustRelax.jl"
 
 # Effective memory access per pseudo-transient iteration, counted as in Räss et al. (2022,
 # GMD 15, 5757): each unknown field is read and written once, each known field is read once,
 # and staggering is ignored (every field has `nᴰ` entries). Auxiliary fields such as stresses,
-# fluxes, and iteration parameters are excluded.
+# fluxes, and iteration parameters are excluded. FLOPs are counted per cell and iteration from
+# the solver kernels; benchmarking/README.md lists the counting rules and coefficients.
 struct PerformanceModel
+    flops::Int
     memory_bytes::Int
     description::String
 end
@@ -38,8 +40,8 @@ struct BenchmarkCase{S, R, V}
     performance_model::PerformanceModel
 end
 
-teff_model(unknowns, knowns, cells, ::Type{T}, description) where {T} =
-    PerformanceModel((2 * unknowns + knowns) * cells * sizeof(T), description)
+teff_model(flops_per_cell, unknowns, knowns, cells, ::Type{T}, description) where {T} =
+    PerformanceModel(flops_per_cell * cells, (2 * unknowns + knowns) * cells * sizeof(T), description)
 
 grid_label(ni) = join(ni, "×")
 
@@ -126,7 +128,7 @@ function stokes_case(backend, n, iterations, ::Type{T}, dims::Val{D}) where {T, 
         "rheology" => "linear viscous (G = K = Inf)",
     )
     model = teff_model(
-        D + 1, 2, n^D * iterations, T,
+        D == 2 ? 123 : 222, D + 1, 2, n^D * iterations, T,
         "$D velocity components and pressure updated; viscosity and buoyancy read",
     )
     return BenchmarkCase(
@@ -182,7 +184,7 @@ function diffusion_case(backend, n, iterations, ::Type{T}, dims::Val{D}) where {
         "iterations" => iterations,
     )
     model = teff_model(
-        1, 3, n^D * iterations, T,
+        D == 2 ? 38 : 52, 1, 3, n^D * iterations, T,
         "temperature updated; old temperature, conductivity, and heat capacity read; one residual evaluation",
     )
     return BenchmarkCase(
@@ -255,24 +257,55 @@ triad!(a::Array, b, c, s) = Threads.@threads for i in eachindex(a, b, c)
 end
 triad!(a, b, c, s) = a .= b .+ s .* c
 
-"""
-    measure_peak_bandwidth(backend, T; n = 2^26, repeats = 5, warmup = 1.0)
-
-Attainable `T` memory bandwidth in GB/s: the fastest of `repeats` STREAM triads over `n`
-elements, counting 3 transfers per element, after `warmup` seconds of triads that let the
-device reach its sustained clock.
-"""
-function measure_peak_bandwidth(backend, ::Type{T} = Float64; n = 2^26, repeats = 5, warmup = 1.0) where {T}
-    a, b, c = (device_array(backend, ones(T, n)) for _ in 1:3)
-    timed_triad() = @elapsed begin
-        triad!(a, b, c, T(3))
-        synchronize(a)
+# Eight independent chains hide FMA latency; summing them keeps them live.
+function fma_chain(x, s, c, iterations)
+    x1, x2, x3, x4 = x, x + 1, x + 2, x + 3
+    x5, x6, x7, x8 = x + 4, x + 5, x + 6, x + 7
+    for _ in 1:iterations
+        x1 = muladd(x1, s, c); x2 = muladd(x2, s, c)
+        x3 = muladd(x3, s, c); x4 = muladd(x4, s, c)
+        x5 = muladd(x5, s, c); x6 = muladd(x6, s, c)
+        x7 = muladd(x7, s, c); x8 = muladd(x8, s, c)
     end
+    return x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8
+end
+
+fma_chains!(out::Array, x, s, c, iterations) = Threads.@threads for i in eachindex(out, x)
+    out[i] = fma_chain(x[i], s, c, iterations)
+end
+fma_chains!(out, x, s, c, iterations) = out .= fma_chain.(x, s, c, iterations)
+
+# Fastest of `repeats` calls of `f`, after `warmup` seconds of calls that let the device reach
+# its sustained clock.
+function best_time(f, synchronized; repeats = 5, warmup = 1.0)
+    timed() = @elapsed (f(); synchronize(synchronized))
     start = time()
     while time() - start < warmup
-        timed_triad()
+        timed()
     end
-    return 3 * n * sizeof(T) / minimum(_ -> timed_triad(), 1:repeats) / 1.0e9
+    return minimum(_ -> timed(), 1:repeats)
+end
+
+"""
+    measure_peaks(backend, T; n = 2^26, fma_items = 2^22, fma_iterations = 256)
+
+Attainable `T` memory bandwidth (STREAM triad over `n` elements, counting 3 transfers per
+element) and compute rate (8 FMA chains of `fma_iterations` per item), in GB/s and GFLOP/s.
+The CPU chains run one item per loop iteration without SIMD across items, so the CPU compute
+rate is a lower bound.
+"""
+function measure_peaks(
+        backend, ::Type{T} = Float64; n = 2^26, fma_items = 2^22, fma_iterations = 256
+    ) where {T}
+    a, b, c = (device_array(backend, ones(T, n)) for _ in 1:3)
+    bandwidth = 3 * n * sizeof(T) / best_time(() -> triad!(a, b, c, T(3)), a) / 1.0e9
+
+    x = device_array(backend, T.(1:fma_items))
+    out = similar(x)
+    flops = 2 * 8 * fma_iterations * fma_items
+    compute = flops / best_time(() -> fma_chains!(out, x, T(0.999), T(0.001), fma_iterations), out) / 1.0e9
+    all(isfinite, Array(out)) || error("FMA probe produced non-finite values")
+    return (; bandwidth, compute)
 end
 
 # Device arrays are synchronized by downloading one element, which works on every backend
@@ -288,6 +321,7 @@ function benchmark_metadata(backend, backend_name, device, ::Type{T}) where {T}
     cpu = first(Sys.cpu_info())
     cpu_model = "$(cpu.model) ($(Sys.CPU_NAME))"
     device = something(device, cpu_model)
+    peaks = measure_peaks(backend, T)
     return Dict{String, Any}(
         "timestamp_utc" => string(now(UTC)),
         "commit" => git.commit,
@@ -305,8 +339,9 @@ function benchmark_metadata(backend, backend_name, device, ::Type{T}) where {T}
             "$(Sys.KERNEL) | $(Sys.ARCH) | $device | $cpu_model | $(Threads.nthreads()) threads",
         "threads" => Threads.nthreads(),
         "package_versions" => loaded_package_versions(),
-        "peak_memory_bandwidth_gb_per_second" => measure_peak_bandwidth(backend, T),
-        "peak_source" => "measured: $T STREAM triad",
+        "peak_memory_bandwidth_gb_per_second" => peaks.bandwidth,
+        "peak_compute_gflops" => peaks.compute,
+        "peak_source" => "measured: $T STREAM triad and FMA-chain kernels",
     )
 end
 
@@ -319,6 +354,7 @@ function measure(case::BenchmarkCase, samples, metadata)
     timings = [sample.time for sample in trial.samples]
     median_time = median(timings)
     model = case.performance_model
+    flops_per_second = model.flops / median_time
 
     return Dict{String, Any}(
         "name" => case.name,
@@ -336,7 +372,11 @@ function measure(case::BenchmarkCase, samples, metadata)
         "work_units" => case.work_units,
         "work_unit" => case.work_unit,
         "throughput_per_second" => case.work_units / median_time,
+        "modeled_flops" => model.flops,
         "modeled_memory_bytes" => model.memory_bytes,
+        "arithmetic_intensity_flops_per_byte" => model.flops / model.memory_bytes,
+        "effective_flops_per_second" => flops_per_second,
+        "effective_gflops_per_second" => flops_per_second / 1.0e9,
         "effective_bandwidth_gb_per_second" => model.memory_bytes / median_time / 1.0e9,
         "performance_metric_source" => "algorithmic_model",
         "performance_model_version" => PERFORMANCE_MODEL_VERSION,

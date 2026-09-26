@@ -46,16 +46,33 @@ iteration must move: each unknown field is read and written once, each known fie
 once, and every field is counted as `nᴰ` entries regardless of its staggering. Stresses,
 fluxes, and iteration parameters are excluded.
 
-| Benchmark | Unknowns | Knowns | `A_eff` per iteration |
-| --- | --- | --- | ---: |
-| Stokes (2D) | `Vx`, `Vy`, `P` | `η`, `ρg` | `8 nᴰ sizeof(T)` |
-| Stokes (3D) | `Vx`, `Vy`, `Vz`, `P` | `η`, `ρg` | `10 nᴰ sizeof(T)` |
-| Thermal diffusion | `T` | `T_old`, `K`, `ρCp` | `5 nᴰ sizeof(T)` |
+FLOPs are counted per cell and iteration from the operations written in the solver kernels,
+each kernel counted once per cell regardless of staggering. An FMA counts as two FLOPs; add,
+subtract, multiply, divide, and reciprocal each count as one. Negation, integer arithmetic,
+comparisons, indexing, grid-spacing reads, and control flow are excluded, as are boundary
+conditions and halo updates. FLOP counts are independent of the element type.
+
+| Benchmark | Unknowns | Knowns | `A_eff` per iteration | FLOPs per iteration |
+| --- | --- | --- | ---: | ---: |
+| Stokes (2D) | `Vx`, `Vy`, `P` | `η`, `ρg` | `8 nᴰ sizeof(T)` | `123 nᴰ` |
+| Stokes (3D) | `Vx`, `Vy`, `Vz`, `P` | `η`, `ρg` | `10 nᴰ sizeof(T)` | `222 nᴰ` |
+| Thermal diffusion (2D) | `T` | `T_old`, `K`, `ρCp` | `5 nᴰ sizeof(T)` | `38 nᴰ` |
+| Thermal diffusion (3D) | `T` | `T_old`, `K`, `ρCp` | `5 nᴰ sizeof(T)` | `52 nᴰ` |
+
+The Stokes counts cover the divergence (5 in 2D, 8 in 3D), the compressible pressure update
+(24), the strain rate (13, 28), the visco-elastic stress update (47, 102), the velocity update
+(32, 57), and the velocity-to-displacement copy (2, 3). With `nout` beyond `iterMax`, the
+residual norms are never evaluated. The diffusion counts cover the damped heat-flux update
+(22, 33) and the pseudo-transient temperature update (16, 19); the single residual evaluation
+per solve (11, 14 per cell) is excluded.
 
 Each JSON record reports `effective_bandwidth_gb_per_second`, the effective memory throughput
-`T_eff = A_eff × iterations / t`. The metadata records `peak_memory_bandwidth_gb_per_second`,
-measured with a STREAM triad on the same device and element type; `T_eff` divided by that peak
-is the fraction of attainable bandwidth the solver reaches. Measurements from hardware
+`T_eff = A_eff × iterations / t`, together with `arithmetic_intensity_flops_per_byte`,
+`effective_flops_per_second`, and `effective_gflops_per_second`. The metadata records
+`peak_memory_bandwidth_gb_per_second` and `peak_compute_gflops`, measured with a STREAM triad
+and an eight-chain FMA kernel on the same device and element type; they are the roofline
+ceilings. The CPU FMA kernel does not vectorize across items, so the CPU compute peak is a
+lower bound. Measurements from hardware
 counters must use a distinct `performance_metric_source` label rather than silently replacing
 this model.
 

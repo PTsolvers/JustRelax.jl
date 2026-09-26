@@ -12,7 +12,7 @@ import VersionPicker from "../../components/VersionPicker.vue"
 import AuthorBadge from '../../components/AuthorBadge.vue'
 import Authors from '../../components/Authors.vue'
 import CitationSelector from './CitationSelector.vue'
-import PerformanceDashboard from '../../components/PerformanceDashboard.vue'
+import PerformanceDashboard from './PerformanceDashboard.vue'
 
 import { enhanceAppWithTabs } from 'vitepress-plugin-tabs/client'
 

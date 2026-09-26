@@ -420,6 +420,10 @@ distinct from `EII_pl` (which integrates the second invariant of the deviatoric 
 strain rate via [`accumulate_tensor!`](@ref)).
 """
 function accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
+    return accumulate_vol!(backend(EVol_pl), EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CPUBackendTrait, EVol_pl, ε_vol_pl, dt)
     _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
     return nothing
 end

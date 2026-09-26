@@ -61,7 +61,7 @@ function _solve!(
         igg::IGG;
         iterMax = 10.0e3,
         nout = 500,
-        b_width = (4, 4, 1),
+        b_width = (4, 4, 0),
         verbose = true,
         kwargs...,
     )

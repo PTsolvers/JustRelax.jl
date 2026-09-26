@@ -625,7 +625,7 @@ end
 # is V = (εbg x, -εbg y, 0), P = P0 and a spatially uniform stress
 # ---------------------------------------------------------------------------------------
 
-const ni_s = (8, 8, 6)
+const ni_s = (32, 16, 16)
 const εbg = 1.0
 quiet(f) = redirect_stdout(f, devnull)
 
@@ -668,8 +668,8 @@ end
 
 @testset "Stokes solve! 3D" begin
     igg = IGG(init_global_grid(ni_s...; init_MPI = JustRelax.MPI.Initialized() ? false : true, select_device = false, quiet = true)...)
-    li = (1.0, 0.8, 0.6)
-    grid = Geometry(ni_s, li; origin = (0.0, -0.8, 0.0))
+    li = (1.0, 0.5, 0.5)
+    grid = Geometry(ni_s, li; origin = (0.0, -0.5, 0.0))
     pt_stokes = PTStokesCoeffs(li, li ./ ni_s; ϵ_rel = 1.0e-12, ϵ_abs = 1.0e-10)
     ρg = @zeros(ni_s...), @zeros(ni_s...), @zeros(ni_s...)
     η0, G0, K0, dt = 1.3, 1.0, 5.0, 0.8

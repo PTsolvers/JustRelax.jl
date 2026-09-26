@@ -21,6 +21,7 @@ else
 end
 
 using JustPIC
+import Adapt
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -47,8 +48,8 @@ end
 
     # CellArrays stores an SVector per cell; copy to host so we can index per-cell
     # on any backend.
-    center_h = Base.Array(pr.center)
-    vertex_h = Base.Array(pr.vertex)
+    center_h = Base.Array(Adapt.adapt(Array, pr.center))
+    vertex_h = Base.Array(Adapt.adapt(Array, pr.vertex))
     faces_h = map(Base.Array, (pr.Vx, pr.Vy, pr.Vz))
     midpoints_h = map(Base.Array, (pr.xy, pr.yz, pr.xz))
 

@@ -169,7 +169,8 @@ const powerlaw = (η0 = 2.0, n = 3.0, ε0 = 1.0)
 
     @testset "vertex arguments average the eight surrounding cells" begin
         i, j, k = 3, 2, 4
-        la = JR3K.local_viscosity_args_vertex(args, i, j, k)
+        # device-side helper: call it on host copies so it runs on every backend
+        la = JR3K.local_viscosity_args_vertex((; T = Th, P = Ph), i, j, k)
         # cell indices around vertex (i, j, k), clamped to the domain
         cells = Iterators.product((max(i - 1, 1), min(i, nx)), (max(j - 1, 1), min(j, ny)), (max(k - 1, 1), min(k, nz)))
         @test la.P ≈ sum(Ph[I...] for I in cells) / 8

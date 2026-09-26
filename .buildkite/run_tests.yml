@@ -52,5 +52,53 @@ steps:
       - exit_status: 3
     env:
       JULIA_NUM_THREADS: 4
+  - label: ":stopwatch: Benchmarks CUDA"
+    key: "benchmarks-cuda"
+    if: build.branch == "main" && build.message !~ /\[skip benchmarks\]/
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "1"
+    command: |
+      echo "--- :julia: Instantiating benchmark environment"
+      julia --project=benchmarking benchmarking/setup.jl
+
+      echo "+++ :stopwatch: CUDA benchmarks"
+      julia --project=benchmarking benchmarking/run_benchmarks.jl --backend=CUDA --output=benchmark_results_CUDA.json
+
+      echo "+++ :stopwatch: host CPU benchmarks"
+      julia --project=benchmarking benchmarking/run_benchmarks.jl --backend=CPU --output=benchmark_results_CUDA-host-CPU.json
+    artifact_paths:
+      - "benchmark_results_*.json"
+    agents:
+      queue: "cuda"
+    timeout_in_minutes: 60
+    soft_fail: true
+    env:
+      JULIA_NUM_THREADS: 4
+      JULIA_PKG_PRECOMPILE_AUTO: 0
+
+  - label: ":stopwatch: Benchmarks AMDGPU"
+    key: "benchmarks-amdgpu"
+    if: build.branch == "main" && build.message !~ /\[skip benchmarks\]/
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "1"
+    command: |
+      echo "--- :julia: Instantiating benchmark environment"
+      julia --project=benchmarking benchmarking/setup.jl
+
+      echo "+++ :stopwatch: AMDGPU benchmarks"
+      julia --project=benchmarking benchmarking/run_benchmarks.jl --backend=AMDGPU --output=benchmark_results_AMDGPU.json
+    artifact_paths:
+      - "benchmark_results_*.json"
+    agents:
+      queue: "rocm"
+      rocmgpu: "*"
+    timeout_in_minutes: 60
+    soft_fail: true
+    env:
+      JULIA_NUM_THREADS: 4
+      JULIA_PKG_PRECOMPILE_AUTO: 0
+
 env:
   SECRET_CODECOV_TOKEN: "qmyeCvSvcMLA79DZmcBvI3UPyoNmthQntj4D+WpWuKOWrWlEEJE3Ljr5IgtW/YNrWnN7Wb5Nr3x/IWs/1YLunol1tDeXa1FzPq1DBHBliC4/tnErCkN7p15ulu+IhQ2RkT0opTilGRjVbTkJ/PvZBHw32QH/4nAoZIObJ7PyvrwG6pPctnEFPGocPQVdDy3jcI5WFNYJ6kQ2wcBJaN1yVg2Xm1WXzMX2ZPxElcL4g0ePjr7HQ0gBv7lzMS08hCGSNNu9WhbTqwn+X68QQMh5aBr9mFS1/AJkO4JROHfjKwnTEFfzQhw/k5w+t2DkWDIZ+mubFbeCaprzRJRaP3xWWw==;U2FsdGVkX18M2bhSgj/MHxJmAtYySJyrmZ1k9Yidc79Ogt1NTOAVWQ5gzxYWNMnMOYzyKQBYgymlVO2qnF9PIg=="

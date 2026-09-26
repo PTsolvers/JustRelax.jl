@@ -162,6 +162,7 @@ makedocs(;
             "Grid" => "man/api/grid.md",
             "Index" => "man/listfunctions.md",
         ],
+        "Performance" => "performance.md",
         "Citing JustRelax.jl" => "man/citing.md",
         "References" => Any[
             "JustPIC" => "man/JustPIC.md",

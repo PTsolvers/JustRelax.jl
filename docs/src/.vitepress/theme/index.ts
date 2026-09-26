@@ -12,6 +12,7 @@ import VersionPicker from "../../components/VersionPicker.vue"
 import AuthorBadge from '../../components/AuthorBadge.vue'
 import Authors from '../../components/Authors.vue'
 import CitationSelector from './CitationSelector.vue'
+import PerformanceDashboard from '../../components/PerformanceDashboard.vue'
 
 import { enhanceAppWithTabs } from 'vitepress-plugin-tabs/client'
 
@@ -35,6 +36,7 @@ export const Theme: ThemeConfig = {
     app.component('AuthorBadge', AuthorBadge)
     app.component('Authors', Authors)
     app.component('CitationSelector', CitationSelector)
+    app.component('PerformanceDashboard', PerformanceDashboard)
   }
 }
 export default Theme

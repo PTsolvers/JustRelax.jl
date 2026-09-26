@@ -420,6 +420,10 @@ distinct from `EII_pl` (which integrates the second invariant of the deviatoric 
 strain rate via [`accumulate_tensor!`](@ref)).
 """
 function accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
+    return accumulate_vol!(backend(EVol_pl), EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CPUBackendTrait, EVol_pl, ε_vol_pl, dt)
     _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
     return nothing
 end
@@ -494,113 +498,6 @@ end
     return nothing
 end
 
-####
-
-function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args)
-    return update_stress!(
-        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args
-    )
-end
-
-function update_stress!(
-        ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args
-    )
-    dim(::AbstractArray{T, N}) where {T, N} = Val(N)
-
-    function f!(stokes, ::Val{2})
-        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-        update_halo!(stokes.τ.xy)
-        return nothing
-    end
-
-    function f!(stokes, ::Val{3})
-        center2vertex!(
-            stokes.τ.yz,
-            stokes.τ.xz,
-            stokes.τ.xy,
-            stokes.τ.yz_c,
-            stokes.τ.xz_c,
-            stokes.τ.xy_c,
-        )
-        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
-        return nothing
-    end
-
-    ni = size(phase_ratios.center)
-    nDim = dim(stokes.viscosity.η)
-
-    @parallel (@idx ni) compute_τ!(
-        @tensor_center(stokes.τ)...,
-        @tensor_center(stokes.τ_o)...,
-        @strain(stokes)...,
-        stokes.viscosity.η,
-        θ_dτ,
-        dt,
-        phase_ratios.center,
-        tupleize(rheology), # needs to be a tuple
-    )
-
-    f!(stokes, nDim)
-
-    return nothing
-end
-
-function update_stress!(
-        ::NonLinearRheologyTrait,
-        stokes,
-        θ,
-        λ::AbstractArray{T, N},
-        phase_ratios,
-        rheology,
-        dt,
-        θ_dτ,
-        args,
-    ) where {N, T}
-    ni = size(phase_ratios.center)
-    nDim = Val(N)
-
-    function f!(stokes, ::Val{2})
-        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-        update_halo!(stokes.τ.xy)
-        return nothing
-    end
-
-    function f!(stokes, ::Val{3})
-        center2vertex!(
-            stokes.τ.yz,
-            stokes.τ.xz,
-            stokes.τ.xy,
-            stokes.τ.yz_c,
-            stokes.τ.xz_c,
-            stokes.τ.xy_c,
-        )
-        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
-        return nothing
-    end
-
-    @parallel (@idx ni) compute_τ_nonlinear!(
-        @tensor_center(stokes.τ),
-        stokes.τ.II,
-        @tensor_center(stokes.τ_o),
-        @strain(stokes),
-        @plastic_strain(stokes.ε_pl),
-        stokes.EII_pl,
-        stokes.P,
-        θ,
-        stokes.viscosity.η,
-        stokes.viscosity.η_vep,
-        λ,
-        phase_ratios.center,
-        tupleize(rheology), # needs to be a tuple
-        dt,
-        θ_dτ,
-    )
-
-    f!(stokes, nDim)
-
-    return nothing
-end
-
 #####
 
 """
@@ -624,68 +521,82 @@ Base.@propagate_inbounds @inline function clamped_indices(
     px, py, pz = periodic
     i0 = _clamped_index(i - 1, nx, px)
     ic = _clamped_index(i, nx, px)
-    i1 = _clamped_index(i + 1, nx, px)
     j0 = _clamped_index(j - 1, ny, py)
     jc = _clamped_index(j, ny, py)
-    j1 = _clamped_index(j + 1, ny, py)
     k0 = _clamped_index(k - 1, nz, pz)
     kc = _clamped_index(k, nz, pz)
-    k1 = _clamped_index(k + 1, nz, pz)
-    return i0, j0, k0, ic, jc, kc, i1, j1, k1
+    return i0, j0, k0, ic, jc, kc
 end
 
 Base.@propagate_inbounds @inline clamped_indices(ni::NTuple{3, Integer}, i, j, k) =
     clamped_indices(ni, (false, false, false), i, j, k)
 
-Base.@propagate_inbounds @inline function av_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_yz(A, i0, j0, k0, ic, jc, kc)
     return 0.25 * (A[ic, j0, k0] + A[ic, jc, k0] + A[ic, j0, kc] + A[ic, jc, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_xz(A, i0, j0, k0, ic, jc, kc)
     return 0.25 * (A[i0, jc, k0] + A[ic, jc, k0] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function av_clamped_xy(A, i0, j0, k0, ic, jc, kc)
     return 0.25 * (A[i0, j0, kc] + A[ic, j0, kc] + A[i0, jc, kc] + A[ic, jc, kc])
 end
 
-Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function harm_clamped_yz(A, i0, j0, k0, ic, jc, kc)
     return 4 / (1 / A[ic, j0, k0] + 1 / A[ic, jc, k0] + 1 / A[ic, j0, kc] + 1 / A[ic, jc, kc])
 end
 
-Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function harm_clamped_xz(A, i0, j0, k0, ic, jc, kc)
     return 4 / (1 / A[i0, jc, k0] + 1 / A[ic, jc, k0] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
-Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc, kc)
     return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
-# on yz
-Base.@propagate_inbounds @inline function av_clamped_yz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, jc, k0] + A[i1, jc, k0] + A[ic, jc, kc] + A[i1, jc, kc])
+# Edge-to-edge averages: move a shear component from one edge family to another. Along
+# each axis the source-to-target step is one of three kinds:
+#   - center -> vertex (two cells meet at the target): average the clamped/wrapped cell
+#     pair `(i0, ic)`; at a physical boundary one cell is missing, which is the only place
+#     clamping (or periodic wrapping) is needed.
+#   - vertex -> center (the target lies inside a cell): average the two faces `(i, i + 1)`
+#     of that cell; every cell has both faces, so the raw index is always in range.
+#   - same location: read the raw index `i` directly; both arrays share that node,
+#     including the boundary node `ni + 1`.
+# `I` is the unclamped target index; callers guard it by the size of the target array.
+
+# on yz: (x center, y vertex, z vertex)
+Base.@propagate_inbounds @inline function av_clamped_yz_z(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on xy edges: x vertex -> center, y same, z center -> vertex
+    return 0.25 * (A[i, j, k0] + A[i + 1, j, k0] + A[i, j, kc] + A[i + 1, j, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_yz_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, j0, kc] + A[i1, j0, kc] + A[ic, jc, kc] + A[i1, jc, kc])
+Base.@propagate_inbounds @inline function av_clamped_yz_y(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on xz edges: x vertex -> center, y center -> vertex, z same
+    return 0.25 * (A[i, j0, k] + A[i + 1, j0, k] + A[i, jc, k] + A[i + 1, jc, k])
 end
 
-# on xz
-Base.@propagate_inbounds @inline function av_clamped_xz_z(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, jc, k0] + A[ic, j1, k0] + A[ic, jc, kc] + A[ic, j1, kc])
+# on xz: (x vertex, y center, z vertex)
+Base.@propagate_inbounds @inline function av_clamped_xz_z(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on xy edges: x same, y vertex -> center, z center -> vertex
+    return 0.25 * (A[i, j, k0] + A[i, j + 1, k0] + A[i, j, kc] + A[i, j + 1, kc])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xz_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[ic, j1, kc] + A[i0, j1, kc])
+Base.@propagate_inbounds @inline function av_clamped_xz_x(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on yz edges: x center -> vertex, y vertex -> center, z same
+    return 0.25 * (A[i0, j, k] + A[ic, j, k] + A[ic, j + 1, k] + A[i0, j + 1, k])
 end
 
-# on xy
-Base.@propagate_inbounds @inline function av_clamped_xy_y(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[ic, j0, kc] + A[ic, jc, kc] + A[ic, j0, k1] + A[ic, jc, k1])
+# on xy: (x vertex, y vertex, z center)
+Base.@propagate_inbounds @inline function av_clamped_xy_y(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on xz edges: x same, y center -> vertex, z vertex -> center
+    return 0.25 * (A[i, j0, k] + A[i, jc, k] + A[i, j0, k + 1] + A[i, jc, k + 1])
 end
 
-Base.@propagate_inbounds @inline function av_clamped_xy_x(A, i0, j0, k0, ic, jc, kc, i1, j1, k1)
-    return 0.25 * (A[i0, jc, kc] + A[ic, jc, kc] + A[i0, jc, k1] + A[ic, jc, k1])
+Base.@propagate_inbounds @inline function av_clamped_xy_x(A, (i, j, k), i0, j0, k0, ic, jc, kc)
+    # A on yz edges: x center -> vertex, y same, z vertex -> center
+    return 0.25 * (A[i0, j, k] + A[ic, j, k] + A[i0, j, k + 1] + A[ic, j, k + 1])
 end
 
 # 3D kernel
@@ -732,8 +643,8 @@ end
         εyyv_ij = av_clamped_yz(ε[2], Ic...)
         εzzv_ij = av_clamped_yz(ε[3], Ic...)
         εyzv_ij = ε[4][I...]
-        εxzv_ij = av_clamped_yz_y(ε[5], Ic...)
-        εxyv_ij = av_clamped_yz_z(ε[6], Ic...)
+        εxzv_ij = av_clamped_yz_y(ε[5], I, Ic...)
+        εxyv_ij = av_clamped_yz_z(ε[6], I, Ic...)
 
         ε_plyzv_ij = ε_pl[4][I...]
 
@@ -741,15 +652,15 @@ end
         τyyv_ij = av_clamped_yz(τ[2], Ic...)
         τzzv_ij = av_clamped_yz(τ[3], Ic...)
         τyzv_ij = τyzv[I...]
-        τxzv_ij = av_clamped_yz_y(τxzv, Ic...)
-        τxyv_ij = av_clamped_yz_z(τxyv, Ic...)
+        τxzv_ij = av_clamped_yz_y(τxzv, I, Ic...)
+        τxyv_ij = av_clamped_yz_z(τxyv, I, Ic...)
 
         τxxv_old_ij = av_clamped_yz(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_yz(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_yz(τ_o[3], Ic...)
         τyzv_old_ij = τyzv_old[I...]
-        τxzv_old_ij = av_clamped_yz_y(τxzv_old, Ic...)
-        τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
+        τxzv_old_ij = av_clamped_yz_y(τxzv_old, I, Ic...)
+        τxyv_old_ij = av_clamped_yz_z(τxyv_old, I, Ic...)
 
         # vertex parameters
         phase = @inbounds phase_yz[I...]
@@ -805,21 +716,21 @@ end
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
         εyyv_ij = av_clamped_xz(ε[2], Ic...)
         εzzv_ij = av_clamped_xz(ε[3], Ic...)
-        εyzv_ij = av_clamped_xz_x(ε[4], Ic...)
+        εyzv_ij = av_clamped_xz_x(ε[4], I, Ic...)
         εxzv_ij = ε[5][I...]
-        εxyv_ij = av_clamped_xz_z(ε[6], Ic...)
+        εxyv_ij = av_clamped_xz_z(ε[6], I, Ic...)
         τxxv_ij = av_clamped_xz(τ[1], Ic...)
         τyyv_ij = av_clamped_xz(τ[2], Ic...)
         τzzv_ij = av_clamped_xz(τ[3], Ic...)
-        τyzv_ij = av_clamped_xz_x(τyzv, Ic...)
+        τyzv_ij = av_clamped_xz_x(τyzv, I, Ic...)
         τxzv_ij = τxzv[I...]
-        τxyv_ij = av_clamped_xz_z(τxyv, Ic...)
+        τxyv_ij = av_clamped_xz_z(τxyv, I, Ic...)
         τxxv_old_ij = av_clamped_xz(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_xz(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_xz(τ_o[3], Ic...)
-        τyzv_old_ij = av_clamped_xz_x(τyzv_old, Ic...)
+        τyzv_old_ij = av_clamped_xz_x(τyzv_old, I, Ic...)
         τxzv_old_ij = τxzv_old[I...]
-        τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
+        τxyv_old_ij = av_clamped_xz_z(τxyv_old, I, Ic...)
         ε_plxzv_ij = ε_pl[5][I...]
 
         # vertex parameters
@@ -876,23 +787,23 @@ end
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
         εyyv_ij = av_clamped_xy(ε[2], Ic...)
         εzzv_ij = av_clamped_xy(ε[3], Ic...)
-        εyzv_ij = av_clamped_xy_x(ε[4], Ic...)
-        εxzv_ij = av_clamped_xy_y(ε[5], Ic...)
+        εyzv_ij = av_clamped_xy_x(ε[4], I, Ic...)
+        εxzv_ij = av_clamped_xy_y(ε[5], I, Ic...)
         εxyv_ij = ε[6][I...]
         ε_plxyv_ij = ε_pl[6][I...]
 
         τxxv_ij = av_clamped_xy(τ[1], Ic...)
         τyyv_ij = av_clamped_xy(τ[2], Ic...)
         τzzv_ij = av_clamped_xy(τ[3], Ic...)
-        τyzv_ij = av_clamped_xy_x(τyzv, Ic...)
-        τxzv_ij = av_clamped_xy_y(τxzv, Ic...)
+        τyzv_ij = av_clamped_xy_x(τyzv, I, Ic...)
+        τxzv_ij = av_clamped_xy_y(τxzv, I, Ic...)
         τxyv_ij = τxyv[I...]
 
         τxxv_old_ij = av_clamped_xy(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_xy(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_xy(τ_o[3], Ic...)
-        τyzv_old_ij = av_clamped_xy_x(τyzv_old, Ic...)
-        τxzv_old_ij = av_clamped_xy_y(τxzv_old, Ic...)
+        τyzv_old_ij = av_clamped_xy_x(τyzv_old, I, Ic...)
+        τxzv_old_ij = av_clamped_xy_y(τxzv_old, I, Ic...)
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters

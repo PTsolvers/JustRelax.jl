@@ -161,6 +161,10 @@
             ε_vol_pl[I...] = zero(eltype(T))
             Base.@nexprs 3 i -> begin
                 τ[i][I...] = zero(eltype(T))
+            end
+            # ε_pl[3] (xy) is vertex-located and shared with the vertex block above, which
+            # indexes it at the same `I`; only the center components (xx, yy) belong here.
+            Base.@nexprs 2 i -> begin
                 ε_pl[i][I...] = zero(eltype(T))
             end
         end
@@ -214,22 +218,22 @@ end
         εyyv_ij = av_clamped_yz(ε[2], Ic...)
         εzzv_ij = av_clamped_yz(ε[3], Ic...)
         εyzv_ij = ε[4][I...]
-        εxzv_ij = av_clamped_yz_y(ε[5], Ic...)
-        εxyv_ij = av_clamped_yz_z(ε[6], Ic...)
+        εxzv_ij = av_clamped_yz_y(ε[5], I, Ic...)
+        εxyv_ij = av_clamped_yz_z(ε[6], I, Ic...)
 
         τxxv_ij = av_clamped_yz(τ[1], Ic...)
         τyyv_ij = av_clamped_yz(τ[2], Ic...)
         τzzv_ij = av_clamped_yz(τ[3], Ic...)
         τyzv_ij = τyzv[I...]
-        τxzv_ij = av_clamped_yz_y(τxzv, Ic...)
-        τxyv_ij = av_clamped_yz_z(τxyv, Ic...)
+        τxzv_ij = av_clamped_yz_y(τxzv, I, Ic...)
+        τxyv_ij = av_clamped_yz_z(τxyv, I, Ic...)
 
         τxxv_old_ij = av_clamped_yz(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_yz(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_yz(τ_o[3], Ic...)
         τyzv_old_ij = τyzv_old[I...]
-        τxzv_old_ij = av_clamped_yz_y(τxzv_old, Ic...)
-        τxyv_old_ij = av_clamped_yz_z(τxyv_old, Ic...)
+        τxzv_old_ij = av_clamped_yz_y(τxzv_old, I, Ic...)
+        τxyv_old_ij = av_clamped_yz_z(τxyv_old, I, Ic...)
 
         # vertex parameters
         phase = @inbounds phase_yz[I...]
@@ -275,7 +279,7 @@ end
             τyzv[I...] += dτyzv
             ε_pl[4][I...] = 0.0
         end
-    else
+    elseif all(I .≤ size(ε[4]))
         τyzv[I...] = zero(eltype(T))
     end
 
@@ -288,21 +292,21 @@ end
         εxxv_ij = av_clamped_xz(ε[1], Ic...)
         εyyv_ij = av_clamped_xz(ε[2], Ic...)
         εzzv_ij = av_clamped_xz(ε[3], Ic...)
-        εyzv_ij = av_clamped_xz_x(ε[4], Ic...)
+        εyzv_ij = av_clamped_xz_x(ε[4], I, Ic...)
         εxzv_ij = ε[5][I...]
-        εxyv_ij = av_clamped_xz_z(ε[6], Ic...)
+        εxyv_ij = av_clamped_xz_z(ε[6], I, Ic...)
         τxxv_ij = av_clamped_xz(τ[1], Ic...)
         τyyv_ij = av_clamped_xz(τ[2], Ic...)
         τzzv_ij = av_clamped_xz(τ[3], Ic...)
-        τyzv_ij = av_clamped_xz_x(τyzv, Ic...)
+        τyzv_ij = av_clamped_xz_x(τyzv, I, Ic...)
         τxzv_ij = τxzv[I...]
-        τxyv_ij = av_clamped_xz_z(τxyv, Ic...)
+        τxyv_ij = av_clamped_xz_z(τxyv, I, Ic...)
         τxxv_old_ij = av_clamped_xz(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_xz(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_xz(τ_o[3], Ic...)
-        τyzv_old_ij = av_clamped_xz_x(τyzv_old, Ic...)
+        τyzv_old_ij = av_clamped_xz_x(τyzv_old, I, Ic...)
         τxzv_old_ij = τxzv_old[I...]
-        τxyv_old_ij = av_clamped_xz_z(τxyv_old, Ic...)
+        τxyv_old_ij = av_clamped_xz_z(τxyv_old, I, Ic...)
 
         # vertex parameters
         phase = @inbounds phase_xz[I...]
@@ -348,7 +352,7 @@ end
             τxzv[I...] += dτxzv
             ε_pl[5][I...] = 0.0
         end
-    else
+    elseif all(I .≤ size(ε[5]))
         τxzv[I...] = zero(eltype(T))
     end
 
@@ -361,22 +365,22 @@ end
         εxxv_ij = av_clamped_xy(ε[1], Ic...)
         εyyv_ij = av_clamped_xy(ε[2], Ic...)
         εzzv_ij = av_clamped_xy(ε[3], Ic...)
-        εyzv_ij = av_clamped_xy_x(ε[4], Ic...)
-        εxzv_ij = av_clamped_xy_y(ε[5], Ic...)
+        εyzv_ij = av_clamped_xy_x(ε[4], I, Ic...)
+        εxzv_ij = av_clamped_xy_y(ε[5], I, Ic...)
         εxyv_ij = ε[6][I...]
 
         τxxv_ij = av_clamped_xy(τ[1], Ic...)
         τyyv_ij = av_clamped_xy(τ[2], Ic...)
         τzzv_ij = av_clamped_xy(τ[3], Ic...)
-        τyzv_ij = av_clamped_xy_x(τyzv, Ic...)
-        τxzv_ij = av_clamped_xy_y(τxzv, Ic...)
+        τyzv_ij = av_clamped_xy_x(τyzv, I, Ic...)
+        τxzv_ij = av_clamped_xy_y(τxzv, I, Ic...)
         τxyv_ij = τxyv[I...]
 
         τxxv_old_ij = av_clamped_xy(τ_o[1], Ic...)
         τyyv_old_ij = av_clamped_xy(τ_o[2], Ic...)
         τzzv_old_ij = av_clamped_xy(τ_o[3], Ic...)
-        τyzv_old_ij = av_clamped_xy_x(τyzv_old, Ic...)
-        τxzv_old_ij = av_clamped_xy_y(τxzv_old, Ic...)
+        τyzv_old_ij = av_clamped_xy_x(τyzv_old, I, Ic...)
+        τxzv_old_ij = av_clamped_xy_y(τxzv_old, I, Ic...)
         τxyv_old_ij = τxyv_old[I...]
 
         # vertex parameters
@@ -422,7 +426,7 @@ end
             τxyv[I...] += dτxyv
             ε_pl[6][I...] = 0.0
         end
-    else
+    elseif all(I .≤ size(ε[6]))
         τxyv[I...] = zero(eltype(T))
     end
 
@@ -499,6 +503,11 @@ end
             ε_vol_pl[I...] = zero(eltype(T))
             Base.@nexprs 6 i -> begin
                 τ[i][I...] = zero(eltype(T))
+            end
+            # ε_pl[4:6] (yz, xz, xy) are edge-located and shared with the yz/xz/xy blocks
+            # above, which index them at the same `I`; only the center components (xx, yy,
+            # zz) belong to this branch.
+            Base.@nexprs 3 i -> begin
                 ε_pl[i][I...] = zero(eltype(T))
             end
         end
@@ -641,7 +650,7 @@ end
                     @muladd (1.0 - relλ) * λ[I...] +
                     relλ * (max(F, 0.0) / (η[I...] * dτ_r * dt + η_reg + volume))
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
                 τij = dτij .+ τij
 
                 # volumetric plastic strain rate (accumulated by accumulate_vol!)

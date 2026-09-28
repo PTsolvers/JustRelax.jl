@@ -138,10 +138,10 @@ end
 
 # Forward state and sensitivities of the step the adjoint differentiates, in one figure: the
 # forward solution (phases, velocity, free surface), the viscosity overlaid by the velocity, and
-# the spatial density and viscosity sensitivities. The viscosity sensitivity is shown as
-# η·∂J/∂η, the response to a relative viscosity perturbation. The outline of the plume that J
-# observes (half the maximum weight) is drawn in every panel.
-function plot_adjoint(figdir, it, t, particles, pPhases, chain, stokes, stokes_ad, ϕ, observation, xci, xvi)
+# the spatial density and viscosity sensitivities. Both are scaled by the local parameter value,
+# ρ·∂J/∂ρ and η·∂J/∂η, so they show the response to relative perturbations. The outline
+# of the plume that J observes (half the maximum weight) is drawn in every panel.
+function plot_adjoint(figdir, it, t, particles, pPhases, chain, stokes, stokes_ad, ρ, ϕ, observation, xci, xvi)
     # blank the air: cells without rock
     rock = Array(ϕ.center) .> 0
     masked(A) = ifelse.(rock, Array(A), NaN)
@@ -175,7 +175,7 @@ function plot_adjoint(figdir, it, t, particles, pPhases, chain, stokes, stokes_a
     Colorbar(fig[1, 4], h)
 
     panels = (
-        (1, "∂J/∂ρ", masked(stokes_ad.ρ)),
+        (1, "ρ ∂J/∂ρ", masked(ρ .* stokes_ad.ρ)),
         (3, "η ∂J/∂η", masked(stokes_ad.viscosity.η .* stokes.viscosity.η)),
     )
     for (col, title, A) in panels
@@ -393,7 +393,10 @@ function plume_free_surface_adjoint(
                 total = sum(Array(gradients[name].center)[p, :, :])
                 println("  phase $p  $name = $(value):  p ∂J/∂p = $(value * total)")
             end
-            plot_results && plot_adjoint(figdir, it + 1, t, particles, pPhases, chain, stokes, stokes_ad, ϕ, observation, xci, xvi)
+            if plot_results
+                ρ = ρg[2] ./ compute_gravity(first(step_rheology))
+                plot_adjoint(figdir, it + 1, t, particles, pPhases, chain, stokes, stokes_ad, ρ, ϕ, observation, xci, xvi)
+            end
         end
 
         dt = compute_dt(stokes, di) * 0.95

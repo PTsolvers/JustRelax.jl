@@ -24,49 +24,51 @@ and run in launches of their own.
 """
 function enzyme_reverse_pointwise!(f::F, n::NTuple{2, Integer}, args::Tuple) where {F}
     primals, shadows = map(first, args), map(last, args)
-    reverse_colored!(ReversePoint(f), n, primals, shadows, nothing)
+    reverse_colored!(f, n, primals, shadows, nothing)
     return nothing
 end
 
-# Annotation of one argument of a point function: differentiated, constant, or (for the
-# material-parameter sensitivities) active with its derivative returned.
-struct ActiveArgument end
-const ACTIVE = ActiveArgument()
-
 @inline annotate(x, dx) = Enzyme.DuplicatedNoNeed(x, dx)
 @inline annotate(x, ::Nothing) = Enzyme.Const(x)
-@inline annotate(x, ::ActiveArgument) = Enzyme.Active(x)
+@inline annotate(x, ::typeof(Enzyme.Active)) = Enzyme.Active(x)
 
-# Reverse of the point function `f` at one point
-struct ReversePoint{F}
-    f::F
-end
-
-@inline function apply_point!(op::ReversePoint, primals, shadows, extra, i, j)
+@inline function apply_point!(f::F, primals, shadows, extra, i, j) where {F <: Function}
     Enzyme.autodiff_deferred(
-        Enzyme.Reverse, Enzyme.Const(op.f), Enzyme.Const,
+        Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const,
         map(annotate, primals, shadows)..., Enzyme.Const(i), Enzyme.Const(j),
     )
     return nothing
 end
 
-# Run `apply_point!(op, …, i, j)` over `1:n[1] × 1:n[2]` in the race-free order of
-# `enzyme_reverse_pointwise!`. `extra` carries further arrays `op` writes to (or `nothing`).
 function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, extra)
+    nx, ny = n
+
+    # Non-adjacent interior rows can run concurrently.
     for first_row in (2, 3)
-        rows = length(first_row:2:(n[2] - 1))
-        rows > 0 && @parallel (1:1, 1:rows) reverse_rows_kernel!(op, primals, shadows, extra, n[1], first_row)
+        number_of_rows = length(first_row:2:(ny - 1))
+        iszero(number_of_rows) && continue
+        @parallel (1:number_of_rows) reverse_row_group!(
+            op, primals, shadows, extra, nx, first_row
+        )
     end
-    for row in (1, n[2])
-        @parallel (1:1, 1:1) reverse_rows_kernel!(op, primals, shadows, extra, n[1], row)
+
+    # Boundary rows run separately because periodic stencils can connect them.
+    for row in (1, ny)
+        @parallel (1:1) reverse_row_group!(op, primals, shadows, extra, nx, row)
     end
+
     return nothing
 end
 
-# reverse rows `first_row`, `first_row + 2`, … (one per index), each point in order
-@parallel_indices (I...) function reverse_rows_kernel!(op, primals, shadows, extra, nx, first_row)
-    for i in 1:nx
-        apply_point!(op, primals, shadows, extra, i, first_row + 2 * (I[2] - 1))
+@parallel_indices (row_in_group) function reverse_row_group!(
+        op, primals, shadows, extra, nx, first_row
+    )
+    row = first_row + 2 * (row_in_group - 1)
+
+    # Adjacent columns can share shadow entries, so process one row sequentially.
+    for column in 1:nx
+        apply_point!(op, primals, shadows, extra, column, row)
     end
+
     return nothing
 end

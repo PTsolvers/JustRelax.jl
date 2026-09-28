@@ -206,7 +206,7 @@ end
 Reverse-differentiate the local stress update point by point, at the vertices with
 `vertex_update!(primals..., i, j)` and at the centers with `center_update!(primals..., i, j)`,
 the two halves of a forward stress kernel. `args` lists their arguments as pairs, as for
-[`enzyme_reverse_pointwise!`](@ref), with the rheology given as `rheology => ACTIVE`.
+[`enzyme_reverse_pointwise!`](@ref), with the rheology given as `rheology => Enzyme.Active`.
 
 The stress seeds in the shadows are consumed as in the adjoint iterations, and the field
 sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
@@ -220,8 +220,9 @@ function enzyme_stress_sensitivities!(
         vertex_update!::FV, center_update!::FC, n, centers, vertices, parameters, args::Tuple,
     ) where {FV, FC}
     primals, shadows = map(first, args), map(last, args)
-    k = findfirst(dx -> dx isa ActiveArgument, shadows)
-    isnothing(k) && throw(ArgumentError("the rheology must be passed as `rheology => ACTIVE`"))
+    k = findfirst(==(Enzyme.Active), shadows)
+    isnothing(k) &&
+        throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
     op = StressSensitivityPoint{FV, FC, k}(vertex_update!, center_update!)
     extra = (; centers, vertices, parameters, ni = n .- 1)
     reverse_colored!(op, n, primals, shadows, extra)

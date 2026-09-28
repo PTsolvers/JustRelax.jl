@@ -95,7 +95,7 @@ function compute_stress_sensitivities!(
             stokes.viscosity.η_vep => nothing,
             stokes.ΔPψ => adjoint.θ,
             ϕ => nothing,
-            rheology => ACTIVE,
+            rheology => Enzyme.Active,
             phases.center => nothing,
             phases.vertex => nothing,
             λ_relaxation => nothing,

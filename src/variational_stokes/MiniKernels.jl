@@ -90,14 +90,6 @@ Base.@propagate_inbounds @inline _av_ya(A::T, ϕ::T, I::Vararg{Integer, 3}) wher
 Base.@propagate_inbounds @inline _av_za(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
     (center(A, ϕ, I...) + top(A, ϕ, I...)) * 0.5
 
-Base.@propagate_inbounds @inline _av_xi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (front(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (right(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (top(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
 
 ## Because mymaskedsum(::generator) does not work inside CUDA kernels...
 Base.@propagate_inbounds @inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T, N}) where {T, N} =

@@ -271,7 +271,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
             vertex2center!(Vx_c, Vx_v)
             vertex2center!(Vy_c, Vy_v)
             vertex2center!(Vz_c, Vz_v)
-            phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+            phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)]
 
             @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)])
             @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)])

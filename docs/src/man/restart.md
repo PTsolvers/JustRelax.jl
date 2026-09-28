@@ -4,13 +4,14 @@ To restart a simulation from a previously saved checkpoint file, you can make us
 
 In this example, we will demonstrate how to set up a script to restart a simulation from a JLD2 checkpoint file as we can save the entire structures of the `StokesArrays` and `ThermalArrays` which makes it easier to restart the simulation. We will assume that you have already saved a checkpoint file using the `checkpointing_jld2` function for the example of a 2D subduction model.
 Ideally, one does not need to change much in the initial script used to start the simulation from scratch. The main difference is that instead of initializing the `StokesArrays` and `ThermalArrays` from scratch, we will load them from the checkpoint file.
-For a detailed description of the 2D subduction model setup, please refer to the [2D subduction documentation](./subduction2D/subduction2D.md). The following example can be found [here](https://github.com/PTsolvers/JustRelax.jl/blob/d63ca8f08860859700913b575c9befc33d5c4f2a/miniapps/subduction/2D/Subduction2D_restart).
+For a detailed description of the 2D subduction model setup, please refer to the [2D subduction documentation](./subduction2D/subduction2D.md). The following example can be found [here](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/subduction/2D/Subduction2D_restart.jl).
 
 Load JustRelax necessary modules and define backend.
 ```julia
+using Pkg; Pkg.activate("miniapps") # Run from the repository root
+using JLD2
 using CUDA # comment this out if you are not using CUDA; or load AMDGPU.jl if you are using an AMD GPU
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-using Pkg; Pkg.activate("miniapps")
 const backend_JR = JustRelax.CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 ```
 
@@ -26,7 +27,7 @@ const backend = CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGP
 ## Load and initialize particles fields
 The `JustPIC` specific function `TA()` will convert the loaded particles to the correct backend.
 ```julia
-data = load(joinpath("Your_checkpointing_directory", "particles.jld2"))
+data = JLD2.load(joinpath("Your_checkpointing_directory", "particles.jld2"))
 particles     = TA(backend)(Float64, data["particles"])
 phases        = TA(backend)(Float64, data["phases"])
 phase_ratios  = TA(backend)(Float64, data["phase_ratios"])
@@ -47,13 +48,20 @@ stokes_cpu, thermal_cpu, t, dt = load_checkpoint_jld2(dst, igg)
 ```julia [Additional fields]
 dst = "Your_checkpointing_directory"
 fname = joinpath(dst, "checkpoint" * lpad("$(igg.me)", 4, "0") * ".jld2")
-stokes_cpu, thermal_cpu, t, dt, it, custom_field_1, custom_field_2 = JLD2.load(fname)
+data = JLD2.load(fname)
+stokes_cpu = data["stokes"]
+thermal_cpu = get(data, "thermal", nothing)
+t = data["time"]
+dt = data["timestep"]
+it = data["it"]
+custom_field_1 = data["custom_field_1"]
+custom_field_2 = data["custom_field_2"]
 ```
 :::
 
 The loaded arrays are CPU arrays, so we need to convert them to the correct backend.
 ```julia
 stokes = PTArray(backend_JR, stokes_cpu)
-thermal = PTArray(backend_JR, thermal_cpu)
+thermal = isnothing(thermal_cpu) ? nothing : PTArray(backend_JR, thermal_cpu)
 ```
 From here on you should be able to continue the simulation as usual. Make sure to adjust the time loop to start from the loaded time `t` and iteration `it` if you loaded them.

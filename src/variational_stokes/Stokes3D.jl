@@ -112,6 +112,10 @@ function _solve_VS!(
     # solver loop
     wtime0 = 0.0
     ητ = deepcopy(η)
+    # compute_V! uses enough registers that CUDA caps its blocks at 256 threads, while
+    # ParallelStencil's default launch can exceed that (e.g. 17×16 threads for a 17-wide range).
+    nthreads_V = (32, 4, 1)
+    nblocks_V = cld.(ni .+ 1, nthreads_V)
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
@@ -197,7 +201,7 @@ function _solve_VS!(
             update_halo!(stokes.τ.xy)
             free_surface_stress_bcs!(stokes, flow_bcs, Val(3))
 
-            @parallel (@idx ni .+ 1) compute_V!(
+            @parallel (@idx ni .+ 1) nblocks_V nthreads_V compute_V!(
                 @velocity(stokes)...,
                 @residuals(stokes.R)...,
                 stokes.P,

@@ -229,7 +229,7 @@ function run_case(
                 total_iterMax = 50.0e3,
                 viscosity_relaxation = 1.0e-2,
                 nout = 50,
-                rel_drop = 1e-2,
+                rel_drop = 1.0e-2,
                 free_surface = true,
                 viscosity_cutoff = viscosity_cutoff,
                 verbose = false,

@@ -604,7 +604,8 @@ function _solve!(
             )
             # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+            # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
+            @parallel (@idx ni .+ 1) cld.(ni .+ 1, (32, 8, 1)) (32, 8, 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,

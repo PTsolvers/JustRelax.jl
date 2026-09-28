@@ -53,54 +53,57 @@ function sinking_sphere(solver; n = 16, zsurf = Inf, no_slip_top = false, free_s
     ni = n, n, n
     li = 1.0, 1.0, 1.0
     igg = IGG(init_global_grid(n, n, n; init_MPI = !JustRelax.MPI.Initialized(), quiet = true)...)
-    grid = Geometry(ni, li; origin = (0.0, 0.0, -1.0))
-    el = ConstantElasticity(; G = 1.0e6, ν = 0.25)
-    material(phase, ρ, η) = SetMaterialParams(;
-        Phase = phase,
-        Density = ConstantDensity(; ρ = ρ),
-        Gravity = ConstantGravity(; g = 1.0),
-        CompositeRheology = CompositeRheology((LinearViscous(; η = η), el)),
-        Elasticity = el,
-    )
-    rheology = (material(1, 1.0, 1.0), material(2, 2.0, 0.1), material(3, 0.0, 1.0e-2))
-
-    particles = init_particles(backend_JP, 20, 40, 10, grid.xi_vel...)
-    pPhases, = init_cell_arrays(particles, Val(1))
-    @parallel (@idx size(pPhases)) sphere_phases!(pPhases, particles.coords..., particles.index, zsurf)
-    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    update_phase_ratios!(phase_ratios, particles, pPhases)
-
-    stokes = StokesArrays(backend, ni)
-    pt_stokes = PTStokesCoeffs(li, minimum.(grid.di.vertex); ϵ_abs = 1.0e-8, ϵ_rel = 1.0e-6, CFL = 0.9 / √3.1)
-    flow_bcs = VelocityBoundaryConditions(;
-        free_slip = (left = true, right = true, front = true, back = true, top = !no_slip_top, bot = true),
-        no_slip = (left = false, right = false, front = false, back = false, top = no_slip_top, bot = false),
-    )
-    ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
-    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
-    compute_ρg!(ρg[3], phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-    out = if solver === :standard
-        solve!(
-            stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, 1.0, igg;
-            kwargs = (; iterMax = 10.0e3, nout = 100, verbose = false)
+    try
+        grid = Geometry(ni, li; origin = (0.0, 0.0, -1.0))
+        el = ConstantElasticity(; G = 1.0e6, ν = 0.25)
+        material(phase, ρ, η) = SetMaterialParams(;
+            Phase = phase,
+            Density = ConstantDensity(; ρ = ρ),
+            Gravity = ConstantGravity(; g = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = η), el)),
+            Elasticity = el,
         )
-    else
-        ϕ = RockRatio(backend, ni)
-        if isinf(zsurf)
-            foreach(f -> fill!(getfield(ϕ, f), 1.0), fieldnames(typeof(ϕ)))
+        rheology = (material(1, 1.0, 1.0), material(2, 2.0, 0.1), material(3, 0.0, 1.0e-2))
+
+        particles = init_particles(backend_JP, 20, 40, 10, grid.xi_vel...)
+        pPhases, = init_cell_arrays(particles, Val(1))
+        @parallel (@idx size(pPhases)) sphere_phases!(pPhases, particles.coords..., particles.index, zsurf)
+        phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        stokes = StokesArrays(backend, ni)
+        pt_stokes = PTStokesCoeffs(li, minimum.(grid.di.vertex); ϵ_abs = 1.0e-8, ϵ_rel = 1.0e-6, CFL = 0.9 / √3.1)
+        flow_bcs = VelocityBoundaryConditions(;
+            free_slip = (left = true, right = true, front = true, back = true, top = !no_slip_top, bot = true),
+            no_slip = (left = false, right = false, front = false, back = false, top = no_slip_top, bot = false),
+        )
+        ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...)
+        args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+        compute_ρg!(ρg[3], phase_ratios, rheology, args)
+        compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+        out = if solver === :standard
+            solve!(
+                stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, 1.0, igg;
+                kwargs = (; iterMax = 10.0e3, nout = 100, verbose = false)
+            )
         else
-            surf = init_marker_surface(backend_JP, grid.xvi[1], grid.xvi[2], zsurf)
-            compute_rock_fraction!(ϕ, surf, grid.xvi, grid.di.vertex)
+            ϕ = RockRatio(backend, ni)
+            if isinf(zsurf)
+                foreach(f -> fill!(getfield(ϕ, f), 1.0), fieldnames(typeof(ϕ)))
+            else
+                surf = init_marker_surface(backend_JP, grid.xvi[1], grid.xvi[2], zsurf)
+                compute_rock_fraction!(ϕ, surf, grid.xvi, grid.di.vertex)
+            end
+            solve_VariationalStokes!(
+                stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ, rheology, args, 1.0, igg;
+                iterMax = 10.0e3, nout = 100, verbose = false, air_phase = isinf(zsurf) ? 0 : 3, free_surface,
+            )
         end
-        solve_VariationalStokes!(
-            stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ, rheology, args, 1.0, igg;
-            iterMax = 10.0e3, nout = 100, verbose = false, air_phase = isinf(zsurf) ? 0 : 3, free_surface,
-        )
+        return out, Array(stokes.V.Vz), stokes
+    finally
+        finalize_global_grid(; finalize_MPI = false)
     end
-    finalize_global_grid(; finalize_MPI = false)
-    return out, Array(stokes.V.Vz), stokes
 end
 
 @testset "Variational Stokes 3D" begin

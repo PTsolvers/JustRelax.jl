@@ -7,6 +7,7 @@ paths:
 
 Miniapps are runnable models and benchmarks, and the source of the documentation's examples. Running and validating them: the `miniapps-and-benchmarks` skill; writing a new one: the `new-miniapp` skill.
 
+- Every miniapp must support CPU, CUDA, and AMDGPU via `ENV["JULIA_JUSTRELAX_BACKEND"]`. Keep allocation, initialization, solver calls, diagnostics, and output compatible with the selected backend. Use kernels/broadcasts for device data and explicit host copies for plotting and I/O; never rely on scalar indexing or `@allowscalar`.
 - All miniapps share the environment `miniapps/Project.toml`: `julia --project=miniapps --startup-file=no <script>`. Its `[sources]` entry points `JustRelax` at an absolute path on the author's machine. To run against the local checkout use `Pkg.develop(path=".")`, and do not commit the resulting `Project.toml` change.
 - Follow the closest existing script: `backend` / `backend_JP` constants with the alternatives shown, `@init_parallel_stencil` for that backend, a `main(igg; nx, ny, …)` function, then `nx`/`ny` and the `IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)` guard at the bottom. Keep the default resolution small enough for a smoke test.
 - Figures, VTK and checkpoints go to a script-created directory (`figdir`, `figs*`). Never commit output.

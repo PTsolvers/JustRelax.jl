@@ -12,7 +12,7 @@ How to run tests: the `running-tests` skill.
 - Only `test_*.jl` files are collected, so a new test needs no registration — but a file not named `test_*.jl` is silently skipped (`deprecated_*.jl` are skipped on purpose).
 - Files with `MPI` in the name are pulled out of the parallel run and executed one at a time under `mpiexec -n 2`. A test-name filter does not apply to them.
 - Each non-MPI test runs in its own worker process, except the light tests named in `test_worker` (traits, types, conversions, mask, mini kernels, interpolations, boundary conditions, JustPIC interface), which run in the main process. A light test must not call `@init_parallel_stencil` or depend on IGG state; a new light test has to be added to that list.
-- On GPU backends `runtests.jl` deletes the CPU-only tests (`test_variational_operators_2D`, `test_rheology`, `test_dyrel_solver_3D`, `test_dyrel_taylor_green_MPI`). A new test that cannot run on a device must be added there, or it fails GPU CI.
+- On GPU backends `runtests.jl` deletes the CPU-only tests (`test_variational_operators_2D`, `test_rheology`, `test_dyrel_solver_3D`, `test_dyrel_taylor_green_MPI`). These are legacy exclusions, not a pattern for new tests: all new or modified tests must run on CPU, CUDA, and AMDGPU. Fix backend incompatibilities rather than excluding tests.
 - `test_stokes_burstedde` and `test_VanKeken` are dropped from the default full run because they are slow; they run when named.
 - Test-only packages (`ParallelTestRunner`, `Suppressor`, `SpecialFunctions`, `GeophysicalModelGenerator`, `Pkg`, `Test`) are declared in the root `Project.toml` (`[extras]` + `[targets]`); there is no `test/Project.toml`. Add a new one there, with a `[compat]` entry.
 
@@ -21,8 +21,9 @@ How to run tests: the `running-tests` skill.
 - Copy the header of `test/test_diffusion2D.jl`: read `ENV["JULIA_JUSTRELAX_BACKEND"]`, load CUDA/AMDGPU accordingly, call `@init_parallel_stencil(<backend>, Float64, <dim>)`, and define the `backend` / `backend_JP` constants.
 - Always add a test for new functionality. Prefer a focused unit test over a full solver run.
 - Use the smallest grid that exercises the code, and derive sizes from `ni` / `size(arr)` instead of repeating literals.
-- **3D tests that must pass on GPU use tiny grids.** ParallelStencil's block heuristic rounds up, so a `13×13×13` range launches `13×13×2 = 338` threads — over the 256 that the register-heavy fused DYREL stress kernel can launch with (`ERROR_LAUNCH_OUT_OF_RESOURCES`). A launched range of at most 256 cells is a single exact block and always fits (e.g. `6×5×4`, `5×4×3`); ranges with `x ≥ 32` and `y ≥ 8` give `32×8×1`. Do not use a `12³` grid in a 3D DYREL test.
-- Build device arrays on the host and assign whole (`A .= PTArray(backend)(host)`). No element loops or `@allowscalar` on device arrays; move results to the host with `Array(…)` before asserting.
+- Keep solver tests small, but retain grids that expose GPU launch rounding (e.g. 17³ vertex ranges). Register-heavy kernels may allow only 256 threads per block; use explicit bounded launch dimensions in the responsible launcher rather than shrinking tests to hide the bug.
+- Scalar helper tests may use host reference values, but numerical code intended for kernels also needs a device-kernel test. Run affected tests on CUDA and AMDGPU when available and report unavailable hardware explicitly.
+- Build device arrays on the host and assign whole (`A .= PTArray(backend)(host)`). No element loops or `@allowscalar` on device arrays; move ordinary device arrays to the host with `Array(…)` before asserting. For `CellArray`s use `CellArrays.CPUCellArray(…)` first. Never use `@allowscalar` to hide a failure.
 - Where a reference exists, test numerical accuracy against it: SolCx, SolKz, SolVi, Burstedde, Taylor–Green, Blankenbach, VanKeken, the Maxwell stress build-up.
 - Silence solver output with `@suppress` (Suppressor) as neighbouring tests do.
 

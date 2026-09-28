@@ -2,6 +2,8 @@
 paths:
   - src/**/*.jl
   - ext/**/*.jl
+  - miniapps/**/*.jl
+  - test/**/*.jl
 ---
 
 # Kernel Rules
@@ -24,7 +26,7 @@ Kernels are compiled for CPU threads, CUDA and AMDGPU from the same source, in 2
 - `@index` is CellArraysIndexing's macro (re-exported by `JustRelax2D`/`JustRelax3D`). KernelAbstractions has an unrelated macro of the same name — do not `using KernelAbstractions` in a file that indexes cell arrays.
 - No scalar indexing of device arrays outside kernels, and no bare `for` over cells in solver code: use a kernel or a broadcast. To fill a device array from host data, build it on the host and assign whole: `A .= PTArray(backend)(host)`.
 - Do not hard-code `Float64` in kernels; the element type comes from the arrays.
-- Fused kernels are register-heavy and have a launch-size limit on GPU (`ERROR_LAUNCH_OUT_OF_RESOURCES`). See the 3D block-size pitfall in [testing-rules](testing-rules.md) before changing a fat kernel or a 3D test grid.
+- Fused kernels are register-heavy and have a launch-size limit on GPU (`ERROR_LAUNCH_OUT_OF_RESOURCES`). Keep block sizes within the compiled kernel limit; automatic launch heuristics can round above 256 threads on small or irregular grids. Fix the launcher, not the test resolution (see [testing-rules](testing-rules.md)).
 
 ## Staggered grid and indexing
 

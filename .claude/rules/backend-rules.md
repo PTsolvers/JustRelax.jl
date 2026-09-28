@@ -2,9 +2,13 @@
 paths:
   - src/**/*.jl
   - ext/**/*.jl
+  - miniapps/**/*.jl
+  - test/**/*.jl
 ---
 
 # Backend Rules
+
+All code, miniapps, and tests must run with CPU, CUDA, and AMDGPU backends. GPU compatibility is mandatory, including setup, diagnostics, assertions, and output; a passing CPU run alone is insufficient. Host-only plotting, I/O, and reference calculations must receive explicit host copies, never scalar-index device arrays.
 
 Solver code is written once and compiled for CPU, CUDA and AMDGPU, in 2D and 3D.
 
@@ -32,6 +36,8 @@ The shared sources are included by six modules: CPU 2D/3D (`src/JustRelax_CPU.jl
 - Scripts and tests pick the backend with `ENV["JULIA_JUSTRELAX_BACKEND"]` (`CPU`/`CUDA`/`AMDGPU`) and pass the tag (`JustRelax.CPUBackend`, …) to constructors: `StokesArrays(backend, ni)`.
 - JustPIC has its own backend types (`JustPIC.CPU`, `CUDA.CUDABackend`, `AMDGPU.ROCBackend`). They are not JustRelax's tags — do not mix them (see the comment in `src/ext/CUDA/2D.jl`).
 - Dispatch on the device through traits (`backend(x)`), never `isa CuArray`. In backend-generic code allocate through the backend (`PTArray(backend)`, `@zeros`), never a plain `Array`.
+- Internal kernel launchers without backend-trait dispatch must be called from the selected extension module (`Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D`, or the matching AMDGPU/3D module), not the CPU module. Public entry points with GPU dispatch should keep using that dispatch.
+- For host access to a GPU-backed `CellArray`, use `CellArrays.CPUCellArray(A)`, which copies its backing storage. `Array(A)` can scalar-index the device and is not a safe substitute.
 - Load CUDA/AMDGPU **before** JustRelax so the extension activates.
 - Halo exchange and MPI go through ImplicitGlobalGrid. CUDA-aware MPI is enabled in CI with `IGG_CUDAAWARE_MPI=1`.
 

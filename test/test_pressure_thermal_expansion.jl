@@ -34,6 +34,14 @@ else
     JustPIC.CPU
 end
 
+const JR2K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax2D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D
+else
+    JustRelax2D
+end
+
 @testset "Thermal pressurization reads ghosted ΔT" begin
     ni = 5, 4
     hot = (2, 3) # cell whose temperature changes
@@ -61,7 +69,7 @@ end
 
     @testset "compute_P!" begin
         P, P0, RP, ∇V, Q = fields()
-        JustRelax2D.compute_P!(P, P0, RP, ∇V, Q, η, rheology, phase_ratios, dt, r, θ_dτ; ΔT)
+        JR2K.compute_P!(P, P0, RP, ∇V, Q, η, rheology, phase_ratios, dt, r, θ_dτ; ΔT)
         @test responds_only_at_hot_cell(P)
     end
 
@@ -69,7 +77,7 @@ end
         P, P0, RP, ∇V, Q = fields()
         ϕ = RockRatio(backend, ni)
         foreach(f -> fill!(getfield(ϕ, f), 1.0), fieldnames(typeof(ϕ)))
-        JustRelax2D.compute_variational_P!(
+        JR2K.compute_variational_P!(
             P, P0, RP, ∇V, Q, η, rheology, phase_ratios, ϕ, dt, r, θ_dτ, (; ΔT)
         )
         @test responds_only_at_hot_cell(P)
@@ -77,7 +85,7 @@ end
 
     @testset "cell-sized ΔT is rejected" begin
         P, P0, RP, ∇V, Q = fields()
-        @test_throws "ΔT must include ghost nodes" JustRelax2D.compute_P!(
+        @test_throws "ΔT must include ghost nodes" JR2K.compute_P!(
             P, P0, RP, ∇V, Q, η, rheology, phase_ratios, dt, r, θ_dτ; ΔT = @zeros(ni...)
         )
     end

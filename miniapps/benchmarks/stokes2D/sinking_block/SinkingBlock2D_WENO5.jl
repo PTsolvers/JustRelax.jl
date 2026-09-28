@@ -142,7 +142,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # update_phase_ratios!(phase_ratios, particles, pPhases)
 
     phases = @zeros(ni...)
-    # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
+    # phases = Float64.([argmax(p) for p in to_cpu(phase_ratios.center)])
     weno = WENO5(backend, Val(2), ni) # ni.+1 for Temp
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
@@ -229,10 +229,10 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         ax5 = Axis(fig[3, 1]; aspect = DataAspect(), title = "Phase ratio Vy")
         ax6 = Axis(fig[3, 3]; aspect = DataAspect(), title = "Density")
 
-        pp_c = [argmax(p) for p in Array(phase_ratios.center)]
-        pp_v = [argmax(p) for p in Array(phase_ratios.vertex)]
-        pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
-        pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
+        pp_c = [argmax(p) for p in to_cpu(phase_ratios.center)]
+        pp_v = [argmax(p) for p in to_cpu(phase_ratios.vertex)]
+        pp_Vx = [argmax(p) for p in to_cpu(phase_ratios.Vx)]
+        pp_Vy = [argmax(p) for p in to_cpu(phase_ratios.Vy)]
 
         h1 = heatmap!(ax1, (xvi ./ 1.0e3)..., Array(velocity), colormap = :vikO)
         Colorbar(fig[1, 2], h1)

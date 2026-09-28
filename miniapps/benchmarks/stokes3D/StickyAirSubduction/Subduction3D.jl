@@ -166,7 +166,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 # velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)],
+                    phase_vertex = [argmax(p) for p in to_cpu(phase_ratios.vertex)],
                 )
                 data_c = (;
                     P = Array(stokes.P),
@@ -183,7 +183,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     Vx_c = diff(stokes.V.Vx[:, 2:(end - 1), 2:(end - 1)], dims = 1),
                     Vy_c = diff(stokes.V.Vy[2:(end - 1), :, 2:(end - 1)], dims = 2),
                     Vz_c = diff(stokes.V.Vz[2:(end - 1), 2:(end - 1), :], dims = 3),
-                    phase_center = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_v = (
                     Array(Vx_v),

@@ -463,13 +463,13 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
                     data_v = (;
                         stress_xy = Array(stokes.τ.xy),
                         strain_rate_xy = Array(stokes.ε.xy),
-                        phase_vertices = [argmax(p) for p in Array(phase_ratios.vertex)],
+                        phase_vertices = [argmax(p) for p in to_cpu(phase_ratios.vertex)],
                     )
                     data_c = (;
                         P = Array(stokes.P),
                         T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                         viscosity = Array(η_eff),
-                        phases = [argmax(p) for p in Array(phase_ratios.center)],
+                        phases = [argmax(p) for p in to_cpu(phase_ratios.center)],
                         Melt_fraction = Array(ϕ_m),
                         EII_pl = Array(stokes.EII_pl),
                         stress_II = Array(stokes.τ.II),

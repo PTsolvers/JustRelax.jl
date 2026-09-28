@@ -21,7 +21,6 @@ else
 end
 
 using JustPIC
-using CellArrays: CPUCellArray
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -48,10 +47,10 @@ end
 
     # CellArrays stores an SVector per cell; copy to host so we can index per-cell
     # on any backend.
-    center_h = CPUCellArray(pr.center)
-    vertex_h = CPUCellArray(pr.vertex)
-    faces_h = map(CPUCellArray, (pr.Vx, pr.Vy, pr.Vz))
-    midpoints_h = map(CPUCellArray, (pr.xy, pr.yz, pr.xz))
+    center_h = to_cpu(pr.center)
+    vertex_h = to_cpu(pr.vertex)
+    faces_h = map(to_cpu, (pr.Vx, pr.Vy, pr.Vz))
+    midpoints_h = map(to_cpu, (pr.xy, pr.yz, pr.xz))
 
     # Staggered grids the ratios live on
     @test size(center_h) == (nx, ny, nz)
@@ -79,7 +78,7 @@ end
     p2b = @fill(0.4, nx, ny, nz)
     p3b = @fill(1.0e-6, nx, ny, nz)             # below the 1e-5 threshold
     JR3.update_phase_ratios_3D!(pr3, (p1b, p2b, p3b), xci, xvi)
-    center3_h = CPUCellArray(pr3.center)
+    center3_h = to_cpu(pr3.center)
     @test center3_h[2, 2, 2][3] == 0.0          # tiny phase zeroed out
     @test center3_h[2, 2, 2][1] + center3_h[2, 2, 2][2] ≈ 1.0
 end

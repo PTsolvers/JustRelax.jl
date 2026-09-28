@@ -290,7 +290,7 @@ function main3D(igg; nx = 64, ny = 16, nz = 16, figdir = "KelvinHelmholtz3D", do
                     P = Array(stokes.P),
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
-                    phase = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_v = (Array(Vx_v), Array(Vy_v), Array(Vz_v))
                 save_vtk(

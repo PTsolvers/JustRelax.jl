@@ -200,16 +200,16 @@ end
 
 """
     enzyme_stress_sensitivities!(
-        vertex_update!, center_update!, n, centers, vertices, parameters, Val(k), args...,
+        vertex_update!, center_update!, n, centers, vertices, parameters, args,
     )
 
 Reverse-differentiate the local stress update point by point, at the vertices with
-`vertex_update!(args..., i, j)` and at the centers with `center_update!(args..., i, j)`, the two
-halves of a forward stress kernel. `args` are Enzyme annotations, and `args[k]` must be
-`Enzyme.Active(rheology)`.
+`vertex_update!(primals..., i, j)` and at the centers with `center_update!(primals..., i, j)`,
+the two halves of a forward stress kernel. `args` lists their arguments as pairs, as for
+[`enzyme_reverse_pointwise!`](@ref), with the rheology given as `rheology => ACTIVE`.
 
-The stress seeds in the `Duplicated` shadows are consumed as in the adjoint iterations, and the
-field sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
+The stress seeds in the shadows are consumed as in the adjoint iterations, and the field
+sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
 derivative with respect to `rheology` comes back per point and holds every material parameter of
 every phase; the requested ones (`parameters`, one resolved path set per phase) are added to
 `vertices` and `centers` at `[p, i, j]`. Because the forward functions themselves are
@@ -217,24 +217,39 @@ differentiated, every input reconstruction (averages, harmonic vertex viscosity,
 phase weighting matches the forward solve by construction.
 """
 function enzyme_stress_sensitivities!(
-        vertex_update!::FV, center_update!::FC, n, centers, vertices, parameters, ::Val{k},
-        args::Vararg{Any, N},
-    ) where {FV, FC, k, N}
-    rheology = args[k].val
-    ni = n .- 1
-    foreach_point_rowwise!(n) do i, j
-        derivative = Enzyme.autodiff(
-            Enzyme.Reverse, Enzyme.Const(vertex_update!), Enzyme.Const, args...,
+        vertex_update!::FV, center_update!::FC, n, centers, vertices, parameters, args::Tuple,
+    ) where {FV, FC}
+    primals, shadows = map(first, args), map(last, args)
+    k = findfirst(dx -> dx isa ActiveArgument, shadows)
+    isnothing(k) && throw(ArgumentError("the rheology must be passed as `rheology => ACTIVE`"))
+    op = StressSensitivityPoint{FV, FC, k}(vertex_update!, center_update!)
+    extra = (; centers, vertices, parameters, ni = n .- 1)
+    reverse_colored!(op, n, primals, shadows, extra)
+    return nothing
+end
+
+# Reverse of the vertex and center stress updates at one point, with the rheology (argument `k`)
+# active; its derivative is stored as the material-parameter sensitivities of that point.
+struct StressSensitivityPoint{FV, FC, k}
+    vertex_update!::FV
+    center_update!::FC
+end
+
+@inline function apply_point!(op::StressSensitivityPoint{FV, FC, k}, primals, shadows, extra, i, j) where {FV, FC, k}
+    (; centers, vertices, parameters, ni) = extra
+    rheology = primals[k]
+    annotations = map(annotate, primals, shadows)
+    derivative = Enzyme.autodiff_deferred(
+        Enzyme.Reverse, Enzyme.Const(op.vertex_update!), Enzyme.Const, annotations...,
+        Enzyme.Const(i), Enzyme.Const(j),
+    )[1][k]
+    store_rheology_gradients!(vertices, parameters, rheology, derivative, (i, j))
+    if i ≤ ni[1] && j ≤ ni[2]
+        derivative = Enzyme.autodiff_deferred(
+            Enzyme.Reverse, Enzyme.Const(op.center_update!), Enzyme.Const, annotations...,
             Enzyme.Const(i), Enzyme.Const(j),
         )[1][k]
-        store_rheology_gradients!(vertices, parameters, rheology, derivative, (i, j))
-        if i ≤ ni[1] && j ≤ ni[2]
-            derivative = Enzyme.autodiff(
-                Enzyme.Reverse, Enzyme.Const(center_update!), Enzyme.Const, args...,
-                Enzyme.Const(i), Enzyme.Const(j),
-            )[1][k]
-            store_rheology_gradients!(centers, parameters, rheology, derivative, (i, j))
-        end
+        store_rheology_gradients!(centers, parameters, rheology, derivative, (i, j))
     end
     return nothing
 end

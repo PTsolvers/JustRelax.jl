@@ -22,7 +22,7 @@ in order (contiguous access, and no race across a periodic seam in x), with all 
 all odd interior rows in parallel. The first and last row can wrap across a periodic seam in y
 and run in launches of their own.
 """
-function enzyme_reverse_pointwise!(f::F, n::NTuple{2, Integer}, args::Tuple) where {F}
+function enzyme_reverse_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
     primals, shadows = map(first, args), map(last, args)
     reverse_colored!(f, n, primals, shadows, nothing)
     return nothing
@@ -32,7 +32,7 @@ end
 @inline annotate(x, ::Nothing) = Enzyme.Const(x)
 @inline annotate(x, ::typeof(Enzyme.Active)) = Enzyme.Active(x)
 
-@inline function apply_point!(f::F, primals, shadows, extra, i, j) where {F <: Function}
+@inline function apply_point!(f, primals, shadows, context, i, j)
     Enzyme.autodiff_deferred(
         Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const,
         map(annotate, primals, shadows)..., Enzyme.Const(i), Enzyme.Const(j),
@@ -40,7 +40,7 @@ end
     return nothing
 end
 
-function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, extra)
+function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, context)
     nx, ny = n
 
     # Non-adjacent interior rows can run concurrently.
@@ -48,26 +48,26 @@ function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, extra)
         number_of_rows = length(first_row:2:(ny - 1))
         iszero(number_of_rows) && continue
         @parallel (1:number_of_rows) reverse_row_group!(
-            op, primals, shadows, extra, nx, first_row
+            op, primals, shadows, context, nx, first_row
         )
     end
 
     # Boundary rows run separately because periodic stencils can connect them.
     for row in (1, ny)
-        @parallel (1:1) reverse_row_group!(op, primals, shadows, extra, nx, row)
+        @parallel (1:1) reverse_row_group!(op, primals, shadows, context, nx, row)
     end
 
     return nothing
 end
 
 @parallel_indices (row_in_group) function reverse_row_group!(
-        op, primals, shadows, extra, nx, first_row
+        op, primals, shadows, context, nx, first_row
     )
     row = first_row + 2 * (row_in_group - 1)
 
     # Adjacent columns can share shadow entries, so process one row sequentially.
     for column in 1:nx
-        apply_point!(op, primals, shadows, extra, column, row)
+        apply_point!(op, primals, shadows, context, column, row)
     end
 
     return nothing

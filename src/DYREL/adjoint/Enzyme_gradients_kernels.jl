@@ -224,8 +224,8 @@ function enzyme_stress_sensitivities!(
     isnothing(k) &&
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
     op = StressSensitivityPoint{FV, FC, k}(vertex_update!, center_update!)
-    extra = (; centers, vertices, parameters, ni = n .- 1)
-    reverse_colored!(op, n, primals, shadows, extra)
+    context = (; centers, vertices, parameters, ni = n .- 1)
+    reverse_colored!(op, n, primals, shadows, context)
     return nothing
 end
 
@@ -236,8 +236,8 @@ struct StressSensitivityPoint{FV, FC, k}
     center_update!::FC
 end
 
-@inline function apply_point!(op::StressSensitivityPoint{FV, FC, k}, primals, shadows, extra, i, j) where {FV, FC, k}
-    (; centers, vertices, parameters, ni) = extra
+@inline function apply_point!(op::StressSensitivityPoint{FV, FC, k}, primals, shadows, context, i, j) where {FV, FC, k}
+    (; centers, vertices, parameters, ni) = context
     rheology = primals[k]
     annotations = map(annotate, primals, shadows)
     derivative = Enzyme.autodiff_deferred(

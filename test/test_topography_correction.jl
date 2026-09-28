@@ -72,7 +72,7 @@ end
             pPhases, chain, particles, origin, grid.di.vertex, air_phase
         )
 
-        index, py, ph = Array(particles.index), Array(particles.coords[2]), Array(pPhases)
+        index, py, ph = to_cpu(particles.index), to_cpu(particles.coords[2]), to_cpu(pPhases)
         stale = 0
         for j in 2:(size(index, 2) - 1), i in 2:(size(index, 1) - 1)
             for ip in cellaxes(index)

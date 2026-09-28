@@ -202,7 +202,7 @@ end
 
 # Body of the 2D fused stress + viscosity kernel at vertex/center `I`. The vertex and center
 # updates are separate functions so the adjoint can differentiate one point, and one of the two
-# locations, at a time (see `enzyme_reverse_rowwise!` and `compute_stress_sensitivities!`).
+# locations, at a time (see `enzyme_reverse_pointwise!` and `compute_stress_sensitivities!`).
 @inline function compute_stress_viscosity_DRYEL_point!(
         τ,
         τ_v,
@@ -944,7 +944,7 @@ end
 
 # Body of the variational stress kernel at vertex/center `I`. The vertex and center updates are
 # separate functions so the adjoint can differentiate one point, and one of the two locations, at
-# a time (see `enzyme_reverse_rowwise!` and `compute_stress_sensitivities!`).
+# a time (see `enzyme_reverse_pointwise!` and `compute_stress_sensitivities!`).
 @inline function compute_stress_DRYEL_point!(
         τ,
         τ_v,

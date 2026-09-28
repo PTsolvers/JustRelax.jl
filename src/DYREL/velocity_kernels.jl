@@ -208,7 +208,7 @@ end
 end
 
 # Body of `compute_∇V_strain_rate_RP!` at point (i, j). It is a separate function so the adjoint
-# can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+# can differentiate one point at a time (see `enzyme_reverse_pointwise!`).
 @inline function compute_∇V_strain_rate_RP_point!(
         εxx::AbstractArray{T, 2},
         εyy,
@@ -408,7 +408,7 @@ end
 end
 
 # Body of `compute_PH_residual_V!` at point (i, j). It is a separate function so the adjoint
-# can differentiate one point at a time (see `enzyme_reverse_rowwise!`).
+# can differentiate one point at a time (see `enzyme_reverse_pointwise!`).
 @inline function compute_PH_residual_V_point!(
         Rx::AbstractArray{T, 2},
         Ry,

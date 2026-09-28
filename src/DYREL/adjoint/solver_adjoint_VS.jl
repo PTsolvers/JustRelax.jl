@@ -124,12 +124,15 @@ function solve_VariationalDYREL_adjoint!(
         if isone(itPH)
             errV0 = ntuple(_ -> maximum(errV) + eps(), dim)
         end
-        # not `nonzero_span`: its absolute threshold is far above a dimensional λV (~dx²/η);
-        # λV is exactly zero only on the first pass
         λVspan = maximum(map(masked_value_scale, maskV, λVi))
-        λVspan = iszero(λVspan) ? one(λVspan) : λVspan
-        errPt = masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan
-        err = maximum((ntuple(d -> errV[d] / errV0[d], dim)..., errPt))
+        has_λV_scale = !iszero(λVspan)
+        errPt = has_λV_scale ?
+            masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan : zero(λVspan)
+        errV_relative = ntuple(d -> errV[d] / errV0[d], dim)
+        # λV is exactly zero before the first adjoint update, so no physically meaningful
+        # continuity normalization exists yet. Omit that term until λV provides a scale;
+        # the momentum residual remains one for a nontrivial objective on the first pass.
+        err = has_λV_scale ? maximum((errV_relative..., errPt)) : maximum(errV_relative)
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -210,8 +213,15 @@ function solve_VariationalDYREL_adjoint!(
 
         iter > total_iterMax && break
     end
-    if !converged && igg.me == 0
-        @warn "adjoint DYREL returned without meeting ϵ — the sensitivities are not converged" err ϵ iter total_iterMax
+    if !converged
+        # Leave the shared DYREL state ready for a subsequent solve, but do not calculate or
+        # return sensitivities from an unconverged adjoint state.
+        dyrel.dVxdτ .= 0
+        dyrel.dVydτ .= 0
+        error(
+            "Variational DYREL adjoint did not converge " *
+                "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
+        )
     end
 
     # sensitivity evaluation

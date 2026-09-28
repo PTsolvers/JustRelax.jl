@@ -66,6 +66,7 @@ module JustRelax2D
     export solve_DYREL!, solve_VariationalDYREL!, DYREL
 
     include("DYREL/adjoint/adjoint_helpers.jl")
+    include("DYREL/adjoint/Enzyme_pointwise.jl")
     include("DYREL/adjoint/Enzyme_kernels.jl")
     include("DYREL/adjoint/Enzyme_kernels_VS.jl")
     include("DYREL/adjoint/Enzyme_gradients_kernels.jl")

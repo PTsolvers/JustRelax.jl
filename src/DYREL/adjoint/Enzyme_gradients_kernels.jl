@@ -99,59 +99,6 @@ end
     )
 end
 
-# Contract one phase's constitutive outputs with the converged adjoint seeds. This calls
-# the same local stress update as the forward kernel; only the surrounding scalar
-# contraction is specific to sensitivity evaluation.
-@inline function stress_parameter_objective(
-        material,
-        εij,
-        τij_o,
-        η,
-        P,
-        λ,
-        λ_relaxation,
-        dt,
-        EII,
-        τ_seed,
-        θ_seed,
-        ratio,
-    )
-    G = get_shear_modulus(material)
-    Kb = get_bulk_modulus(material)
-    solution = _compute_local_stress(
-        εij, τij_o, η, P, G, Kb, λ, λ_relaxation, material, dt, EII
-    )
-    return ratio * (
-        τ_seed[1] * solution[1] +
-            τ_seed[2] * solution[2] +
-            τ_seed[3] * solution[3] +
-            θ_seed * solution[9]
-    )
-end
-
-@generated function enzyme_stress_gradients(
-        material, εij, τij_o, η, args::Vararg{Any, N}
-    ) where {N}
-    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
-    return quote
-        derivatives = Enzyme.autodiff_deferred(
-            Enzyme.Reverse,
-            Enzyme.Const(stress_parameter_objective),
-            Enzyme.Active,
-            Enzyme.Active(material),
-            Enzyme.Const(εij),
-            Enzyme.Const(τij_o),
-            Enzyme.Active(η),
-            $(constant_args...),
-        )[1]
-        derivative = derivatives[1]
-        dη = derivatives[4]
-        # Enzyme returns `nothing` for an Active scalar that is inactive on the
-        # executed material branch. Its derivative contribution is then zero.
-        return derivative, isnothing(dη) ? zero(η) : dη
-    end
-end
-
 @inline function viscosity_parameter_objective(
         material, rheology, ::Val{p}, ratio, AII, args, seed, cutoff
     ) where {p}

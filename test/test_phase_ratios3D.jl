@@ -47,10 +47,10 @@ end
 
     # CellArrays stores an SVector per cell; copy to host so we can index per-cell
     # on any backend.
-    center_h = Base.Array(pr.center)
-    vertex_h = Base.Array(pr.vertex)
-    faces_h = map(Base.Array, (pr.Vx, pr.Vy, pr.Vz))
-    midpoints_h = map(Base.Array, (pr.xy, pr.yz, pr.xz))
+    center_h = to_cpu(pr.center)
+    vertex_h = to_cpu(pr.vertex)
+    faces_h = map(to_cpu, (pr.Vx, pr.Vy, pr.Vz))
+    midpoints_h = map(to_cpu, (pr.xy, pr.yz, pr.xz))
 
     # Staggered grids the ratios live on
     @test size(center_h) == (nx, ny, nz)

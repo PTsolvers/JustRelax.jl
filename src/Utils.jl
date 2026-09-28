@@ -708,10 +708,8 @@ end
 
 Compute the L2 norm of array `A` across all MPI processes.
 """
-function norm_mpi(A)
-    sum2_l = _sum(A .^ 2)
-    return sqrt(MPI.Allreduce(sum2_l, MPI.SUM, MPI.COMM_WORLD))
-end
+norm_mpi(A) = sqrt(sum_mpi(abs2, A))
+norm_mpi(A, B) = sqrt(sum_mpi((a, b) -> abs2(a * b), A, B))
 
 """
     sum_mpi(A)

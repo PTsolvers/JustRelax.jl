@@ -147,7 +147,7 @@ end
 # here — it is folded with the (similarly small) plastic pressure correction ΔPψ into the single
 # `θc` correction array by the stress kernel. Only these two small corrections are summed; the large
 # hydrostatic P is kept separate in the momentum kernel to preserve precision (see
-# compute_stress_viscosity_DRYEL!).
+# compute_stress_viscosity_DYREL!).
 # NB: ∇V itself is NOT stored here — it is dead inside the DYREL/PH loop (RP is derived from the
 # in-register `div_ij`, and nothing on this path reads ∇V back). The public `stokes.∇V` diagnostic
 # is recomputed once from the converged velocity field after the loop in `_solve_DYREL!`.

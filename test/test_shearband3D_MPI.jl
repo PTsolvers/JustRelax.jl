@@ -24,6 +24,7 @@ else
 end
 
 using JustPIC
+using CellArrays: CPUCellArray
 
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
@@ -227,7 +228,7 @@ function main(igg; nx = 64, ny = 64, nz = 64)
         gather!(Vz_nohalo, Vzv_v)
 
         # MPI
-        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+        phase_center = [argmax(p) for p in CPUCellArray(phase_ratios.center)]
 
         @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         @views η_vep_nohalo .= Array(stokes.viscosity.η_vep[2:(end - 1), 2:(end - 1), 2:(end - 1)])       # Copy data to CPU removing the halo

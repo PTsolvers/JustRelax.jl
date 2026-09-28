@@ -1,0 +1,74 @@
+name: Benchmarks
+
+# `pull_request`, not `pull_request_target`: this job executes the PR's code, so it must not
+# receive a write token for fork PRs. Fork PRs get the job summary but no comment.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'ext/**'
+      - 'benchmarking/**'
+      - 'Project.toml'
+      - '.github/workflows/Benchmarks.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compare:
+    name: CPU comparison against ${{ github.base_ref }}
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    env:
+      JULIA_NUM_THREADS: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+
+      - name: Instantiate benchmark environment
+        run: julia --project=benchmarking benchmarking/setup.jl
+
+      - name: Compare against base branch
+        shell: bash
+        run: |
+          julia --project=benchmarking benchmarking/compare.jl \
+            --rev=origin/${{ github.base_ref }} | tee "$RUNNER_TEMP/comparison.txt"
+          {
+            echo '<!-- benchmark-comparison -->'
+            echo '### CPU benchmarks: `${{ github.base_ref }}` vs this PR'
+            echo
+            cat "$RUNNER_TEMP/comparison.txt"
+            echo
+            echo '<sub>Median time ± interquartile spread on a shared `ubuntu-latest` runner. 🔴/🟢 mark ratios outside the combined spread. GPU performance is not covered.</sub>'
+          } > "$RUNNER_TEMP/comment.md"
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Find comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: peter-evans/find-comment@v4
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- benchmark-comparison -->'
+
+      - name: Post comparison
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: ${{ runner.temp }}/comment.md
+          edit-mode: replace

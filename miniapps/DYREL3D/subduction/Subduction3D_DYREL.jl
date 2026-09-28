@@ -233,7 +233,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
                     εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
                     η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
-                    phase_center = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_c = (
                     dimensionalize_and_strip(Array(Vx_c), cm / yr, CharDim),

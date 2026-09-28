@@ -451,7 +451,7 @@ end
             phase_ratios, gersh_rheology, grid.di, dt,
         )
 
-        phases = map(x -> Array(x), (phase_ratios.center, phase_ratios.yz, phase_ratios.xz, phase_ratios.xy))
+        phases = map(to_cpu, (phase_ratios.center, phase_ratios.yz, phase_ratios.xz, phase_ratios.xy))
         nonperiodic = (false, false, false)
         center, yz, xz, xy = phases
         ηc(i, j, k) = JustRelax.JustRelax3D._ηve_center(η_host, center, gersh_rheology, dt, i, j, k)

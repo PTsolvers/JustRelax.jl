@@ -238,7 +238,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
                     τII = Array(stokes.τ.II),
                     εII = Array(stokes.ε.II),
                     η = Array(log10.(stokes.viscosity.η_vep)),
-                    phase = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_v = (
                     Array(Vx_v),

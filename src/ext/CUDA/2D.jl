@@ -55,6 +55,19 @@ include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
 include("../../DYREL/solver_VS.jl")
 
+# The forward and adjoint DYREL implementations are separate so Enzyme only has
+# to differentiate pointwise stencil operations.  Load the adjoint path here as
+# well as in the CPU module; backend-specific allocation methods live below.
+include("../../DYREL/adjoint/adjoint_helpers.jl")
+include("../../DYREL/adjoint/Enzyme_pointwise.jl")
+include("../../DYREL/adjoint/Enzyme_kernels.jl")
+include("../../DYREL/adjoint/Enzyme_kernels_VS.jl")
+include("../../DYREL/adjoint/Enzyme_gradients_kernels.jl")
+include("../../DYREL/adjoint/sensitivities_adjoint.jl")
+include("../../DYREL/adjoint/sensitivities_adjoint_VS.jl")
+include("../../DYREL/adjoint/solver_adjoint.jl")
+include("../../DYREL/adjoint/solver_adjoint_VS.jl")
+
 @parallel_indices (i, j) function _apply_free_surface_diagonal_CUDA!(
         Dy, λmaxVy, ρgy, di_center, dt
     )

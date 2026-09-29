@@ -581,7 +581,8 @@ end
                 # the strain-increment form carries dt, as the vertex kernel above and
                 # the non-variational counterpart do; without it the correction does not
                 # match the compliance the multiplier was solved with
-                dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
+                c_pl = 2.0 * ηij * dt * dτ_r
+                dτij = @muladd @. dτij - c_pl * εij_pl
                 τij = dτij .+ τij
 
                 # volumetric plastic strain rate (accumulated by accumulate_vol!)

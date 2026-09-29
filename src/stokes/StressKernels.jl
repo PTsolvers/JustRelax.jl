@@ -1159,7 +1159,8 @@ end
 
         τII_ij = @inbounds if !iszero(λ[I...])
             εij_pl = λ[I...] .* dQdτij
-            dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
+            c_pl = 2.0 * ηij * dt * dτ_r
+            dτij = @muladd @. dτij - c_pl * εij_pl
             τij = dτij .+ τij
 
             # volumetric plastic strain rate (accumulated by accumulate_vol!)

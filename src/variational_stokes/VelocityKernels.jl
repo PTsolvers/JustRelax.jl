@@ -146,31 +146,47 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
                 εyy[i, j, k] = d_yi(Vy) - ∇Vijk
                 # Compute ε_zz
                 εzz[i, j, k] = d_zi(Vz) - ∇Vijk
+            else
+                εxx[i, j, k] = zero(T)
+                εyy[i, j, k] = zero(T)
+                εzz[i, j, k] = zero(T)
             end
         end
         # Compute ε_yz
-        if all((i, j, k) .≤ size(εyz)) && isvalid_yz(ϕ, i, j, k)
-            εyz[i, j, k] =
-                0.5 * (
-                _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
-                    _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
-            )
+        if all((i, j, k) .≤ size(εyz))
+            if isvalid_yz(ϕ, i, j, k)
+                εyz[i, j, k] =
+                    0.5 * (
+                    _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                        _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+                )
+            else
+                εyz[i, j, k] = zero(T)
+            end
         end
         # Compute ε_xz
-        if all((i, j, k) .≤ size(εxz)) && isvalid_xz(ϕ, i, j, k)
-            εxz[i, j, k] =
-                0.5 * (
-                _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
-                    _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
-            )
+        if all((i, j, k) .≤ size(εxz))
+            if isvalid_xz(ϕ, i, j, k)
+                εxz[i, j, k] =
+                    0.5 * (
+                    _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                        _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+                )
+            else
+                εxz[i, j, k] = zero(T)
+            end
         end
         # Compute ε_xy
-        if all((i, j, k) .≤ size(εxy)) && isvalid_xy(ϕ, i, j, k)
-            εxy[i, j, k] =
-                0.5 * (
-                _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
-                    _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
-            )
+        if all((i, j, k) .≤ size(εxy))
+            if isvalid_xy(ϕ, i, j, k)
+                εxy[i, j, k] =
+                    0.5 * (
+                    _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                        _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+                )
+            else
+                εxy[i, j, k] = zero(T)
+            end
         end
     end
     return nothing

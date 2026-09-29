@@ -544,11 +544,26 @@ function JR2D.subgrid_characteristic_time!(
     return nothing
 end
 
+function JR2D.subgrid_characteristic_time!(
+        subgrid_arrays,
+        particles,
+        dt₀::ROCArray,
+        phases::AbstractArray{Int, N},
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        di,
+    ) where {N}
+    return subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes, di
+    )
+end
+
 # shear heating
 
 function JR2D.compute_shear_heating!(::AMDGPUBackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)
-    @parallel (ni) compute_shear_heating_kernel!(
+    @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
         @tensor_center(stokes.τ),
         @tensor_center(stokes.τ_o),

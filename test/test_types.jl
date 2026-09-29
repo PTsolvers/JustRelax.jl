@@ -5,6 +5,7 @@ elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
 end
 
 using JustRelax, Test
+using GeoParams
 import JustRelax.JustRelax2D as JR2
 import JustRelax.JustRelax3D as JR3
 
@@ -93,6 +94,28 @@ const BackendArray = PTArray(backend)
 
     @test_throws MethodError JR2.PrincipalStress(backend, 10.0, 10.0)
 
+    # Non-uniform vertex shear and xx ≠ -yy, so both the 4-vertex mean of
+    # squares and the plane-strain zz = -(xx + yy) term enter the invariant.
+    εxy_v = [Float64(i + 2j) for i in 1:(nx + 1), j in 1:(ny + 1)]
+    stokes.ε_pl.xx .= 3.0
+    stokes.ε_pl.yy .= -1.0
+    copyto!(stokes.ε_pl.xy, εxy_v)
+    εII_ref = [
+        sqrt(0.5 * (3.0^2 + 1.0^2 + 2.0^2) + sum(abs2, εxy_v[i:(i + 1), j:(j + 1)]) / 4)
+            for i in 1:nx, j in 1:ny
+    ]
+    stokes.EII_pl .= 1.0
+    JR2.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, 2.0)
+    @test Array(stokes.EII_pl) ≈ 1.0 .+ 2.0 .* εII_ref
+
+    JR2.tensor_invariant!(stokes.ε_pl)
+    @test Array(stokes.ε_pl.II) ≈ εII_ref
+
+    stokes.EVol_pl .= 1.0
+    stokes.ε_vol_pl .= -0.25
+    JR2.accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, 2.0)
+    @test all(Array(stokes.EVol_pl) .≈ 0.5)
+
     thermal = JR2.ThermalArrays(backend, ni)
     @test size(thermal.T) == (nx + 2, ny + 2)
     @test size(@view(thermal.T[2:(end - 1), 2:(end - 1)])) == ni
@@ -120,6 +143,53 @@ const BackendArray = PTArray(backend)
     @test typeof(thermal.qTy2) <: BackendArray
     @test typeof(thermal.ResT) <: BackendArray
 
+    elastic = ConstantElasticity(; G = 10.0, Kb = 20.0)
+    rheology = SetMaterialParams(;
+        Phase = 1,
+        ShearHeat = ConstantShearheating(; Χ = 1.0),
+        Elasticity = elastic,
+        CompositeRheology = CompositeRheology((LinearViscous(; η = 2.0), elastic)),
+    )
+    stokes.τ.xx .= 2.0
+    stokes.τ.yy .= -2.0
+    stokes.τ.xy_c .= 3.0
+    stokes.τ_o.xx .= 0.0
+    stokes.τ_o.yy .= 0.0
+    stokes.τ_o.xy_c .= 0.0
+    # Incompressible strain rate (εzz = 0) with non-uniform vertex shear, which the
+    # kernel averages onto centers. ε_el = (τ - τ_o) / (2 G dt) and
+    # H = Χ τij (εij - ε_el,ij), with the xy term counted twice.
+    εxy_v = [0.25 * (i + 2j) for i in 1:(nx + 1), j in 1:(ny + 1)]
+    stokes.ε.xx .= 0.5
+    stokes.ε.yy .= -0.5
+    copyto!(stokes.ε.xy, εxy_v)
+    G, dt = 10.0, 2.0
+    H_ref = [
+        2.0 * (0.5 - 2.0 / (2G * dt)) + (-2.0) * (-0.5 + 2.0 / (2G * dt)) +
+            2 * 3.0 * (sum(εxy_v[i:(i + 1), j:(j + 1)]) / 4 - 3.0 / (2G * dt))
+            for i in 1:nx, j in 1:ny
+    ]
+    JR2.compute_shear_heating!(thermal, stokes, rheology, dt)
+    @test Array(thermal.shear_heating) ≈ H_ref
+
+    thermal_rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 2700.0),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1000.0),
+            Conductivity = ConstantConductivity(; k = 3.0),
+        ),
+    )
+    dt₀ = similar(thermal.T)
+    fill!(dt₀, 0.0)
+    phases = PTArray(backend)(fill(1, ni...))
+    # dt₀ = ρCp / (2k (1/dx² + 1/dy²)); anisotropic spacing exposes a swapped axis.
+    JR2.subgrid_characteristic_time!(
+        nothing, nothing, dt₀, phases, thermal_rheology, thermal, stokes, (1.0, 2.0)
+    )
+    @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2700.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
+    @test all(iszero, Array(dt₀)[[1, end], :])
+
     @test JR2.ThermalArrays(10, 10) isa JustRelax.ThermalArrays
     @test JR2.ThermalArrays(ni...) isa JustRelax.ThermalArrays
 
@@ -139,6 +209,19 @@ end
 
     JR2.displacement2velocity!(stokes, 5)
     @test all(stokes.V.Vx .== 2.0)
+
+    stokes.U.Ux .= 12.0
+    JR2.displacement2velocity!(stokes, 4, DisplacementBoundaryConditions())
+    @test all(stokes.V.Vx .== 3.0)
+
+    velocity_before = copy(stokes.V.Vx)
+    @test isnothing(
+        JR2.displacement2velocity!(stokes, 4, VelocityBoundaryConditions())
+    )
+    @test stokes.V.Vx == velocity_before
+    @test_throws "Unknown boundary conditions type: Nothing" JR2.displacement2velocity!(
+        stokes, 4, nothing
+    )
 end
 
 @testset "3D allocators" begin
@@ -221,8 +304,8 @@ end
     @test size(σ.σ3) == (3, ni...)
     @test JR3.compute_principal_stresses!(stokes, σ) == nothing
 
-    # exercise the Householder branch of hessenberg_3x3 (non-zero α) and the
-    # iteration body of hessenberg_eigen_3x3 by feeding non-trivial off-diagonals
+    # a fully populated, non-trivial symmetric stress tensor exercises the Jacobi
+    # rotation sweeps in eigen_symmetric_3x3
     stokes.τ.xx .= 1.0
     stokes.τ.yy .= 2.0
     stokes.τ.zz .= 3.0
@@ -236,6 +319,36 @@ end
     λ2 = sqrt(sum(Array(σ.σ2)[i, 1, 1, 1]^2 for i in 1:3))
     λ3 = sqrt(sum(Array(σ.σ3)[i, 1, 1, 1]^2 for i in 1:3))
     @test isapprox(λ1 + λ2 + λ3, 6.0; atol = 1.0e-6)
+
+    # Non-uniform edge shear components: each is the mean of squares over the
+    # four edges of its plane surrounding the cell center.
+    εyz_e = [Float64(i + 2j + 3k) for i in 1:nx, j in 1:(ny + 1), k in 1:(nz + 1)]
+    εxz_e = [Float64(2i - j + k) for i in 1:(nx + 1), j in 1:ny, k in 1:(nz + 1)]
+    εxy_e = [Float64(i * j + k) for i in 1:(nx + 1), j in 1:(ny + 1), k in 1:nz]
+    stokes.ε_pl.xx .= 2.0
+    stokes.ε_pl.yy .= -1.0
+    stokes.ε_pl.zz .= -1.0
+    copyto!(stokes.ε_pl.yz, εyz_e)
+    copyto!(stokes.ε_pl.xz, εxz_e)
+    copyto!(stokes.ε_pl.xy, εxy_e)
+    εII_ref = [
+        sqrt(
+                0.5 * (4.0 + 1.0 + 1.0) +
+                sum(abs2, εyz_e[i, j:(j + 1), k:(k + 1)]) / 4 +
+                sum(abs2, εxz_e[i:(i + 1), j, k:(k + 1)]) / 4 +
+                sum(abs2, εxy_e[i:(i + 1), j:(j + 1), k]) / 4
+            ) for i in 1:nx, j in 1:ny, k in 1:nz
+    ]
+    JR3.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, 0.5)
+    @test Array(stokes.EII_pl) ≈ 0.5 .* εII_ref
+
+    JR3.tensor_invariant!(stokes.ε_pl)
+    @test Array(stokes.ε_pl.II) ≈ εII_ref
+
+    stokes.EVol_pl .= -1.0
+    stokes.ε_vol_pl .= 0.75
+    JR3.accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, 4.0)
+    @test all(Array(stokes.EVol_pl) .≈ 2.0)
 
     thermal = JR3.ThermalArrays(backend, ni)
     @test size(thermal.T) == (nx + 2, ny + 2, nz + 2)

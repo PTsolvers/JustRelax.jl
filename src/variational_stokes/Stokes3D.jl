@@ -119,7 +119,7 @@ function _solve_VS!(
 
     # compute buoyancy forces and viscosity
     compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff; air_phase)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -164,7 +164,6 @@ function _solve_VS!(
                 air_phase = air_phase,
                 relaxation = viscosity_relaxation,
             )
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
             # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
             @parallel (@idx ni .+ 1) cld.(ni .+ 1, (32, 8, 1)) (32, 8, 1) update_stresses_center_vertex!(
@@ -260,7 +259,7 @@ function _solve_VS!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays

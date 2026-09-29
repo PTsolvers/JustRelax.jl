@@ -362,6 +362,8 @@ else
         ΔT_h = [0.4 * cos(i + 2j - k) for i in 1:nx, j in 1:ny, k in 1:nz]
         melt_h = [0.1 * mod(i + j * k, 5) for i in 1:nx, j in 1:ny, k in 1:nz]
         dev(A) = copyto!(@zeros(ni...), A)
+        # `ΔT` is read in the ghosted `thermal.ΔT` layout; NaN ghosts expose any stray read
+        ghosted(A) = (G = fill(NaN, size(A) .+ 2); G[UnitRange.(2, size(A) .+ 1)...] .= A; copyto!(@zeros(size(G)...), G))
 
         # The update is the implicit pseudo-time step P' - P = ψ R(P') with
         # R(P) = -(P - P0)/(K dt) - ∇V + αΔT/dt + Q/dt, ψ = (r/θ_dτ)(1/η + 1/(G dt))⁻¹;
@@ -390,8 +392,8 @@ else
 
         for (args, with_ΔT, with_melt) in (
                 ((;), false, false),
-                ((; ΔT = dev(ΔT_h)), true, false),
-                ((; ΔT = dev(ΔT_h), melt_fraction = dev(melt_h)), true, true),
+                ((; ΔT = ghosted(ΔT_h)), true, false),
+                ((; ΔT = ghosted(ΔT_h), melt_fraction = dev(melt_h)), true, true),
             )
             P, RP = dev(P_h), @zeros(ni...)
             JR3.compute_variational_P!(
@@ -445,6 +447,7 @@ else
             (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
             Pin,
             stokes.P,
+            nothing,
             stokes.viscosity.η,
             λ,
             λv,
@@ -477,6 +480,7 @@ else
             (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
             Pin,
             stokes.P,
+            nothing,
             stokes.viscosity.η,
             λ,
             λv,
@@ -752,7 +756,7 @@ else
     stress_args2(stokes, Pin, λ, λv) = (
         @plastic_strain(stokes), stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
         @tensor_center(stokes.τ), (stokes.τ.xy,), @tensor_center(stokes.τ_o), (stokes.τ_o.xy,),
-        Pin, stokes.P, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+        Pin, stokes.P, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
     )
 
     function rate_stress2!(stokes, Pin, λ, λv, rheology, pr, ϕ; dt, θ_dτ = 1.0, relλ = 1.0)
@@ -1027,6 +1031,7 @@ else
             ηdτ,
             ϕ,
             inv.(dxi),
+            0.0,
         )
         return nothing
     end

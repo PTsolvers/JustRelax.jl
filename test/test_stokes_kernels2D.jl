@@ -43,6 +43,8 @@ end
 const JR2 = JustRelax.JustRelax2D
 
 dev(A) = PTArray(backend)(A)
+# `ΔT` is read in the ghosted `thermal.ΔT` layout; NaN ghosts expose any stray read
+ghosted(A) = (G = fill(NaN, size(A) .+ 2); G[UnitRange.(2, size(A) .+ 1)...] .= A; dev(G))
 
 # ---------------------------------------------------------------------------------------
 # Reference constitutive relations
@@ -427,14 +429,14 @@ end
                     @parallel (@idx ni) JR2K.compute_τ_nonlinear!(
                         @tensor_center(stokes.τ), stokes.τ.II, @tensor_center(stokes.τ_o),
                         @strain(stokes), @plastic_strain(stokes), stokes.EII_pl,
-                        stokes.ε_vol_pl, stokes.EVol_pl, stokes.P, θ, η, stokes.viscosity.η_vep,
+                        stokes.ε_vol_pl, stokes.EVol_pl, stokes.P, nothing, θ, η, stokes.viscosity.η_vep,
                         λ, phase_ratios.center, rheology, dt, 0.0, args,
                     )
                 else
                     @parallel (@idx ni) JR2K.compute_τ_nonlinear!(
                         @tensor_center(stokes.τ), stokes.τ.II, @tensor_center(stokes.τ_o),
                         @strain(stokes), @plastic_strain(stokes), stokes.EII_pl,
-                        stokes.P, θ, η, stokes.viscosity.η_vep, λ, rheology, dt, 0.0, args,
+                        stokes.ε_vol_pl, stokes.P, nothing, θ, η, stokes.viscosity.η_vep, λ, rheology, dt, 0.0, args,
                     )
                 end
             end
@@ -469,7 +471,7 @@ end
                         @strain(stokes), @strain_increment(stokes), @plastic_strain(stokes),
                         stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                         @tensor_center(stokes.τ), (stokes.τ.xy,), @tensor_center(stokes.τ_o), (stokes.τ_o.xy,),
-                        stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                        stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                         relλ, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                     )
                 else
@@ -477,7 +479,7 @@ end
                         @strain(stokes), @plastic_strain(stokes),
                         stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                         @tensor_center(stokes.τ), (stokes.τ.xy,), @tensor_center(stokes.τ_o), (stokes.τ_o.xy,),
-                        stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                        stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                         relλ, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                     )
                 end
@@ -625,7 +627,7 @@ end
             JR2K.compute_P!(P, dev(P0_c), RP, dev(∇V_c), dev(Q_c), dev(η_c), rheo_P, phase_ratios, dtP, r, θ_dτ, (; melt_fraction = @zeros(ni...)))
         end
         @test Array(P) ≈ @. P0_c + Kp * (Q_c - dtP * ∇V_c)
-        for kw in ((; ΔT = dev(ΔT_c)), (; ΔT = dev(ΔT_c), melt_fraction = @zeros(ni...)))
+        for kw in ((; ΔT = ghosted(ΔT_c)), (; ΔT = ghosted(ΔT_c), melt_fraction = @zeros(ni...)))
             P, RP = dev(Pini), @zeros(ni...)
             for _ in 1:300
                 JR2K.compute_P!(P, dev(P0_c), RP, dev(∇V_c), dev(Q_c), dev(η_c), rheo_P, phase_ratios, dtP, r, θ_dτ, kw)

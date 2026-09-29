@@ -260,14 +260,14 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
                     @parallel (@idx ni) JR3K.compute_τ_nonlinear!(
                         @tensor_center(stokes.τ), stokes.τ.II, @tensor_center(stokes.τ_o),
                         @strain(stokes), @plastic_strain(stokes), stokes.EII_pl,
-                        stokes.ε_vol_pl, stokes.EVol_pl, stokes.P, θ, stokes.viscosity.η,
+                        stokes.ε_vol_pl, stokes.EVol_pl, stokes.P, nothing, θ, stokes.viscosity.η,
                         stokes.viscosity.η_vep, λ, phase_ratios.center, rheology, dt, 0.0, args,
                     )
                 else
                     @parallel (@idx ni) JR3K.compute_τ_nonlinear!(
                         @tensor_center(stokes.τ), stokes.τ.II, @tensor_center(stokes.τ_o),
                         @strain(stokes), @plastic_strain(stokes), stokes.EII_pl,
-                        stokes.P, θ, stokes.viscosity.η, stokes.viscosity.η_vep, λ, rheology, dt, 0.0, args,
+                        stokes.ε_vol_pl, stokes.P, nothing, θ, stokes.viscosity.η, stokes.viscosity.η_vep, λ, rheology, dt, 0.0, args,
                     )
                 end
             end
@@ -299,7 +299,7 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
                 @strain(stokes), @plastic_strain(stokes), stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                 @tensor_center(stokes.τ), (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o), (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
-                stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                 0.5, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                 phase_ratios.xy, phase_ratios.yz, phase_ratios.xz,
             )
@@ -370,7 +370,7 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
                 @strain(stokes), @plastic_strain(stokes), stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                 @tensor_center(stokes.τ), (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o), (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
-                stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                 0.5, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                 phase_ratios.xy, phase_ratios.yz, phase_ratios.xz,
             )
@@ -407,7 +407,7 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
                 @strain(stokes), @plastic_strain(stokes), stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                 @tensor_center(stokes.τ), (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o), (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
-                stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                 0.5, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                 phase_ratios.xy, phase_ratios.yz, phase_ratios.xz,
             )
@@ -444,7 +444,7 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
                 @strain(stokes), @plastic_strain(stokes), stokes.EII_pl, stokes.ε_vol_pl, stokes.EVol_pl,
                 @tensor_center(stokes.τ), (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy),
                 @tensor_center(stokes.τ_o), (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
-                stokes.P, Pc, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
+                stokes.P, Pc, nothing, stokes.viscosity.η, λ, λv, stokes.τ.II, stokes.viscosity.η_vep,
                 0.5, dt, 0.0, rheology, phase_ratios.center, phase_ratios.vertex,
                 phase_ratios.xy, phase_ratios.yz, phase_ratios.xz,
             )
@@ -480,7 +480,7 @@ affine(a0, a) = (x, y, z) -> a0 + a[1] * x + a[2] * y + a[3] * z
             for I in CartesianIndices(n)
                 I[d] in (1, n[d]) && continue
                 Ic = JR3.clamped_indices(ni, Tuple(I)...)
-                @test fn(src[s], Tuple(I), Ic...) ≈ f(getindex.(LOC[t], Tuple(I))...)
+                @test fn(src[s], Ic...) ≈ f(getindex.(LOC[t], Tuple(I))...)
             end
         end
     end

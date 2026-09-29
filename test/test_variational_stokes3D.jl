@@ -1020,7 +1020,7 @@ else
 
     ## 7. Momentum residual ------------------------------------------------------------------
 
-    function vs_momentum!(stokes, ρg, ητ, ηdτ, ϕ)
+    function vs_momentum!(stokes, ρg, ητ, ηdτ, ϕ; dt = 0.0)
         @parallel (@idx ni .+ 1) JR3.compute_V!(
             @velocity(stokes)...,
             @residuals(stokes.R)...,
@@ -1031,7 +1031,7 @@ else
             ηdτ,
             ϕ,
             inv.(dxi),
-            0.0,
+            dt,
         )
         return nothing
     end
@@ -1074,6 +1074,38 @@ else
                     all(z -> isapprox(z, 0.2; atol = 1.0e-12), Rz)
             end
             @test resid()
+        end
+
+        @testset "free-surface stabilization and face mass" begin
+            # No stress or pressure: the Vz row is R = -⟨fz⟩ plus the implicit buoyancy term
+            # Vz ∂(ϕ fz)/∂z dt, and the update divides by max(ϕ.Vz, 0.1) ⟨ητ⟩ - ηdτ ∂(ϕ fz)/∂z dt.
+            ηdτ, ητ0, ϕVz = 0.3, 2.0, 0.05
+            fz_h = [1 + 0.1i + 0.3k^2 for i in 1:nx, j in 1:ny, k in 1:nz]
+            ϕ = full_rock_ratio()
+            ϕ.Vz .= ϕVz
+            ρg = (@zeros(ni...), @zeros(ni...), copyto!(@zeros(ni...), fz_h))
+            function update(dt)
+                stokes = StokesArrays(backend, ni)
+                fill_dev!(stokes.V.Vz, (i, j, k) -> 0.2 + 0.05i - 0.03j + 0.1k)
+                Vz0 = Array(stokes.V.Vz)
+                vs_momentum!(stokes, ρg, fill!(@zeros(ni...), ητ0), ηdτ, ϕ; dt)
+                return Vz0, Array(stokes.V.Vz), Array(stokes.R.Rz)
+            end
+            for dt in (0.0, 0.7)
+                Vz0, Vz, Rz = update(dt)
+                expected_R = similar(Rz)
+                expected_V = copy(Vz0)
+                for I in CartesianIndices(Rz)
+                    i, j, k = Tuple(I)
+                    ∂ρg∂z = (fz_h[i, j, k + 1] - fz_h[i, j, k]) / dz
+                    expected_R[I] = -(fz_h[i, j, k] + fz_h[i, j, k + 1]) / 2 +
+                        Vz0[i + 1, j + 1, k + 1] * ∂ρg∂z * dt
+                    expected_V[i + 1, j + 1, k + 1] +=
+                        ηdτ * expected_R[I] / (0.1 * ητ0 - ηdτ * ∂ρg∂z * dt)
+                end
+                @test Rz ≈ expected_R
+                @test Vz ≈ expected_V
+            end
         end
 
         @testset "masked edge differences" begin

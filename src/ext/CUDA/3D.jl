@@ -519,6 +519,21 @@ function JR3D.subgrid_characteristic_time!(
     return nothing
 end
 
+function JR3D.subgrid_characteristic_time!(
+        subgrid_arrays,
+        particles,
+        dt₀::CuArray,
+        phases::AbstractArray{Int, N},
+        rheology,
+        thermal::JustRelax.ThermalArrays,
+        stokes::JustRelax.StokesArrays,
+        di,
+    ) where {N}
+    return subgrid_characteristic_time!(
+        subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes, di
+    )
+end
+
 # shear heating
 
 function JR3D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheology, dt)

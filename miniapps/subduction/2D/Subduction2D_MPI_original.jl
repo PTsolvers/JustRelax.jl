@@ -310,7 +310,7 @@ function main(x_global, z_global, li, origin, phases_GMG, T_GMG, igg; nx = 16, n
         igg.me == 0 && @show it
 
         #MPI gathering
-        phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+        phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)]
         #centers
         @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo
         @views τII_nohalo .= Array(stokes.τ.II[2:(end - 1), 2:(end - 1)]) # Copy data to CPU removing the halo

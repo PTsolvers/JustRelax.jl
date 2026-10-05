@@ -42,10 +42,11 @@ Do not branch on `isa CuArray` or allocate plain `Array`s inside backend-generic
 code. Read [Selecting the backend](@ref) for the user-facing setup, including
 the separate JustRelax and JustPIC backend tags.
 
-`@init_parallel_stencil` can run only once per module in a Julia session. A
-change of backend or dimensionality therefore requires a fresh Julia process.
-Never attempt to reinitialize ParallelStencil in an already-loaded solver
-module.
+`@init_parallel_stencil` can run only once per module in a Julia session. The package
+keeps each backend and dimension in a separate module, so these modules can
+coexist. If your own script initializes ParallelStencil in `Main`, restart
+Julia before changing that initialization. Never reinitialize ParallelStencil
+in an already-loaded solver module.
 
 ## Adding a solver
 

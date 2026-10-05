@@ -651,10 +651,10 @@ end
 
         # CellArrays stores SVector per cell; copy to host first so we can
         # safely index per-cell on any backend.
-        center_h = Base.Array(pr.center)
-        vertex_h = Base.Array(pr.vertex)
-        Vx_h = Base.Array(pr.Vx)
-        Vy_h = Base.Array(pr.Vy)
+        center_h = to_cpu(pr.center)
+        vertex_h = to_cpu(pr.vertex)
+        Vx_h = to_cpu(pr.Vx)
+        Vy_h = to_cpu(pr.Vy)
 
         # Cell-center ratios reproduce the input cleanly (only one phase per cell).
         @test center_h[1, 1][1] ≈ 1.0 && center_h[1, 1][2] ≈ 0.0

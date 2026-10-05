@@ -79,6 +79,7 @@ export default defineConfig({
       { text: "Home", link: "/" },
       { text: "Documentation", link: "/man/installation" },
       { text: "API", link: "/man/listfunctions" },
+      { text: "Performance", link: "/performance" },
     ],
     sidebar: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     editLink: 'REPLACE_ME_DOCUMENTER_VITEPRESS',

@@ -21,6 +21,7 @@ else
 end
 
 using JustPIC
+using CellArrays: CPUCellArray
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
@@ -31,7 +32,7 @@ end
 
 # all active particles carry the value `v`
 function particles_equal(A, index, v)
-    Ac, idx = Array(A), Array(index)
+    Ac, idx = CPUCellArray(A), CPUCellArray(index)
     for k in axes(idx, 3), j in axes(idx, 2), i in axes(idx, 1)
         for ip in cellaxes(idx)
             @index(idx[ip, i, j, k]) || continue

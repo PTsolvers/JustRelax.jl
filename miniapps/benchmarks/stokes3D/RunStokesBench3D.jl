@@ -24,7 +24,7 @@ end
 
 # Load script dependencies
 using LinearAlgebra, CairoMakie
-using MPI: MPI
+using JustRelax: MPI
 
 
 # choose benchmark

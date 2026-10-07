@@ -146,8 +146,10 @@ end
         τ_xz = @inbounds @index xz[ip, I...]
         τ_xy = @inbounds @index xy[ip, I...]
 
+        # `rotate_elastic_stress3D` takes the full vorticity ∂vᵢ/∂xⱼ - ∂vⱼ/∂xᵢ, while the
+        # particles carry the half components ½(∂vᵢ/∂xⱼ - ∂vⱼ/∂xᵢ)
         τ_rotated = GeoParams.rotate_elastic_stress3D(
-            (ω_yz, ω_xz, ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
+            (2 * ω_yz, 2 * ω_xz, 2 * ω_xy), (τ_xx, τ_yy, τ_zz, τ_yz, τ_xz, τ_xy), dt
         )
 
         components = xx, yy, zz, yz, xz, xy
@@ -220,18 +222,27 @@ Interpolate the particle stress in `τ_particles` back onto the old-stress field
 `stokes.τ_o`: normal components onto the cell centers, and shear components onto the
 vertices in 2D or onto the cell centers and edges in 3D, matching where the stress kernels
 read them from. Counterpart of [`rotate_stress!`](@ref), and the step that hands the
-rotated stress to the next Stokes solve.
+rotated stress to the next Stokes solve. The interpolated stress is also kept in
+`τ_particles` as the reference of the next FLIP update in `rotate_stress!`.
 """
 function stress2grid!(
         stokes, τ_particles::JustRelax.StressParticles{backend}, particles
     ) where {backend}
-    return stress2grid!(
+    stress2grid!(
         stokes,
         normal_stress(τ_particles)...,
         shear_stress(τ_particles)...,
         particles,
     )
+    # reference for the FLIP update in `rotate_stress!`
+    foreach((ref, τ) -> ref .= τ, grid_stress(τ_particles), reference_stress(stokes.τ_o, τ_particles))
+    return nothing
 end
+
+# Grid stress fields that `rotate_stress!` interpolates, in the order of `grid_stress`
+@inline reference_stress(τ, ::JustRelax.StressParticles{B, 2}) where {B} = (τ.xx, τ.yy, τ.xy)
+@inline reference_stress(τ, ::JustRelax.StressParticles{B, 3}) where {B} =
+    (τ.xx, τ.yy, τ.zz, τ.yz_c, τ.xz_c, τ.xy_c)
 
 function stress2grid!(stokes, pτxx, pτyy, pτxy, particles)
     # normal components
@@ -275,55 +286,64 @@ end
 """
     rotate_stress!(τ_particles::StressParticles, stokes, particles, dt)
 
-Interpolate the current deviatoric stress `stokes.τ` and vorticity `stokes.ω` onto the
-particles and rotate the particle stress over `dt`. `stokes.ω` must hold the vorticity of
-the current velocity field. Use [`stress2grid!`](@ref) afterwards to map the rotated
-stress back onto `stokes.τ_o`.
+Update the particle stress with the change of the grid stress over the last Stokes solve,
+then rotate it over `dt` with the vorticity of the current velocity field.
+
+The update is FLIP: each particle receives `τ - τ_ref` interpolated to its position, where
+`τ` is `stokes.τ` and `τ_ref` is the grid stress that [`stress2grid!`](@ref) last produced
+from the particles. Stress variations below the grid scale stay on the particles instead of
+being reset to the grid interpolant every step. `stokes.ω` must hold the vorticity of the
+current velocity field. Use `stress2grid!` afterwards to map the rotated stress back onto
+`stokes.τ_o`.
 """
 function rotate_stress!(
         τ_particles::JustRelax.StressParticles{backend}, stokes, particles, dt
     ) where {backend}
-    return rotate_stress!(unwrap(τ_particles)..., stokes, particles, dt)
+    return rotate_stress!(
+        unwrap(τ_particles)..., grid_stress(τ_particles), stokes, particles, dt
+    )
 end
 
-function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, dt)
-    # normal components
+function rotate_stress!(pτxx, pτyy, pτxy, pω, τ_ref::NTuple{3}, stokes, particles, dt)
+    ref_xx, ref_yy, ref_xy = τ_ref
     # Stokes center fields have no particle ghost layers. `centroid2particle!` defaults to
     # ghosted fields in current JustPIC, which shifts the interpolation by one cell at the
     # physical boundaries (and reads past the upper edge). Keep stress and particle locations
     # aligned explicitly.
-    centroid2particle!(pτxx, stokes.τ.xx, particles; ghosted = false)
-    centroid2particle!(pτyy, stokes.τ.yy, particles; ghosted = false)
-    # shear components
-    grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
-    # vorticity tensor
+    centroid2particle_flip!(
+        (pτxx, pτyy), (stokes.τ.xx, stokes.τ.yy), (ref_xx, ref_yy), particles; ghosted = false
+    )
+    grid2particle_flip!(pτxy, stokes.τ.xy, ref_xy, particles; ghost_1 = false, ghost_2 = false)
+    # the vorticity is not history: take the current field
     grid2particle!(pω, stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
-    # rotate stress
+
     rotate_stress_particles!((pτxx, pτyy, pτxy), (pω,), particles, dt)
 
     return nothing
 end
 
 function rotate_stress!(
-        pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, dt
+        pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, τ_ref::NTuple{6},
+        stokes, particles, dt
     )
-    # normal components
-    centroid2particle!(pτxx, stokes.τ.xx, particles; ghosted = false)
-    centroid2particle!(pτyy, stokes.τ.yy, particles; ghosted = false)
-    centroid2particle!(pτzz, stokes.τ.zz, particles; ghosted = false)
     # Shear components. `grid2particle!` indexes the field with the particle cell index and
     # reads both `F[i]` and `F[i+1]`, so it needs a full vertex extent in every dimension.
     # The 3D shear components are edge-centered and each is one element short in exactly one
     # dimension (`yz` in x, `xz` in y, `xy` in z), so they cannot be read that way. Use the
     # cell-centered counterparts, which the stress kernels keep up to date.
-    centroid2particle!(pτyz, stokes.τ.yz_c, particles; ghosted = false)
-    centroid2particle!(pτxz, stokes.τ.xz_c, particles; ghosted = false)
-    centroid2particle!(pτxy, stokes.τ.xy_c, particles; ghosted = false)
+    centroid2particle_flip!(
+        (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy),
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),
+        τ_ref,
+        particles;
+        ghosted = false,
+    )
     # vorticity tensor, likewise edge-centered — `compute_vorticity!` fills these centers
-    centroid2particle!(pωyz, stokes.ω.yz_c, particles; ghosted = false)
-    centroid2particle!(pωxz, stokes.ω.xz_c, particles; ghosted = false)
-    centroid2particle!(pωxy, stokes.ω.xy_c, particles; ghosted = false)
-    # rotate stress
+    centroid2particle!(
+        (pωyz, pωxz, pωxy), (stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c), particles;
+        ghosted = false,
+    )
+
     rotate_stress_particles!(
         (pτxx, pτyy, pτzz, pτyz, pτxz, pτxy), (pωyz, pωxz, pωxy), particles, dt
     )

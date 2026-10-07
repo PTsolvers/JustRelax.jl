@@ -159,7 +159,10 @@ function run_case(
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
     pPhases, = init_cell_arrays(particles, Val(1))
-    particle_args = (pPhases,)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pPhases, unwrap(pτ)...)
+    particle_args_reduced = tuple(unwrap(pτ)...)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, air_top)
     update_phase_ratios!(phase_ratios, particles, pPhases)
@@ -241,6 +244,9 @@ function run_case(
         tensor_invariant!(stokes.τ)
         tensor_invariant!(stokes.ε_pl)
 
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
+
         # advect the material, then the free surface, then rebuild the cut cells
         advection!(particles, RungeKutta2(), @velocity(stokes), dt)
         move_particles!(particles, particle_args)
@@ -248,8 +254,16 @@ function run_case(
             chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt
         )
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-        inject_particles_phase!(particles, pPhases, (), ())
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+        )
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
         compute_rock_fraction!(ϕ, chain, xvi, di)
 
         t += dt

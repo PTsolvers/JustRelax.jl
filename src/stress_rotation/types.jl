@@ -1,23 +1,33 @@
 """
-    StressParticles{backend, nNormal, nShear, T}
+    StressParticles{backend, nNormal, nShear, T, G}
 
 Particle-borne deviatoric stress and vorticity: the normal components
 `τ_normal`, the shear components `τ_shear`, and the vorticity components `ω`, each a
 tuple of particle cell arrays. Carrying the old stress on the particles instead of on
 the grid keeps it attached to the material as it advects and rotates.
 
+`τ_grid` holds the grid stress that `stress2grid!` last produced from the particles,
+on the grid locations `rotate_stress!` reads `stokes.τ` from: cell centers for the
+normal components, vertices for the 2D shear component and cell centers for the 3D
+shear components. `rotate_stress!` adds `stokes.τ - τ_grid` to the particles.
+
 Build one from the particles it follows with `StressParticles(particles)`, advance it with
 `rotate_stress!`, and write it back onto `stokes.τ_o` with `stress2grid!`.
 """
-struct StressParticles{backend, nNormal, nShear, T}
+struct StressParticles{backend, nNormal, nShear, T, G}
     τ_normal::NTuple{nNormal, T}
     τ_shear::NTuple{nShear, T}
     ω::NTuple{nShear, T}
+    τ_grid::G
 
     function StressParticles(
-            backend, τ_normal::NTuple{nNormal, T}, τ_shear::NTuple{nShear, T}, ω::NTuple{nShear, T}
-        ) where {nNormal, nShear, T}
-        return new{backend, nNormal, nShear, T}(τ_normal, τ_shear, ω)
+            backend, τ_normal::NTuple{nNormal, T}, τ_shear::NTuple{nShear, T}, ω::NTuple{nShear, T},
+            τ_grid::NTuple{N, AbstractArray},
+        ) where {nNormal, nShear, T, N}
+        N == nNormal + nShear || throw(
+            ArgumentError("`τ_grid` must hold $(nNormal + nShear) stress components, got $N")
+        )
+        return new{backend, nNormal, nShear, T, typeof(τ_grid)}(τ_normal, τ_shear, ω, τ_grid)
     end
 end
 
@@ -31,3 +41,4 @@ particle cell arrays.
 @inline normal_stress(x::StressParticles) = x.τ_normal
 @inline shear_stress(x::StressParticles) = x.τ_shear
 @inline shear_vorticity(x::StressParticles) = x.ω
+@inline grid_stress(x::StressParticles) = x.τ_grid

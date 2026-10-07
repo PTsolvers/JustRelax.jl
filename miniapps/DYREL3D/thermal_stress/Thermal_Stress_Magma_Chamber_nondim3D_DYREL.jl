@@ -31,8 +31,7 @@ end
 
 # Load script dependencies
 using Printf, Statistics, LinearAlgebra, GeoParams, CairoMakie
-using ImplicitGlobalGrid
-using MPI: MPI
+using JustRelax: MPI
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -235,7 +234,10 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, pτ.τ_normal..., pτ.τ_shear...)
 
     # Circular temperature anomaly--------------------------
     x_anomaly = lx * 0.5
@@ -383,6 +385,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
         # dt = compute_dt(stokes, di, dt_diff, igg)
         dt = compute_dt(stokes, di, dt_max, igg)
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         println("\n dt = $(ustrip.(dimensionalize(dt, yr, CharDim))) yr \n")
         # --------------------------------
 
@@ -434,9 +439,20 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (
+                thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz,
+                stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c,
+            ),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)

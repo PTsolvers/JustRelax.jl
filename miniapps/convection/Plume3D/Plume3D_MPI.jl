@@ -70,7 +70,10 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature and material phase carried by the particles
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, pτ.τ_normal..., pτ.τ_shear...)
 
     # Rectangular thermal and compositional anomaly
     xc_anomaly = lx / 2   # origin of thermal anomaly
@@ -210,6 +213,9 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
         # `igg` makes the velocity maximum a global reduction, so every rank marches
         # with the same dt
         dt = compute_dt(stokes, di, dt_diff, igg) * 0.8
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -254,9 +260,20 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (
+                thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz,
+                stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c,
+            ),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         it += 1
         t += dt

@@ -11,7 +11,6 @@ PoissonGrids = "738b24c9-c2dc-46c1-8999-11ea9699e80b"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
-JustPIC = {rev = "main", url = "https://github.com/JuliaGeodynamics/JustPIC.jl.git"}
 JustRelax = {path = ".."}
 
 [compat]

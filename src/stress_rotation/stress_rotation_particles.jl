@@ -97,12 +97,13 @@ end
 
 Rotate the deviatoric stress carried by each active particle over `dt` with the local
 vorticity, using GeoParams' elastic stress rotation. `τ` holds the stress components and
-`ω` the vorticity components, as particle cell arrays. `method` is accepted for call-site
-compatibility and does not select an algorithm.
+`ω` the vorticity components, as particle cell arrays. `method` is deprecated: it does not
+select an algorithm and passing it emits a deprecation warning.
 """
 function rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles, dt; method = nothing
     )
+    warn_rotation_method(method)
     @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
         τ..., ω..., particles.index, dt
     )
@@ -161,55 +162,13 @@ end
     return nothing
 end
 
-@parallel_indices (I) function rotate_stress_particles_jaumann!(xx, yy, xy, ω, index, dt)
-    for ip in cellaxes(index)
-        !@index(index[ip, I...]) && continue # no particle in this location
-
-        ω_xy = @inbounds @index ω[ip, I...]
-        τ_xx = @inbounds @index xx[ip, I...]
-        τ_yy = @inbounds @index yy[ip, I...]
-        τ_xy = @inbounds @index xy[ip, I...]
-
-        tmp = τ_xy * ω_xy * 2
-        @inbounds @index xx[ip, I...] = muladd(dt, tmp, τ_xx)
-        @inbounds @index yy[ip, I...] = muladd(dt, tmp, τ_yy)
-        @inbounds @index xy[ip, I...] = muladd(dt, (τ_xx - τ_yy) * ω_xy, τ_xy)
-    end
-
-    return nothing
-end
-
-@parallel_indices (I...) function rotate_stress_particles_rotation_matrix!(
-        xx, yy, xy, ω, index, dt
+warn_rotation_method(::Nothing) = nothing
+function warn_rotation_method(method)
+    Base.depwarn(
+        "the `method = $(repr(method))` keyword of `rotate_stress_particles!` is deprecated " *
+            "and ignored: the GeoParams rotation is always used",
+        :rotate_stress_particles!,
     )
-    for ip in cellaxes(index)
-        !@index(index[ip, I...]) && continue # no particle in this location
-
-        θ = @inbounds dt * @index ω[ip, I...]
-        sinθ, cosθ = sincos(θ)
-
-        τ_xx = @inbounds @index xx[ip, I...]
-        τ_yy = @inbounds @index yy[ip, I...]
-        τ_xy = @inbounds @index xy[ip, I...]
-
-        R = @SMatrix [
-            cosθ -sinθ
-            sinθ cosθ
-        ]
-
-        τ = @SMatrix [
-            τ_xx τ_xy
-            τ_xy τ_yy
-        ]
-
-        # this could be fully unrolled in 2D
-        τr = R * (τ * R')
-
-        @inbounds @index xx[ip, I...] = τr[1, 1]
-        @inbounds @index yy[ip, I...] = τr[2, 2]
-        @inbounds @index xy[ip, I...] = τr[1, 2]
-    end
-
     return nothing
 end
 

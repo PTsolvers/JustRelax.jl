@@ -132,7 +132,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
-    particle_args_reduced = tuple(unwrap(pτ)...)
+    particle_args_reduced = unwrap(pτ)
 
     # Elliptical temperature anomaly
     xc_anomaly = lx / 2   # origin of thermal anomaly
@@ -292,7 +292,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", vtk_dir = 
             particles,
             pPhases,
             particle_args_reduced,
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+            stress_fields(stokes, pτ),
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

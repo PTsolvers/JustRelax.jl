@@ -42,3 +42,26 @@ particle cell arrays.
 @inline shear_stress(x::StressParticles) = x.τ_shear
 @inline shear_vorticity(x::StressParticles) = x.ω
 @inline grid_stress(x::StressParticles) = x.τ_grid
+
+"""
+    stress_fields(stokes, x::StressParticles)
+
+Grid fields of `stokes` that pair entry by entry with [`unwrap(x)`](@ref unwrap), for
+`inject_particles_phase!` to initialize newly injected particles:
+
+```julia
+inject_particles_phase!(
+    particles, pPhases, (pT, unwrap(pτ)...), (thermal.T, stress_fields(stokes, pτ)...)
+)
+```
+
+In 2D the normal stresses are read at the vertices (`τ.xx_v`, `τ.yy_v`), so refresh them
+with `center2vertex!` first if the solver does not update them. In 3D every component is
+read at the cell centers.
+"""
+@inline stress_fields(stokes, ::StressParticles{B, 2}) where {B} =
+    (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
+@inline stress_fields(stokes, ::StressParticles{B, 3}) where {B} = (
+    stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c,
+    stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c,
+)

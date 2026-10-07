@@ -36,6 +36,17 @@ active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
     particles = init_particles(backend_JP, 9, 18, 3, grid.xi_vel...)
     stokes = StokesArrays(backend, ni)
 
+    @testset "stress_fields" begin
+        pτ = StressParticles(particles)
+        grid_fields = stress_fields(stokes, pτ)
+        @test length(grid_fields) == length(unwrap(pτ))
+        @test grid_fields[1:3] == (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz)
+        @test grid_fields[4] === stokes.τ.yz_c
+        @test grid_fields[5] === stokes.τ.xz_c
+        @test grid_fields[6] === stokes.τ.xy_c
+        @test grid_fields[7:9] == (stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c)
+    end
+
     @testset "rigid rotation" begin
         pτ = StressParticles(particles)
         components = (JustRelax.normal_stress(pτ)..., JustRelax.shear_stress(pτ)...)

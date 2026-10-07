@@ -330,7 +330,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             particles,
             pPhases,
             particle_args_reduced,
-            (thermal.T, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+            (thermal.T, stress_fields(stokes, pτ)...),
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

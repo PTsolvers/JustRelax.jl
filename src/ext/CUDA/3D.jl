@@ -573,9 +573,9 @@ end
 # stress rotation on particles
 
 function JR3D.rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method = nothing
     )
-    # same kernel as the CPU method; `method` is accepted for call-site compatibility
+    warn_rotation_method(method)
     @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
         τ..., ω..., particles.index, dt
     )

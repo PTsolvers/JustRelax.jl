@@ -99,7 +99,7 @@ function run_case(
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pPhases, unwrap(pτ)...)
-    particle_args_reduced = tuple(unwrap(pτ)...)
+    particle_args_reduced = unwrap(pτ)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, air_top)
     update_phase_ratios!(phase_ratios, particles, pPhases)
@@ -174,7 +174,7 @@ function run_case(
             particles,
             pPhases,
             particle_args_reduced,
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+            stress_fields(stokes, pτ),
         )
         update_phase_ratios!(phase_ratios, particles, pPhases)
 

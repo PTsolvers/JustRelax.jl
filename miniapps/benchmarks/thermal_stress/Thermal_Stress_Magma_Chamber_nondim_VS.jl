@@ -523,7 +523,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             particles,
             pPhases,
             particle_args_reduced,
-            (thermal.T, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+            (thermal.T, stress_fields(stokes, pτ)...),
         )
 
         # update phase ratios

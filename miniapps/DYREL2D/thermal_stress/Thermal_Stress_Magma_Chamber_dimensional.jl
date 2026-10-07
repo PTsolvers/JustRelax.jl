@@ -489,7 +489,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
             particles,
             pPhases,
             particle_args_reduced,
-            (thermal.T, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
+            (thermal.T, stress_fields(stokes, pτ)...),
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

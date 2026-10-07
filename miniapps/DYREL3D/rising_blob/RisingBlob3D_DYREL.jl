@@ -232,7 +232,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
-    particle_args_reduced = (pT, pτ.τ_normal..., pτ.τ_shear...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Circular temperature anomaly--------------------------
     x_anomaly = lx * 0.5
@@ -425,10 +425,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             particles,
             pPhases,
             particle_args_reduced,
-            (
-                thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz,
-                stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c,
-            ),
+            (thermal.T, stress_fields(stokes, pτ)...),
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

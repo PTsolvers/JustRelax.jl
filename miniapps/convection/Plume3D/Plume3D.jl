@@ -68,7 +68,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
     # particle fields for the stress rotation
     pτ = StressParticles(particles)
     particle_args = (pT, pPhases, unwrap(pτ)...)
-    particle_args_reduced = (pT, pτ.τ_normal..., pτ.τ_shear...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Rectangular thermal and compositional anomaly
     xc_anomaly = lx / 2   # origin of thermal anomaly
@@ -225,10 +225,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D", do_v
             particles,
             pPhases,
             particle_args_reduced,
-            (
-                thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.zz,
-                stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c,
-            ),
+            (thermal.T, stress_fields(stokes, pτ)...),
         )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

@@ -11,14 +11,14 @@ PoissonGrids = "738b24c9-c2dc-46c1-8999-11ea9699e80b"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [sources]
-JustPIC = {path = "/home/albert/.julia/dev/JustPIC_flip"}
+JustPIC = {rev = "main", url = "https://github.com/JuliaGeodynamics/JustPIC.jl.git"}
 JustRelax = {path = ".."}
 
 [compat]
 ExactFieldSolutions = "0.2.3"
 GeoParams = "0.8"
 GeophysicalModelGenerator = "0.8"
-JustPIC = "0.7.12"
+JustPIC = "0.7.13"
 ParallelStencil = "0.16"
 PoissonGrids = "0.1"
 SpecialFunctions = "2"

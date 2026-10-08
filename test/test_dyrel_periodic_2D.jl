@@ -238,12 +238,12 @@ _linear_phase(η) = SetMaterialParams(;
                 kwargs = (;
                     verbose_PH = false, verbose_DR = false, iterMax = 100.0e3,
                     total_iterMax = 200.0e3, nout = 50, rel_drop = 1.0e-3,
-                    linear_viscosity = true, viscosity_cutoff = (-Inf, Inf),
+                    linear_viscosity = false, viscosity_cutoff = (-Inf, Inf),
                 )
             )
             return (
                 Vx = Array(stokes.V.Vx), Vy = Array(stokes.V.Vy),
-                η = Array(stokes.viscosity.η),
+                η = Array(stokes.viscosity.η), ηv = Array(stokes.viscosity.ηv),
                 τxy = Array(stokes.τ.xy), εxy = Array(stokes.ε.xy),
                 converged = out.converged,
             )
@@ -275,6 +275,7 @@ _linear_phase(η) = SetMaterialParams(;
             ) / scale < 1.0e-10
             @test a.εxy[1, :] ≈ a.εxy[end, :]
             @test a.τxy[1, :] ≈ a.τxy[end, :]
+            @test a.ηv[1, :] ≈ a.ηv[end, :]
         end
     end
 end

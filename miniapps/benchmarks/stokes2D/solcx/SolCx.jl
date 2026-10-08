@@ -38,7 +38,7 @@ function solCx_density(xci, ni, di)
     y = PTArray(backend)([yci for _ in xc, yci in yc])
     ρ = PTArray(backend)(zeros(ni))
 
-    # matches Stokes2D_SolCx_Zhong1996's reference density: ρ = sin(π*y)*cos(π*x)
+    # Opposite sign to Stokes2D_SolCx_Zhong1996's forcing; vizSolCx.jl negates its (p, V).
     _density(x, y) = sin(π * y) * cos(π * x)
 
     @parallel function density(ρ, x, y)

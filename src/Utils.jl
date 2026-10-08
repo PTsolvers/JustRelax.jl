@@ -705,8 +705,10 @@ end
 
 """
     norm_mpi(A)
+    norm_mpi(A, B)
 
-Compute the L2 norm of array `A` across all MPI processes.
+Compute the L2 norm of array `A`, or of the elementwise product `A .* B`, across all MPI
+processes.
 """
 norm_mpi(A) = sqrt(sum_mpi(abs2, A))
 norm_mpi(A, B) = sqrt(sum_mpi((a, b) -> abs2(a * b), A, B))

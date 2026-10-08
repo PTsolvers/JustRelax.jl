@@ -43,6 +43,6 @@ end
     JR.compute_shear_heating!(thermal, stokes, rheology, 1.0)
     @test all(iszero, Array(thermal.shear_heating))
 
-    # The obsolete array overload must not dispatch into its former recursion.
+    # `compute_viscosity!` has no `(η, ν, εII, args, rheology, cutoff)` method on any backend.
     @test !applicable(JR.compute_viscosity!, stokes.viscosity.η, 1.0, stokes.ε.II, (;), rheology, (0.0, Inf))
 end

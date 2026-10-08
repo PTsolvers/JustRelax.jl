@@ -749,8 +749,8 @@ end
 
             else
                 # get rheological properties for this phase
-                G = get_shear_modulus(rheology, phase)
-                Kb = get_bulk_modulus(rheology, phase)
+                G = get_shear_modulus(rheology[phase])
+                Kb = get_bulk_modulus(rheology[phase])
                 ratio_I .* _compute_local_stress(
                     εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, Pf
                 )

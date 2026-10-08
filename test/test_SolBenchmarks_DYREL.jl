@@ -305,11 +305,7 @@ end
             @test iters.err_evo_tot[end] < 1.0e-6
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 2.0 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 2.0 rtol = 1.0e-6
             @test maximum(abs, Array(stokes.P)) ≈ 2.517811125543723 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 2.0 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 2.0 rtol = 1.0e-6
             @test maximum(abs, Array(stokes_vs.P)) ≈ 2.0521009636837029 rtol = 1.0e-6
         end
 

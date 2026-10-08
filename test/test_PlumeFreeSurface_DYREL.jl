@@ -190,34 +190,32 @@ function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1, 
     return iters, maxVx, maxVy, allfinite
 end
 
-if get(ENV, "JUSTRELAX_DEFINE_PLUME_BENCHMARK_ONLY", "false") != "true"
-    @testset "PlumeFreeSurface DYREL (variational)" begin
-        @suppress begin
-            nx = ny = 40
-            init_mpi = JustRelax.MPI.Initialized() ? false : true
-            igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+@testset "PlumeFreeSurface DYREL (variational)" begin
+    @suppress begin
+        nx = ny = 40
+        init_mpi = JustRelax.MPI.Initialized() ? false : true
+        igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
 
-            # --- free_surface = false (instantaneous Stokes solve from rest) ---
-            iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
-            @test allfinite
-            @test maxVy ≈ 9.6799854388711294e-9 rtol = 1.0e-2
-            @test maxVx ≈ 3.2724198551326459e-9 rtol = 1.0e-2
-            @test maxVy > maxVx
+        # --- free_surface = false (instantaneous Stokes solve from rest) ---
+        iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
+        @test allfinite
+        @test maxVy ≈ 9.6799854388711294e-9 rtol = 1.0e-2
+        @test maxVx ≈ 3.2724198551326459e-9 rtol = 1.0e-2
+        @test maxVy > maxVx
 
 
-            iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
-            @test allfinite_air
-            @test iters_air.err_evo_tot[end] < 1.0e-6
-            @test iters.iter <= 1.25 * iters_air.err_evo_it[end]
+        iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
+        @test allfinite_air
+        @test iters_air.err_evo_tot[end] < 1.0e-6
+        @test iters.iter <= 1.25 * iters_air.err_evo_it[end]
 
-            # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
-            iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
-            @test allfinite_fs
-            @test iters_fs.converged
-            @test maxVy_fs ≈ 7.6707177590837003e-9 rtol = 1.0e-2
-            @test !isapprox(maxVy_fs, 9.6799854388711294e-9; rtol = 5.0e-4)
+        # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
+        iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
+        @test allfinite_fs
+        @test iters_fs.converged
+        @test maxVy_fs ≈ 7.6707177590837003e-9 rtol = 1.0e-2
+        @test !isapprox(maxVy_fs, 9.6799854388711294e-9; rtol = 5.0e-4)
 
-            finalize_global_grid(; finalize_MPI = true)
-        end
+        finalize_global_grid(; finalize_MPI = true)
     end
 end

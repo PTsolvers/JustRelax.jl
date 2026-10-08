@@ -49,11 +49,8 @@ const RHO, GRAV = 1.0, 1.0
     return nothing
 end
 
-# The staggered volume fractions are analytic, so they are assembled on the host
-# and uploaded; on GPU backends they live in device memory. Uploading through the
-# backend's array constructor (rather than copyto! straight into the pre-allocated
-# device array) is the same host->device path already used elsewhere in this suite
-# for both CUDA and AMDGPU (e.g. test_dyrel_solver_3D.jl's `PTArray(backend)(...)`).
+# The staggered volume fractions are analytic, so they are evaluated in a kernel
+# directly in the (possibly device-resident) mask arrays.
 @parallel_indices (i, j) function setmask_kernel!(dst, f, xs, ys)
     @inbounds dst[i, j] = f(xs[i], ys[j])
     return nothing

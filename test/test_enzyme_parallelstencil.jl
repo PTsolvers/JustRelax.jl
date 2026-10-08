@@ -566,6 +566,19 @@ end
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
 
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, 0)
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, 1.0)
+    adjoint.τ.xx .= 1.0
+    adjoint.τ.xy .= 1.0
+    adjoint.ε.xx .= 0.0
+    adjoint.ε.xy .= 0.0
+    JustRelax2D.enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ, 1.0, 1.0, (;)
+    )
+    @test any(!iszero, adjoint.ε.xx)
+    @test any(!iszero, adjoint.ε.xy)
+
     nonlinear_rheology = (
         SetMaterialParams(;
             Phase = 1,

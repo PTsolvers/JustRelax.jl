@@ -52,7 +52,7 @@ function compute_sensitivities!(
     # Pull the stress seeds back through the stress kernel to the viscosity fields and the
     # stress-path material parameters.
     compute_stress_sensitivities!(
-        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients
+        stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
     compute_linear_viscosity_parameter_sensitivities!(
@@ -232,7 +232,7 @@ derivatives to `gradients`. The τII viscosity refresh is left out, as in the li
 adjoint.
 """
 function compute_stress_sensitivities!(
-        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients
+        stokes, adjoint, phases, rheology, λ_relaxation, dt, periodic, gradients, args
     )
     names = keys(gradients)
     parameters = map(material -> _resolve_parameter_paths(material, names, _stress_parameter_paths), rheology)
@@ -258,6 +258,7 @@ function compute_stress_sensitivities!(
             stokes.EII_pl => nothing,
             stokes.ε_vol_pl => nothing,
             stokes.P => adjoint.P,
+            fluid_pressure(args, stokes.P) => nothing,
             stokes.λ => nothing,
             stokes.λv => nothing,
             stokes.viscosity.η => adjoint.viscosity.η,

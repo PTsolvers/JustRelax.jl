@@ -121,7 +121,7 @@ end
 
 """
     enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, ϕ::RockRatio, λ_relaxation, dt,
+        stokes, adjoint, rheology, phase_ratios, ϕ::RockRatio, λ_relaxation, dt, args,
     )
 
 Differentiate the masked DYREL constitutive kernel. Stress adjoints in `adjoint.τ` are
@@ -138,7 +138,8 @@ The separate τII-viscosity refresh (`update_viscosity_τII!`) is not differenti
 this covers `linear_viscosity = true`.
 """
 function enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt
+        stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt,
+        args = (;),
     )
     periodic = periodic_dims(stokes)
     enzyme_reverse_pointwise!(
@@ -155,6 +156,7 @@ function enzyme_compute_stress_DRYEL!(
             stokes.EII_pl => nothing,
             stokes.ε_vol_pl => nothing,
             stokes.P => adjoint.P,
+            fluid_pressure(args, stokes.P) => nothing,
             stokes.λ => nothing,
             stokes.λv => nothing,
             stokes.viscosity.η => adjoint.viscosity.η,

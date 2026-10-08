@@ -48,7 +48,7 @@ function compute_sensitivities!(
     # stress-path material parameters. The harmonic vertex viscosity is folded back into the
     # centers.
     compute_stress_sensitivities!(
-        stokes, stokes_ad, phase_ratios, ϕ, rheology, λ_relaxation, dt, periodic, gradients
+        stokes, stokes_ad, phase_ratios, ϕ, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
     compute_linear_viscosity_parameter_sensitivities!(
@@ -67,7 +67,7 @@ end
 # `harm_clamped`, and `adjoint.viscosity.ηv` stays zero.
 function compute_stress_sensitivities!(
         stokes, adjoint, phases, ϕ::JustRelax.RockRatio, rheology, λ_relaxation, dt, periodic,
-        gradients,
+        gradients, args,
     )
     names = keys(gradients)
     parameters = map(material -> _resolve_parameter_paths(material, names, _stress_parameter_paths), rheology)
@@ -89,6 +89,7 @@ function compute_stress_sensitivities!(
             stokes.EII_pl => nothing,
             stokes.ε_vol_pl => nothing,
             stokes.P => adjoint.P,
+            fluid_pressure(args, stokes.P) => nothing,
             stokes.λ => nothing,
             stokes.λv => nothing,
             stokes.viscosity.η => adjoint.viscosity.η,

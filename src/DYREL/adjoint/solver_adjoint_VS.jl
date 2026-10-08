@@ -248,7 +248,7 @@ function variational_adjoint_residual!(
         stokes, stokes_ad, ρg, ϕ, _di, ni, rheology, phase_ratios, args;
         free_surface_dt = dt * free_surface, air_phase,
     )
-    enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt)
+    enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args)
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
     stokes_ad.P .*= maskP

@@ -188,6 +188,7 @@ function enzyme_compute_stress_viscosity_DRYEL!(
             stokes.EII_pl => nothing,
             stokes.ε_vol_pl => nothing,
             stokes.P => adjoint.P,
+            fluid_pressure(args, stokes.P) => nothing,
             stokes.λ => nothing,
             stokes.λv => nothing,
             stokes.viscosity.η => adjoint.viscosity.η,

@@ -107,7 +107,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "figs3D", do_vt
     min_xcell = 8
     particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))

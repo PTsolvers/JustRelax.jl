@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    import CUDA
+    using CUDA
 end
 using Test
 using JustRelax, JustRelax.JustRelax2D
@@ -60,7 +60,7 @@ end
         air_phase = 2
 
         y_surf = -0.05 * ly
-        chain = init_markerchain(backend, nxcell, min_xcell, max_xcell, grid.xvi[1], y_surf)
+        chain = init_markerchain(backend, nxcell, min_xcell, max_xcell, Array(grid.xvi[1]), y_surf)
         @parallel (@idx size(particles.index)) init_phases!(
             pPhases, particles.coords[2], particles.index, y_surf, air_phase
         )

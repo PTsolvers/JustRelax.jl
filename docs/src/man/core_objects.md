@@ -67,8 +67,10 @@ properties.
 
 All of the containers above share one staggered-grid convention: pressure,
 temperature, and the diagonal stress/strain-rate components live at cell
-centers; the off-diagonal (shear) components at cell vertices; and velocity
-and flux components on the cell faces they cross.
+centers. Temperature includes one ghost layer on each boundary. In 2D, the
+off-diagonal (shear) components live at cell vertices; in 3D they live on
+edges (for example, `τ.xy` has size `(nx + 1, ny + 1, nz)`). Velocity and
+flux components live on the cell faces they cross.
 
 ![Staggered grid stencil](../assets/staggered_grid_stencil.png)
 

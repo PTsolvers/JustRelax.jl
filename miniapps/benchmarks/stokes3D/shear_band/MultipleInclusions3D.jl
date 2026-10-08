@@ -177,7 +177,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
 
-    pc = [argmax(p) for p in Array(phase_ratios.center)]
+    pc = [argmax(p) for p in to_cpu(phase_ratios.center)]
     while t < tmax
         # Stokes solver ----------------
         solve!(

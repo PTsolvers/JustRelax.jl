@@ -1,4 +1,5 @@
 using Adapt, MuladdMacro
+import ForwardDiff
 
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs
@@ -91,6 +92,7 @@ export update_phases_given_markerchain!
 include("rheology/GeoParams.jl")
 
 include("rheology/StressUpdate.jl")
+include("rheology/CapReturnMapping.jl")
 export compute_yieldfunction_phase, compute_plastic_gradients_phase
 
 include("stokes/StressKernels.jl")

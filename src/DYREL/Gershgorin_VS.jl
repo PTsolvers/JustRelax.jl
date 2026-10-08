@@ -62,7 +62,8 @@ end
 
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
     ni = size(η)
-    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
+    # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
+    @parallel (@idx ni) (cld(ni[1], 32), cld(ni[2], 8), 1) (32, 8, 1) _Gershgorin_Stokes2D_SchurComplement!(
         Dx,
         Dy,
         λmaxVx,

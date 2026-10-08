@@ -361,6 +361,47 @@ end
     @test all(isfinite, λmaxVy)
 end
 
+@testset "Variational DYREL fused stress-viscosity kernel" begin
+    ni = (3, 3)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+        ),
+    )
+    phase_ratios = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _fill_phase!(phase_ratios.center)
+    @parallel (@idx ni .+ 1) _fill_phase!(phase_ratios.vertex)
+
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+
+    stokes = StokesArrays(CPUBackend, ni)
+    stokes.ε.xy .= 1.0
+    stokes.viscosity.η .= 2.0
+    stokes.viscosity.ηv .= 7.0
+    θc = @zeros(ni...)
+    γ_eff = @zeros(ni...)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = 1.0)
+
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, ϕ,
+        1.0, 1.0, 1.0, args, (-Inf, Inf), true,
+    )
+    @test all(stokes.τ.xy .≈ 14.0)
+    @test all(stokes.τ.xy_c .≈ 4.0)
+    @test all(stokes.viscosity.η .== 2.0)
+    @test all(stokes.viscosity.ηv .== 7.0)
+
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, ϕ,
+        1.0, 1.0, 1.0, args, (-Inf, Inf), false,
+    )
+    @test all(stokes.viscosity.η .≈ 1.0)
+    @test all(stokes.viscosity.ηv .≈ 1.0)
+end
+
 @testset "Variational DYREL cut-cell convergence rate" begin
     # From a cold start the cut cell must not be the slow mode: a thin sliver of rock
     # has to reach the same pressure in the same order of iterations as a nearly full

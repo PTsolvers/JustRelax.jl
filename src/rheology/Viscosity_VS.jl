@@ -1,15 +1,11 @@
 ## ϕ-aware (variational, DYREL) 2D KERNELS
 #
 # `η` and `ηv` are computed at every cell and vertex, including those a `ϕ::RockRatio` masks out
-# of the momentum equations: the vertex stress interpolates the four surrounding centers with
-# `harm_clamped`, and at a free surface a vertex `isvalid_v` accepts routinely has masked-out
-# centers among them. A harmonic mean is set by its smallest entry, so a stale value at one of
-# those centers would set the interface viscosity.
+# of the momentum equations, because center and vertex stresses read these fields directly.
 #
 # The air correction therefore goes through `viscosity_phase_ratio`, not `correct_phase_ratio`: an
-# all-air cell keeps its own ratio, because the harmonic phase mean over an empty ratio is not
-# finite and DYREL's ϕ-aware Gershgorin preconditioner reads `η`/`ηv` before its own validity
-# check, where a non-finite entry would spread across the whole preconditioner row.
+# all-air point keeps its own ratio, and DYREL's ϕ-aware Gershgorin preconditioner reads `η`/`ηv`
+# before its own validity check, where a non-finite entry would spread across the whole row.
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays,
         phase_ratios,

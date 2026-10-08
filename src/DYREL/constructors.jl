@@ -229,7 +229,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)

@@ -837,12 +837,147 @@ function compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.λ,
         stokes.λv,
         stokes.viscosity.η,
+        stokes.viscosity.ηv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
         periodic_dims(stokes),
     )
+    return nothing
+end
+
+# Center and vertex stresses read their separately stored viscosities from the previous nonlinear
+# iteration, so both grids can be updated safely in one launch.
+function compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity;
+        air_phase::Integer = 0,
+    )
+    Pf = fluid_pressure(args, stokes.P)
+    periodic = periodic_dims(stokes)
+
+    @parallel (@idx size(phase_ratios.vertex)) compute_stress_viscosity_DRYEL!(
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
+        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
+        (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
+        (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
+        stokes.τ.II,
+        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
+        (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy),
+        stokes.EII_pl,
+        stokes.ε_vol_pl,
+        stokes.P,
+        Pf,
+        stokes.λ,
+        stokes.λv,
+        stokes.viscosity.η,
+        stokes.viscosity.ηv,
+        stokes.viscosity.η_vep,
+        stokes.ΔPψ,
+        θc,
+        stokes.R.RP,
+        γ_eff,
+        ϕ,
+        rheology,
+        phase_ratios.center,
+        phase_ratios.vertex,
+        λ_relaxation,
+        dt,
+        viscosity_relaxation,
+        args,
+        viscosity_cutoff,
+        linear_viscosity,
+        air_phase,
+        periodic,
+    )
+    return nothing
+end
+
+@parallel_indices (I...) function compute_stress_viscosity_DRYEL!(
+        τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, λv,
+        η, ηv, η_vep, ΔPψ, θc, RP, γ_eff,
+        ϕ::JustRelax.RockRatio, rheology, phase_ratios_center, phase_ratios_vertex,
+        λ_relaxation, dt, ν, visc_args, cutoff, linear_viscosity, air_phase, periodic,
+    )
+    ni = size(phase_ratios_center)
+    Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+
+    @inbounds begin
+        # vertex
+        if isvalid_v(ϕ, I...)
+            Ic = clamped_indices(ni, periodic, I...)
+            τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
+            εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
+            ηij = ηv[I...]
+            Pij = av_clamped(P, Ic...)
+            Pfij = sample_Pf(Pf, av_clamped, Pij, Ic...)
+            ratio = phase_ratios_vertex[I...]
+            solution = compute_local_stress(
+                εij, τij_o, ηij, Pij, λv[I...], λ_relaxation,
+                rheology, ratio, dt, av_clamped(EII_pl, Ic...), Pfij,
+            )
+            τxx_I, τyy_I, τxy_I = solution[1], solution[2], solution[3]
+            τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+            ε_pl[3][I...] = solution[6]
+            λv[I...] = solution[8]
+        else
+            τxx_I = τyy_I = τxy_I = 0.0e0
+            τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+            λv[I...] = 0.0e0
+        end
+
+        if !linear_viscosity
+            ratio = viscosity_phase_ratio(air_phase, phase_ratios_vertex[I...])
+            ηv[I...] = _update_τII_viscosity(
+                τxx_I, τyy_I, τxy_I, ratio, rheology,
+                local_viscosity_args_vertex(visc_args, I...), ηv[I...], ν, cutoff,
+            )
+        end
+
+        # center arrays are one entry shorter than vertex arrays in each direction
+        if all(I .≤ ni)
+            if isvalid_c(ϕ, I...)
+                τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
+                εij = ε[1][I...], ε[2][I...], av(ε[3])
+                Pij = P[I...]
+                Pfij = sample_Pf(Pf, getindex, Pij, I...)
+                ratio = phase_ratios_center[I...]
+                solution = compute_local_stress(
+                    εij, τij_o, η[I...], Pij, λ[I...], λ_relaxation,
+                    rheology, ratio, dt, EII_pl[I...], Pfij,
+                )
+                τxx_I, τyy_I, τxy_I = solution[1], solution[2], solution[3]
+                τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
+                ε_pl[1][I...], ε_pl[2][I...] = solution[4], solution[5]
+                ε_vol_pl[I...] = solution[11]
+                τII[I...] = solution[7]
+                λ[I...] = solution[8]
+                ΔPψ_I = solution[9]
+                ΔPψ[I...] = ΔPψ_I
+                η_vep[I...] = solution[10]
+            else
+                τxx_I = τyy_I = τxy_I = 0.0e0
+                ΔPψ_I = 0.0e0
+                τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
+                ε_pl[1][I...], ε_pl[2][I...] = 0.0e0, 0.0e0
+                ε_vol_pl[I...] = 0.0e0
+                τII[I...] = 0.0e0
+                λ[I...] = 0.0e0
+                ΔPψ[I...] = ΔPψ_I
+                η_vep[I...] = 0.0e0
+            end
+
+            θc[I...] = γ_eff[I...] * RP[I...] + ΔPψ_I
+            if !linear_viscosity
+                ratio = viscosity_phase_ratio(air_phase, phase_ratios_center[I...])
+                η[I...] = _update_τII_viscosity(
+                    τxx_I, τyy_I, τxy_I, ratio, rheology,
+                    local_viscosity_args(visc_args, I...), η[I...], ν, cutoff,
+                )
+            end
+        end
+    end
     return nothing
 end
 
@@ -861,6 +996,7 @@ end
         λ,
         λv,
         η,
+        ηv,
         η_vep,
         ΔPψ,
         ϕ::JustRelax.RockRatio,
@@ -882,7 +1018,7 @@ end
             τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
             εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
             λvij = λv[I...]
-            ηij = harm_clamped(η, Ic...)
+            ηij = ηv[I...]
             Pij = av_clamped(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped, Pij, Ic...)
             EIIvij = av_clamped(EII_pl, Ic...)

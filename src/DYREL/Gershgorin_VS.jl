@@ -52,15 +52,7 @@ end
     return ϕij / (inv(ηij) + invGdt)
 end
 
-# Vertex viscosity seen by the variational operator. `compute_stress_DRYEL!` builds the
-# vertex stress from the harmonic mean of the four surrounding center viscosities, clamped
-# at the domain border, so the Gershgorin bound must sample that same combination for the
-# preconditioner to describe the operator being iterated.
-Base.@propagate_inbounds @inline function η_vertex(η, ni, periodic, i, j)
-    return harm_clamped(η, clamped_indices(ni, periodic, i, j)...)
-end
-
-function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
+function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
     ni = size(η)
     # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
     @parallel (@idx ni) (cld(ni[1], 32), cld(ni[2], 8), 1) (32, 8, 1) _Gershgorin_Stokes2D_SchurComplement!(
@@ -69,6 +61,7 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_e
         λmaxVx,
         λmaxVy,
         η,
+        ηv,
         γ_eff,
         di.center,
         di.vertex,
@@ -83,15 +76,13 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_e
 end
 
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, di_center, di_vertex,
+        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, di_center, di_vertex,
         phase_vertex, phase_center, ϕ::JustRelax.RockRatio, rheology, dt, ρgy
     )
 
     ni = size(η)
     # A direction is periodic exactly when its momentum block carries a row per cell rather than
     # one per interior face, so the shapes of `Dx`/`Dy` are the flags -- no extra argument.
-    periodic = (size(Dx, 1) == ni[1], size(Dy, 2) == ni[2])
-
     # @inbounds begin
     phase = phase_vertex[i + 1, j + 1]
     GN = fn_ratio(get_shear_modulus, rheology, phase)
@@ -101,8 +92,8 @@ end
     GW = fn_ratio(get_shear_modulus, rheology, phase)
 
 
-    ηN = η_vertex(η, ni, periodic, i + 1, j + 1)
-    ηS = η_vertex(η, ni, periodic, i + 1, j)
+    ηN = ηv[i + 1, j + 1]
+    ηS = ηv[i + 1, j]
     ηW = η[i, j]
 
     # Powell-Hestenes penalty coefficient using the same effective weighting as the
@@ -172,8 +163,8 @@ end
     GE = GN # reuse cached value
 
     ηS = η[i, j]
-    ηW = η_vertex(η, ni, periodic, i, j + 1)
-    ηE = η_vertex(η, ni, periodic, i + 1, j + 1)
+    ηW = ηv[i, j + 1]
+    ηE = ηv[i + 1, j + 1]
     # Powell-Hestenes penalty coupling; γW already carries the ϕ.center[i, j] weights.
     γS = γW # reuse cached value
 

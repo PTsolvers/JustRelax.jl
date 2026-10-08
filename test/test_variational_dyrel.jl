@@ -317,10 +317,7 @@ end
 end
 
 @testset "Variational DYREL vertex viscosity" begin
-    # `compute_stress_DRYEL!` builds the vertex stress from the harmonic mean of the
-    # four surrounding cell viscosities, so the Gershgorin diagonal has to sample the
-    # same combination. Sampling an independently computed vertex viscosity instead
-    # preconditions a different operator wherever the viscosity is heterogeneous.
+    # Stress and Gershgorin must use the independently stored vertex viscosity.
     ni = (4, 4)
     grid = Geometry(ni, Float64.(ni))
     rheology = (
@@ -340,24 +337,24 @@ end
     # heterogeneous by four orders of magnitude, so a harmonic mean is nowhere close
     # to any single sample it is built from
     η = [10.0^(i + j) for i in 1:ni[1], j in 1:ni[2]]
+    ηv = [3.0^(i + j) for i in 1:(ni[1] + 1), j in 1:(ni[2] + 1)]
     γ_eff = @zeros(ni...)
     Dx, λmaxVx = @zeros(ni[1] - 1, ni[2]), @zeros(ni[1] - 1, ni[2])
     Dy, λmaxVy = @zeros(ni[1], ni[2] - 1), @zeros(ni[1], ni[2] - 1)
 
     JustRelax2D.Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ, rheology, grid.di, 1.0
+        Dx, Dy, λmaxVx, λmaxVy, η, ηv, γ_eff, phase_ratios, ϕ, rheology, grid.di, 1.0
     )
 
     # unit rock fraction and no penalty, so the diagonal is the bare viscous stencil
-    harm(i, j) = JustRelax2D.harm_clamped(η, JustRelax2D.clamped_indices(ni, i, j)...)
     @test grid.di.center == grid.di.vertex
     _dx2, _dy2 = inv.(grid.di.center) .^ 2
     for j in axes(Dx, 2), i in axes(Dx, 1)
-        @test Dx[i, j] ≈ (harm(i + 1, j + 1) + harm(i + 1, j)) * _dy2 +
+        @test Dx[i, j] ≈ (ηv[i + 1, j + 1] + ηv[i + 1, j]) * _dy2 +
             4 / 3 * (η[i + 1, j] + η[i, j]) * _dx2
     end
     for j in axes(Dy, 2), i in axes(Dy, 1)
-        @test Dy[i, j] ≈ (harm(i, j + 1) + harm(i + 1, j + 1)) * _dx2 +
+        @test Dy[i, j] ≈ (ηv[i, j + 1] + ηv[i + 1, j + 1]) * _dx2 +
             4 / 3 * (η[i, j + 1] + η[i, j]) * _dy2
     end
     @test all(isfinite, λmaxVx)

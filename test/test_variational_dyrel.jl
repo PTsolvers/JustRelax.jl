@@ -316,7 +316,7 @@ end
     @test all(ηb .≈ ηb[1, 1])
 end
 
-@testset "Variational DYREL vertex viscosity" begin
+@testset "Variational DYREL harmonic vertex interpolation" begin
     # Vertex stress and Gershgorin use the same harmonic interpolation of center viscosity.
     ni = (4, 4)
     grid = Geometry(ni, Float64.(ni))
@@ -379,11 +379,18 @@ end
 
     stokes = StokesArrays(CPUBackend, ni)
     stokes.ε.xy .= 1.0
+    stokes.R.RP .= 3.0
     stokes.viscosity.η .= 2.0
     stokes.viscosity.ηv .= 7.0
     θc = @zeros(ni...)
     γ_eff = @zeros(ni...)
+    γ_eff .= 2.0
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = 1.0)
+
+    JustRelax2D.compute_stress_DRYEL!(
+        stokes, rheology, phase_ratios, ϕ, 1.0, 1.0
+    )
+    @test all(stokes.τ.xy .≈ 4.0)
 
     JustRelax2D.compute_stress_viscosity_DRYEL!(
         stokes, θc, γ_eff, rheology, phase_ratios, ϕ,
@@ -394,6 +401,7 @@ end
     @test all(stokes.τ.xy_c .≈ 4.0)
     @test all(stokes.viscosity.η .== 2.0)
     @test all(stokes.viscosity.ηv .== 7.0)
+    @test all(θc .≈ 6.0)
 
     JustRelax2D.compute_stress_viscosity_DRYEL!(
         stokes, θc, γ_eff, rheology, phase_ratios, ϕ,

@@ -209,7 +209,7 @@ end
 # squares, so the exact pressure of a full cell is its depth below the surface, and
 # the exact `ϕ.center * P` of the cut cell is half its rock thickness — half a cell
 # in the stored, ϕ-divided convention the momentum operator works in.
-function _hydrostatic_column(igg, frac; ni = (4, 8), jcut = 5, start_at_rest = true)
+function _hydrostatic_column(igg, frac; ni = (4, 8), jcut = 5, start_at_rest = true, solver_kwargs = (;))
     grid = Geometry(ni, Float64.(ni))
     rheology = (
         SetMaterialParams(;
@@ -247,6 +247,7 @@ function _hydrostatic_column(igg, frac; ni = (4, 8), jcut = 5, start_at_rest = t
         kwargs = (;
             air_phase = 0, verbose_PH = false, verbose_DR = false,
             linear_viscosity = true, iterMax = 50_000, total_iterMax = 100_000, nout = 50,
+            solver_kwargs...,
         ),
     )
     return stokes, ϕ, exact, result
@@ -384,6 +385,32 @@ end
         result.iter
     end
     @test maximum(iters) < 2 * minimum(iters)
+end
+
+@testset "Variational DYREL solver options" begin
+    # With `strict_convergence` the solve is accepted only once the relative residual it
+    # reports is below `ϵ`; the absolute volumetric-strain test cannot end it earlier. The
+    # penalty and inner-tolerance options change the iteration path, never the solution.
+    for opts in (
+            (; strict_convergence = true),
+            (; strict_convergence = true, penalty_viscosity = :mean),
+            (; strict_convergence = true, penalty_viscosity = :geomean),
+            (; strict_convergence = true, penalty_viscosity = :floored, penalty_floor_fraction = 0.5),
+            (; strict_convergence = true, penalty_viscosity = :capped, penalty_ratio = 10),
+            (; strict_convergence = true, inner_tolerance_floor = 0.1, adaptive_inner_tolerance = true),
+            (; strict_convergence = true, momentum_restart_every = 10),
+            (; strict_convergence = true, residual_check_every = 10, stagnation_window = 200),
+            (; strict_convergence = true, inner_solver = :pcg),
+            (; strict_convergence = true, inner_solver = :gcr, gcr_depth = 10),
+        )
+        stokes, ϕ, exact, result = _hydrostatic_column(TEST_IGG, 0.95; start_at_rest = false, solver_kwargs = opts)
+        @test result.converged
+        @test result.err < 1.0e-10
+        @test stokes.P ≈ exact atol = 1.0e-8
+    end
+    @test_throws "penalty_viscosity must be :local, :mean, :geomean, :floored or :capped, got :local_η" _hydrostatic_column(
+        TEST_IGG, 0.95; solver_kwargs = (; penalty_viscosity = :local_η)
+    )
 end
 
 @testset "Variational DYREL plasticity" begin

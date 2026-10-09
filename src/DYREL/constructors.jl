@@ -291,8 +291,13 @@ end
 # variational version
 
 function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
-    ni = size(stokes.P)
-    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, stokes.viscosity.η, ϕ, mean(stokes.viscosity.η[.!isinf.(stokes.viscosity.η)]), γfact, dt)
+    compute_bulk_viscosity_and_penalty!(dyrel, stokes.viscosity.η, rheology, phase_ratios, ϕ, γfact, dt)
+    return nothing
+end
+
+function compute_bulk_viscosity_and_penalty!(dyrel, η::AbstractArray, rheology, phase_ratios, ϕ::JustRelax.RockRatio, γfact, dt)
+    ni = size(η)
+    @parallel (@idx ni) compute_bulk_viscosity_and_penalty!(dyrel.ηb, dyrel.γ_eff, rheology, phase_ratios.center, η, ϕ, mean(η[.!isinf.(η)]), γfact, dt)
     return nothing
 end
 

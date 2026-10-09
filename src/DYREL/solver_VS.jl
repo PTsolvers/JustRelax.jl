@@ -147,13 +147,11 @@ function _solve_VariationalDYREL!(
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
-        # deviatoric stress, then a separate τII-viscosity refresh. The stress kernel derives the
-        # vertex viscosity as harm_clamped(η) — the same convention as the APT variational stress
-        # kernel; a stored ηv would disagree at the free-surface interface and under-move it.
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P))
-        if !linear_viscosity
-            update_viscosity_τII!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
-        end
+        # Deviatoric stress and, for nonlinear rheology, the local τII-viscosity refresh.
+        compute_stress_viscosity_DRYEL!(
+            stokes, θc, dyrel.γ_eff, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt,
+            viscosity_relaxation, args, viscosity_cutoff, linear_viscosity; air_phase,
+        )
 
         # compute velocity residuals (pressure residual stokes.R.RP already computed above;
         # free-surface stabilization via dt * free_surface)
@@ -241,21 +239,13 @@ function _solve_VariationalDYREL!(
             # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
-            # deviatoric stress (vertex viscosity via harm_clamped(η)) + separate τII-viscosity
-            # refresh, then assemble the small pressure correction θc = γ_eff·RP + ΔPψ
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf = fluid_pressure(args, stokes.P))
-            if !linear_viscosity
-                update_viscosity_τII!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
-            end
-            # exchange vertex-stress halos (+ vertex viscosity, refreshed above) before the momentum
-            # kernel reads them, matching the non-variational solver
-            if linear_viscosity
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-            else
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
-            end
-            @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
-
+            # Deviatoric stress, local τII-viscosity refresh and small pressure correction.
+            compute_stress_viscosity_DRYEL!(
+                stokes, θc, dyrel.γ_eff, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt,
+                viscosity_relaxation, args, viscosity_cutoff, linear_viscosity; air_phase,
+            )
+            # Exchange the vertex-stress halos before the momentum kernel reads them.
+            update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
             # Velocity residual + damped pseudo-transient velocity update (fused, masked). The face
             # fraction enters only through `variational_face_mass` inside `D`; the damping
             # recurrence itself carries no ϕ factor.

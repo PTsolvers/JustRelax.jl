@@ -316,11 +316,8 @@ end
     @test all(ηb .≈ ηb[1, 1])
 end
 
-@testset "Variational DYREL vertex viscosity" begin
-    # `compute_stress_DRYEL!` builds the vertex stress from the harmonic mean of the
-    # four surrounding cell viscosities, so the Gershgorin diagonal has to sample the
-    # same combination. Sampling an independently computed vertex viscosity instead
-    # preconditions a different operator wherever the viscosity is heterogeneous.
+@testset "Variational DYREL harmonic vertex interpolation" begin
+    # Vertex stress and Gershgorin use the same harmonic interpolation of center viscosity.
     ni = (4, 4)
     grid = Geometry(ni, Float64.(ni))
     rheology = (
@@ -362,6 +359,56 @@ end
     end
     @test all(isfinite, λmaxVx)
     @test all(isfinite, λmaxVy)
+end
+
+@testset "Variational DYREL fused stress-viscosity kernel" begin
+    ni = (3, 3)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = ConstantDensity(; ρ = 1.0),
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+        ),
+    )
+    phase_ratios = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _fill_phase!(phase_ratios.center)
+    @parallel (@idx ni .+ 1) _fill_phase!(phase_ratios.vertex)
+
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(f -> fill!(getfield(ϕ, f), 1.0), (:center, :vertex, :Vx, :Vy))
+
+    stokes = StokesArrays(CPUBackend, ni)
+    stokes.ε.xy .= 1.0
+    stokes.R.RP .= 3.0
+    stokes.viscosity.η .= 2.0
+    stokes.viscosity.ηv .= 7.0
+    θc = @zeros(ni...)
+    γ_eff = @zeros(ni...)
+    γ_eff .= 2.0
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = 1.0)
+
+    JustRelax2D.compute_stress_DRYEL!(
+        stokes, rheology, phase_ratios, ϕ, 1.0, 1.0
+    )
+    @test all(stokes.τ.xy .≈ 4.0)
+
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, ϕ,
+        1.0, 1.0, 1.0, args, (-Inf, Inf), true,
+    )
+    # Stored ηv is deliberately different; vertex stress still follows harm_clamped(η).
+    @test all(stokes.τ.xy .≈ 4.0)
+    @test all(stokes.τ.xy_c .≈ 4.0)
+    @test all(stokes.viscosity.η .== 2.0)
+    @test all(stokes.viscosity.ηv .== 7.0)
+    @test all(θc .≈ 6.0)
+
+    JustRelax2D.compute_stress_viscosity_DRYEL!(
+        stokes, θc, γ_eff, rheology, phase_ratios, ϕ,
+        1.0, 1.0, 1.0, args, (-Inf, Inf), false,
+    )
+    @test all(stokes.viscosity.η .≈ 1.0)
+    @test all(stokes.viscosity.ηv .≈ 1.0)
 end
 
 @testset "Variational DYREL cut-cell convergence rate" begin

@@ -65,6 +65,7 @@ include("../../DYREL/adjoint/Enzyme_kernels_VS.jl")
 include("../../DYREL/adjoint/Enzyme_gradients_kernels.jl")
 include("../../DYREL/adjoint/sensitivities_adjoint.jl")
 include("../../DYREL/adjoint/sensitivities_adjoint_VS.jl")
+include("../../DYREL/adjoint/objective_function.jl")
 include("../../DYREL/adjoint/solver_adjoint.jl")
 include("../../DYREL/adjoint/solver_adjoint_VS.jl")
 

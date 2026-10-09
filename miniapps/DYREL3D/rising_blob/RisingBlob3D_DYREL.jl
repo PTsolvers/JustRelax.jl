@@ -225,7 +225,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     min_xcell = 15
     particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
@@ -470,7 +470,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
 
                 let
                     Zv = [z for _ in 1:(nx + 1), _ in 1:(ny + 1), z in ustrip.(dimensionalize(xvi[3], km, CharDim))][:]
-                    Z = [z for _ in 1:nx  , _ in 1:ny  , z in ustrip.(dimensionalize(xci[3], km, CharDim))][:]
+                    Z = [z for _ in 1:nx, _ in 1:ny, z in ustrip.(dimensionalize(xci[3], km, CharDim))][:]
                     fig = Figure(; size = (1200, 900))
                     ax1 = Axis(fig[1, 1]; aspect = 1, title = "T")
                     ax2 = Axis(fig[1, 2]; aspect = 1, title = "Pressure")

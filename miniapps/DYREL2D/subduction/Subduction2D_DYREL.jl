@@ -249,8 +249,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         # through the regular centroid/vertex interpolation paths.
         inject_particles_phase!(particles, pPhases, (), ())
         centroid2particle!(pT, thermal.T, particles)
-        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
-        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
+        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles; ghosted = false)
+        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles; ghosted = false)
         grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
         grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
 

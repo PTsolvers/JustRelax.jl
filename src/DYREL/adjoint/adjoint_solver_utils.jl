@@ -1,3 +1,4 @@
+# Shared initialization and velocity-update utilities for the adjoint solvers.
 function initialize_adjoint_iteration!(adjoint, ni)
     @parallel (@idx ni .+ 2) _initialize_adjoint_iteration!(
         adjoint.P,

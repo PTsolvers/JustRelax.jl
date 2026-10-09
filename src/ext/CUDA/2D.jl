@@ -58,11 +58,12 @@ include("../../DYREL/solver_VS.jl")
 # The forward and adjoint DYREL implementations are separate so Enzyme only has
 # to differentiate pointwise stencil operations.  Load the adjoint path here as
 # well as in the CPU module; backend-specific allocation methods live below.
-include("../../DYREL/adjoint/adjoint_helpers.jl")
+include("../../DYREL/adjoint/adjoint_solver_utils.jl")
 include("../../DYREL/adjoint/Enzyme_pointwise.jl")
 include("../../DYREL/adjoint/Enzyme_kernels.jl")
 include("../../DYREL/adjoint/Enzyme_kernels_VS.jl")
 include("../../DYREL/adjoint/Enzyme_gradients_kernels.jl")
+include("../../DYREL/adjoint/sensitivity_utils.jl")
 include("../../DYREL/adjoint/sensitivities_adjoint.jl")
 include("../../DYREL/adjoint/sensitivities_adjoint_VS.jl")
 include("../../DYREL/adjoint/objective_function.jl")

@@ -267,7 +267,10 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     grid_vxi = grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Circular temperature anomaly -----------------------
     x_anomaly = lx * 0.5
@@ -457,6 +460,9 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dt = compute_dt(stokes, di, dt_max, igg) * 0.95
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # --------------------------------
 
         compute_shear_heating!(
@@ -510,10 +516,21 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
 
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (), ())
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        # vertex normal stresses for the injection (this solver does not update them)
+        center2vertex!(stokes.τ.xx_v, stokes.τ.xx)
+        center2vertex!(stokes.τ.yy_v, stokes.τ.yy)
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
         compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         # Add thermal perturbation at regular intervals

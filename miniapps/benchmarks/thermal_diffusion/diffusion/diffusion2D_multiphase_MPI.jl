@@ -30,8 +30,7 @@ else
 end
 
 # Load script dependencies
-using ImplicitGlobalGrid
-using MPI: MPI
+using JustRelax: MPI
 
 using GeoParams, CairoMakie
 

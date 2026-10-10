@@ -197,7 +197,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     thermal = ThermalArrays(backend, ni)
     # initialize thermal profile - Half space cooling
     init_T!(thermal.T, xvi[2], thick_air, CharDim)
-    Ttop, Tbot = extrema(thermal.T)
+    Ttop, Tbot = extrema(@views thermal.T[2:(end - 1), 2:(end - 1)])
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux = (left = true, right = true, top = false, bot = false),
         constant_value = (left = false, right = false, top = Ttop, bot = Tbot),
@@ -314,24 +314,6 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         tensor_invariant!(stokes.ε_pl)
         # ------------------------------
 
-        # Advection --------------------
-        # advect particles in space
-        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
-        # advect particles in memory
-        move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(
-            particles,
-            pPhases,
-            particle_args_reduced,
-            (thermal.T, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy),
-        )
-        # update phase ratios
-        update_phase_ratios!(phase_ratios, particles, pPhases)
-
-        # interpolate stress back to the grid
-        stress2grid!(stokes, pτ, particles)
-
         # Thermal solver ---------------
         heatdiffusion_PT!(
             thermal,
@@ -362,6 +344,24 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
+
+        # Advection --------------------
+        # advect particles in space
+        advection!(particles, RungeKutta2(), @velocity(stokes), dt)
+        # advect particles in memory
+        move_particles!(particles, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         @show it += 1
         t += dt
@@ -463,4 +463,4 @@ else
 end
 
 # run main script
-# main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);
+main2D(igg; figdir = figdir, ar = ar, nx = nx, ny = ny, do_vtk = do_vtk);

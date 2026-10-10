@@ -82,7 +82,7 @@ function Shearheating3D(igg; nx = 16, ny = 16, nz = 16)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 100, 150, 80
     particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vx, grid_vy, grid_vz = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))

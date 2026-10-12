@@ -395,7 +395,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             particles,
             pPhases,
             particle_args_reduced,
-            (thermal.T, stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, stress_fields(stokes, pτ)...)
         )
 
         # # advect marker chain

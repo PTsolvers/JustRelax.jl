@@ -41,8 +41,9 @@ Create thermal boundary conditions for 2D or 3D temperature fields.
 Boundary tuples use `left`, `right`, `top`, and `bot` in 2D. In 3D they also use
 `front` and `back`. Omitted faces are filled with `false`, and the dimensionality
 is inferred from the longest boundary tuple that is passed: pass a complete
-six-face tuple for a 3D set, since the defaults are four-face 2D tuples. Tuples
-with any other number of faces are rejected.
+six-face tuple for a 3D set, since the defaults are four-face 2D tuples. A longest
+tuple with any other number of faces, or a face name that is not valid for the
+inferred dimension, is rejected.
 
 The face values have the following meaning:
 
@@ -100,13 +101,15 @@ struct TemperatureBoundaryConditions{T1, T2, T3, T4, D, nD} <: AbstractBoundaryC
             throw(ArgumentError("thermal boundary conditions must use 4 (2D) or 6 (3D) faces"))
         end
 
-        # expand to 3D
+        check_thermal_bc_faces(nD, no_flux, constant_flux, constant_value, periodic)
+
+        # fill omitted faces with `false` and expand to 3D
         dummy = (; front = false, back = false)
 
-        no_flux_exp = merge(dummy, no_flux)
-        constant_flux_exp = merge(dummy, constant_flux)
-        constant_value_exp = merge(dummy, constant_value)
-        periodic_exp = merge(dummy, periodic)
+        no_flux_exp = merge(dummy, _thermal_bc_tuple(no_flux, Val(nD)))
+        constant_flux_exp = merge(dummy, _thermal_bc_tuple(constant_flux, Val(nD)))
+        constant_value_exp = merge(dummy, _thermal_bc_tuple(constant_value, Val(nD)))
+        periodic_exp = merge(dummy, _thermal_bc_tuple(periodic, Val(nD)))
 
         check_periodic_pairs(periodic_exp, nD)
         check_periodic_conflicts(
@@ -216,6 +219,16 @@ function check_periodic_pairs(periodic, nD)
     for (a, b) in pairs
         getproperty(periodic, a) == getproperty(periodic, b) ||
             error("Periodic boundary conditions must be paired: $a and $b")
+    end
+    return
+end
+
+function check_thermal_bc_faces(nD, conditions...)
+    faces = nD == 2 ? (:left, :right, :top, :bot) : (:left, :right, :front, :back, :top, :bot)
+    for condition in conditions, k in keys(condition)
+        k in faces || throw(
+            ArgumentError("unknown $(nD)D thermal boundary face `$k`; valid faces are $faces")
+        )
     end
     return
 end

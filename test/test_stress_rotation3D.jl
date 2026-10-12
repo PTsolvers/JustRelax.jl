@@ -1,15 +1,11 @@
-push!(LOAD_PATH, "..")
-
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     import CUDA
 end
-
 using Test
 using JustRelax, JustRelax.JustRelax3D
-using ParallelStencil
-using LinearAlgebra
+using ParallelStencil, ParallelStencil.FiniteDifferences3D
 
 const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
@@ -39,41 +35,92 @@ else
     JustRelax.JustRelax3D
 end
 
-@parallel_indices (i, j, k) function _gather_particles!(out, A, index, np)
-    for ip in 1:np
-        out[ip, i, j, k] = @index(index[ip, i, j, k]) ? @index(A[ip, i, j, k]) : NaN
+# host copy of the values held by the active particles
+active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
+
+@testset "Stress rotation on particles 3D" begin
+    ni = (5, 4, 3)
+    grid = Geometry(ni, (1.0, 1.0, 1.0))
+    particles = init_particles(backend_JP, 9, 18, 3, grid.xi_vel...)
+    stokes = StokesArrays(backend, ni)
+
+    @testset "stress_fields" begin
+        pτ = StressParticles(particles)
+        grid_fields = stress_fields(stokes, pτ)
+        @test length(grid_fields) == length(unwrap(pτ))
+        @test grid_fields[1:3] == (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz)
+        @test grid_fields[4] === stokes.τ.yz_c
+        @test grid_fields[5] === stokes.τ.xz_c
+        @test grid_fields[6] === stokes.τ.xy_c
+        @test grid_fields[7:9] == (stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c)
     end
-    return nothing
+
+    @testset "rigid rotation" begin
+        pτ = StressParticles(particles)
+        components = (JustRelax.normal_stress(pτ)..., JustRelax.shear_stress(pτ)...)
+        # Voigt order xx, yy, zz, yz, xz, xy
+        τ0 = (1.0, -0.5, -0.5, 0.1, -0.3, 0.2)
+        # angular velocity, i.e. the half components ½(∂vᵢ/∂xⱼ - ∂vⱼ/∂xᵢ) as (yz, xz, xy)
+        Ω = (0.1, -0.2, 0.3)
+        dt = 1.0
+        foreach((p, v) -> fill!(p.data, v), components, τ0)
+        foreach((p, v) -> fill!(p.data, v), JustRelax.shear_vorticity(pτ), Ω)
+
+        JustRelax3D.rotate_stress_particles!(components, JustRelax.shear_vorticity(pτ), particles, dt)
+
+        # rotation by |Ω| dt about Ω / |Ω| (Rodrigues)
+        θ = sqrt(sum(abs2, Ω)) * dt
+        n = collect(Ω) ./ sqrt(sum(abs2, Ω))
+        K = [0 -n[3] n[2]; n[3] 0 -n[1]; -n[2] n[1] 0]
+        R = cos(θ) * [1 0 0; 0 1 0; 0 0 1] + sin(θ) * K + (1 - cos(θ)) * (n * n')
+        T = [τ0[1] τ0[6] τ0[5]; τ0[6] τ0[2] τ0[4]; τ0[5] τ0[4] τ0[3]]
+        τ_exact = R * T * R'
+        expected = (τ_exact[1, 1], τ_exact[2, 2], τ_exact[3, 3], τ_exact[2, 3], τ_exact[1, 3], τ_exact[1, 2])
+        for (p, e) in zip(components, expected)
+            @test all(isapprox.(active_values(p, particles), e; atol = 1.0e-12))
+        end
+    end
+
+    @testset "FLIP update keeps sub-grid stress" begin
+        pτ = StressParticles(particles)
+        components = (JustRelax.normal_stress(pτ)..., JustRelax.shear_stress(pτ)...)
+        for p in components
+            p.data .= PTArray(backend)(rand(size(p.data)...))
+        end
+
+        stress2grid!(stokes, pτ, particles)
+        τ_o = stokes.τ_o
+        for (ref, τ) in zip(JustRelax.grid_stress(pτ), (τ_o.xx, τ_o.yy, τ_o.zz, τ_o.yz_c, τ_o.xz_c, τ_o.xy_c))
+            @test Array(ref) == Array(τ)
+        end
+
+        Δτ = (0.1, -0.2, 0.3, -0.05, 0.15, 0.25)
+        τ = stokes.τ
+        for (dst, src, Δ) in zip(
+                (τ.xx, τ.yy, τ.zz, τ.yz_c, τ.xz_c, τ.xy_c),
+                (τ_o.xx, τ_o.yy, τ_o.zz, τ_o.yz_c, τ_o.xz_c, τ_o.xy_c),
+                Δτ,
+            )
+            dst .= src .+ Δ
+        end
+        foreach(ω -> fill!(ω, 0.0), (stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c))
+        before = map(p -> active_values(p, particles), components)
+
+        rotate_stress!(pτ, stokes, particles, 1.0)
+
+        for (p, τ_before, Δ) in zip(components, before, Δτ)
+            @test active_values(p, particles) ≈ τ_before .+ Δ
+        end
+    end
 end
 
-function gather(A, particles)
-    np = length(eltype(particles.index))
-    nip = size(particles.index)
-    out = @zeros(np, nip...)
-    @parallel (@idx nip) _gather_particles!(out, A, particles.index, np)
-    return Array(out)
-end
-
-voigt2tensor(τ) = [τ[1] τ[6] τ[5]; τ[6] τ[2] τ[4]; τ[5] τ[4] τ[3]]
-tensor2voigt(A) = (A[1, 1], A[2, 2], A[3, 3], A[2, 3], A[1, 3], A[1, 2])
-
-# rotation by the angle |Ω| t about Ω, i.e. R = exp(t [Ω]×) for a rigid rotation dr/dt = Ω × r
-function rotation_matrix(Ω, t)
-    θ = norm(Ω) * t
-    n = collect(Ω) ./ norm(Ω)
-    N = [0 -n[3] n[2]; n[3] 0 -n[1]; -n[2] n[1] 0]
-    return cos(θ) * I + sin(θ) * N + (1 - cos(θ)) * n * n'
-end
-
-@testset "Stress rotation 3D" begin
-    nx, ny, nz = 5, 4, 3
-    ni = nx, ny, nz
-    di = 0.3, 0.2, 0.25
-    grid = Geometry(ni, ni .* di; origin = (0.0, 0.0, 0.0))
+@testset "Vorticity 3D" begin
+    ni = 5, 4, 3
+    grid = Geometry(ni, ni .* (0.3, 0.2, 0.25); origin = (0.0, 0.0, 0.0))
     xc = collect.(grid.xci)
     xv = collect.(grid.xvi)
 
-    @testset "vorticity of a rigid rotation" begin
+    @testset "rigid rotation" begin
         Ω = (0.3, -0.5, 0.8)
         stokes = StokesArrays(backend, ni)
         # V = Ω × r on the staggered velocity coordinates
@@ -88,7 +135,7 @@ end
         end
     end
 
-    @testset "vorticity is evaluated on its own edges" begin
+    @testset "evaluated on its own edges" begin
         # Vy = x z²: ω_xy = ∂Vy/∂x / 2 = z² / 2 on the xy edges (z at cell centers),
         # ω_yz = -∂Vy/∂z / 2 = -x z on the yz edges (x at cell centers, z at vertices);
         # centered differences are exact for both
@@ -101,74 +148,5 @@ end
         @test Array(stokes.ω.xy) ≈ ωxy_exact
         @test Array(stokes.ω.yz) ≈ ωyz_exact
         @test all(iszero, Array(stokes.ω.xz))
-
-        # the form with one spacing tuple per velocity component, launched by the Stokes solvers
-        stokes.ω.xy .= 0
-        stokes.ω.yz .= 0
-        @parallel (@idx ni .+ 1) JR3K.compute_vorticity!(
-            stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, stokes.V.Vx, stokes.V.Vy, stokes.V.Vz, grid._di.velocity...
-        )
-        @test Array(stokes.ω.xy) ≈ ωxy_exact
-        @test Array(stokes.ω.yz) ≈ ωyz_exact
-    end
-
-    particles = init_particles(backend_JP, 4, 8, 2, grid.xi_vel...)
-    active = gather(particles.index, particles) .== 1
-    @test count(active) > 0
-    τ0 = (1.2, -0.4, -0.8, 0.3, -0.25, 0.7)
-
-    function rotated_particle_stress(Ω, dt)
-        stokes = StokesArrays(backend, ni)
-        for (A, v) in zip((stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c), τ0)
-            A .= v
-        end
-        for (A, v) in zip((stokes.ω.yz_c, stokes.ω.xz_c, stokes.ω.xy_c), Ω)
-            A .= v
-        end
-        pτ = StressParticles(particles)
-        rotate_stress!(pτ, stokes, particles, dt)
-        return pτ, stokes
-    end
-
-    @testset "zero vorticity leaves the stress unchanged" begin
-        pτ, _ = rotated_particle_stress((0.0, 0.0, 0.0), 0.3)
-        for (A, e) in zip((pτ.τ_normal..., pτ.τ_shear...), τ0)
-            @test all(gather(A, particles)[active] .≈ e)
-        end
-    end
-
-    @testset "uniform vorticity rotates the stress by |ω| Δt" begin
-        Ω, dt = (0.3, -0.5, 0.8), 0.4
-        pτ, _ = rotated_particle_stress(Ω, dt)
-        R = rotation_matrix(Ω, dt)
-        τ_expected = tensor2voigt(R * voigt2tensor(τ0) * R')
-        # invariants of the reference rotation
-        @test tr(voigt2tensor(τ_expected)) ≈ tr(voigt2tensor(τ0)) atol = 1.0e-12
-        @test det(voigt2tensor(τ_expected)) ≈ det(voigt2tensor(τ0))
-        got = map(A -> gather(A, particles)[active], (pτ.τ_normal..., pτ.τ_shear...))
-        for n in 1:6
-            @test all(got[n] .≈ τ_expected[n])
-        end
-        # the stress is still rotated rigidly, preserving its invariants
-        τ_got = voigt2tensor(ntuple(n -> got[n][1], 6))
-        @test tr(τ_got) ≈ tr(voigt2tensor(τ0)) atol = 1.0e-12
-        @test det(τ_got) ≈ det(voigt2tensor(τ0))
-    end
-
-    @testset "stress2grid! maps a uniform particle stress onto centers and edges" begin
-        pτ = StressParticles(particles)
-        for (A, v) in zip((pτ.τ_normal..., pτ.τ_shear...), τ0)
-            fill!(A, eltype(A)(ntuple(_ -> v, length(eltype(A)))))
-        end
-        stokes = StokesArrays(backend, ni)
-        stress2grid!(stokes, pτ, particles)
-        τo = stokes.τ_o
-        for (A, v) in zip((τo.xx, τo.yy, τo.zz, τo.yz_c, τo.xz_c, τo.xy_c), τ0)
-            @test all(Array(A) .≈ v)
-        end
-        # edges between four cell centers
-        @test all(Array(τo.yz)[:, 2:(end - 1), 2:(end - 1)] .≈ τ0[4])
-        @test all(Array(τo.xz)[2:(end - 1), :, 2:(end - 1)] .≈ τ0[5])
-        @test all(Array(τo.xy)[2:(end - 1), 2:(end - 1), :] .≈ τ0[6])
     end
 end

@@ -41,7 +41,7 @@ import JustRelax:
     check_periodic_bcs,
     reject_periodic_bcs
 
-import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress, unwrap
 import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
@@ -519,26 +519,11 @@ function JR3D.subgrid_characteristic_time!(
     return nothing
 end
 
-function JR3D.subgrid_characteristic_time!(
-        subgrid_arrays,
-        particles,
-        dt₀::CuArray,
-        phases::AbstractArray{Int, N},
-        rheology,
-        thermal::JustRelax.ThermalArrays,
-        stokes::JustRelax.StokesArrays,
-        di,
-    ) where {N}
-    return subgrid_characteristic_time!(
-        subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes, di
-    )
-end
-
 # shear heating
 
 function JR3D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)
-    @parallel (@idx ni) compute_shear_heating_kernel!(
+    @parallel (ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
         @tensor_center(stokes.τ),
         @tensor_center(stokes.τ_o),
@@ -588,13 +573,9 @@ end
 # stress rotation on particles
 
 function JR3D.rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method = nothing
     )
-    # The :jaumann and rotation-matrix kernels are 2D-only; 3D stress rotation always
-    # uses GeoParams' elastic stress rotation.
-    method === :matrix || error(
-        "Unknown method: $method. Only the GeoParams-based rotation (method = :matrix) is available in 3D"
-    )
+    warn_rotation_method(method)
     @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
         τ..., ω..., particles.index, dt
     )

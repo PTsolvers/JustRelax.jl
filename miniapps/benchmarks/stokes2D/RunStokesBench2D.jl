@@ -24,7 +24,7 @@ end
 
 # Load script dependencies
 using Printf, LinearAlgebra
-using MPI: MPI
+using JustRelax: MPI
 using CairoMakie
 
 

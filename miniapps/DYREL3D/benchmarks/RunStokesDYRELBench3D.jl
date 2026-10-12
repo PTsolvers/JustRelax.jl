@@ -3,7 +3,7 @@ Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))
 
 using LinearAlgebra, CairoMakie, GeoParams, JustPIC
 using JustRelax, JustRelax.JustRelax3D
-using MPI: MPI
+using JustRelax: MPI
 
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)

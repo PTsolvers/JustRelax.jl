@@ -330,7 +330,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
     dt₀ = similar(thermal.T)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
@@ -423,7 +423,7 @@ function main2D(igg; nx = 32, ny = 32, do_vtk = false)
         @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
         compute_melt_fraction!(

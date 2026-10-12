@@ -160,13 +160,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     t, it = 0.0, 0
     while it < 1000 # run only for 5 Myrs
 
-        # interpolate fields from particles to centroids
-        particle2centroid!(thermal.T, pT, particles)
-        thermal_bcs!(thermal, thermal_bc)
-
-        # interpolate stress back to the grid
-        stress2grid!(stokes, pτ, particles)
-
         # Stokes solver ----------------
         args = (; T = thermal.T, P = stokes.P, dt = Inf)
         t_stokes = @elapsed begin
@@ -247,15 +240,21 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         move_particles!(particles, particle_args)
         # Inject phase labels first, then initialize every newly injected particle field
         # through the regular centroid/vertex interpolation paths.
-        inject_particles_phase!(particles, pPhases, (), ())
-        centroid2particle!(pT, thermal.T, particles)
-        centroid2particle!(pτ.τ_normal[1], stokes.τ.xx, particles)
-        centroid2particle!(pτ.τ_normal[2], stokes.τ.yy, particles)
-        grid2particle!(pτ.τ_shear[1], stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
-        grid2particle!(pτ.ω[1], stokes.ω.xy, particles; ghost_1 = false, ghost_2 = false)
-
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            (pT, pτ.τ_normal[1], pτ.τ_normal[2], pτ.τ_shear[1], pτ.ω[1]),
+            (thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate fields from particles to centroids
+        particle2centroid!(thermal.T, pT, particles)
+        thermal_bcs!(thermal, thermal_bc)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         @show it += 1
         t += dt

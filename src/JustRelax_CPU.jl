@@ -40,7 +40,7 @@ module JustRelax2D
         check_periodic_bcs,
         reject_periodic_bcs
 
-    import JustRelax: normal_stress, shear_stress, shear_vorticity
+    import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress
     import JustRelax: @dxi, @dx, @dy, @dz
 
     import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
@@ -107,7 +107,7 @@ module JustRelax3D
         check_periodic_bcs,
         reject_periodic_bcs
 
-    import JustRelax: normal_stress, shear_stress, shear_vorticity
+    import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress
     import JustRelax: @dxi, @dx, @dy, @dz
 
     import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index

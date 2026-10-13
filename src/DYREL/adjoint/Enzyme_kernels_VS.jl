@@ -174,16 +174,14 @@ end
 
 # Reverse the converged constitutive relation η = η(εII), not the relaxation step used to
 # reach it. The stress sweep has already seeded adjoint.viscosity.η, including contributions
-# from harmonic interpolation to vertices. The point function also interpolates vertex
-# shear to centers. η_target is scratch so the primal solve is intact.
+# from harmonic interpolation to vertices. η_target is scratch so the primal solve is intact.
 function enzyme_compute_viscosity_εII!(
         η_target, stokes, adjoint, phase_ratios, ϕ::JustRelax.RockRatio, args,
         rheology, cutoff; air_phase::Integer = 0,
     )
-    periodic = periodic_dims(stokes)
     ni = size(η_target)
     enzyme_reverse_pointwise!(
-        compute_viscosity_strain_center_point!,
+        compute_viscosity_kernel_point!,
         ni,
         (
             η_target => adjoint.viscosity.η,
@@ -191,13 +189,32 @@ function enzyme_compute_viscosity_εII!(
             phase_ratios.center => nothing,
             stokes.ε.xx => adjoint.ε.xx,
             stokes.ε.yy => adjoint.ε.yy,
-            stokes.ε.xy => adjoint.ε.xy,
             stokes.ε.xy_c => adjoint.ε.xy_c,
             args => nothing,
             rheology => nothing,
             air_phase => nothing,
             cutoff => nothing,
+            compute_viscosity_εII => nothing,
+            local_viscosity_args => nothing,
             ϕ => nothing,
+        ),
+    )
+    return nothing
+end
+
+# Reverse the forward shear interpolation εxy_c = vertex2center(εxy). The pointwise reverse
+# applies its exact transpose, including the periodic wrapping used by the forward operation.
+function enzyme_interpolate_shear_ε_to_centers!(stokes, adjoint)
+    periodic = periodic_dims(stokes)
+    ni = size(stokes.ε.xy_c)
+    enzyme_reverse_pointwise!(
+        vertex2center_kernel_point!,
+        ni,
+        (
+            stokes.ε.xy_c => adjoint.ε.xy_c,
+            stokes.ε.xy => adjoint.ε.xy,
+            false => nothing,
+            false => nothing,
             periodic[1] => nothing,
             periodic[2] => nothing,
             ni[1] => nothing,

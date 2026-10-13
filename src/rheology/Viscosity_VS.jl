@@ -42,48 +42,15 @@ function update_viscosity_τII!(
     return nothing
 end
 
-# Interpolate vertex shear and evaluate center viscosity at the same cell, so the
-# constitutive pullback can reverse both operations in one point function.
 function compute_viscosity_strain_DRYEL!(
         stokes::JustRelax.StokesArrays, phase_ratios::JustPIC.PhaseRatios,
         ϕ::JustRelax.RockRatio, args, rheology, cutoff;
         air_phase::Integer = 0, relaxation = 1.0e0,
     )
-    ni = size(stokes.viscosity.η)
-    periodic = periodic_dims(stokes)
-    @parallel (@idx ni) compute_viscosity_strain_center_kernel!(
-        stokes.viscosity.η, relaxation, phase_ratios.center,
-        stokes.ε.xx, stokes.ε.yy, stokes.ε.xy, stokes.ε.xy_c,
-        args, rheology, air_phase, cutoff, ϕ, periodic[1], periodic[2], ni[1], ni[2],
-    )
-    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-        stokes.viscosity.ηv, relaxation, phase_ratios.vertex,
-        select_tensor_vertex(stokes, compute_viscosity_εII)...,
-        args, rheology, air_phase, cutoff, compute_viscosity_εII,
-        local_viscosity_args_vertex, ϕ,
-    )
-    return nothing
-end
-
-@parallel_indices (i, j) function compute_viscosity_strain_center_kernel!(
-        η, ν, ratios_center, εxx, εyy, εxy, εxy_c, args, rheology, air_phase,
-        cutoff, ϕ::JustRelax.RockRatio, periodic_x, periodic_y, nx, ny,
-    )
-    compute_viscosity_strain_center_point!(
-        η, ν, ratios_center, εxx, εyy, εxy, εxy_c, args, rheology, air_phase,
-        cutoff, ϕ, periodic_x, periodic_y, nx, ny, i, j,
-    )
-    return nothing
-end
-
-@inline function compute_viscosity_strain_center_point!(
-        η, ν, ratios_center, εxx, εyy, εxy, εxy_c, args, rheology, air_phase,
-        cutoff, ϕ::JustRelax.RockRatio, periodic_x, periodic_y, nx, ny, i, j,
-    )
-    vertex2center_kernel_point!(εxy_c, εxy, false, false, periodic_x, periodic_y, nx, ny, i, j)
-    compute_viscosity_kernel_point!(
-        η, ν, ratios_center, εxx, εyy, εxy_c, args, rheology, air_phase,
-        cutoff, compute_viscosity_εII, local_viscosity_args, ϕ, i, j,
+    interpolate_shear_ε_to_centers(stokes, Val(2))
+    compute_viscosity!(
+        stokes, phase_ratios, ϕ, args, rheology, cutoff;
+        air_phase, relaxation,
     )
     return nothing
 end

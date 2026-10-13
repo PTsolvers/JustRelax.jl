@@ -240,8 +240,8 @@ function solve_VariationalDYREL_adjoint!(
 end
 
 # One reverse sweep through the masked forward kernels, in the reverse order of the forward
-# update: momentum residual, stress, viscosity, strain rate and continuity residual,
-# boundary conditions.
+# update: momentum residual, stress, viscosity, shear interpolation, strain rate and
+# continuity residual, boundary conditions.
 # Seeds are set by the caller. The adjoint pressure residual of eliminated cells is dropped.
 function variational_adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni, dt,
@@ -259,6 +259,7 @@ function variational_adjoint_residual!(
             viscosity_target, stokes, stokes_ad, phase_ratios, ϕ, args, rheology,
             viscosity_cutoff; air_phase,
         )
+        enzyme_interpolate_shear_ε_to_centers!(stokes, stokes_ad)
     end
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)

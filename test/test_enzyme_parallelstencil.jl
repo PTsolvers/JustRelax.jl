@@ -16,7 +16,7 @@ const Enzyme = JustRelax2D.Enzyme
     return nothing
 end
 
-@testset "Variational DYREL strain-viscosity pullback" begin
+@testset "Variational DYREL viscosity pullback" begin
     ni = (3, 2)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
@@ -43,18 +43,11 @@ end
         return sum(weights .* stokes.viscosity.η)
     end
     objective()
-    fused_η = copy(stokes.viscosity.η)
-    fused_ηv = copy(stokes.viscosity.ηv)
-    fused_εxy_c = copy(stokes.ε.xy_c)
-    JustRelax2D.interpolate_shear_ε_to_centers(stokes, Val(2))
-    compute_viscosity!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
-    @test stokes.viscosity.η ≈ fused_η
-    @test stokes.viscosity.ηv ≈ fused_ηv
-    @test stokes.ε.xy_c ≈ fused_εxy_c
     adjoint.viscosity.η .= weights
     JustRelax2D.enzyme_compute_viscosity_εII!(
         copy(stokes.viscosity.η), stokes, adjoint, phases, ϕ, args, rheology, (-Inf, Inf)
     )
+    JustRelax2D.enzyme_interpolate_shear_ε_to_centers!(stokes, adjoint)
 
     function finite_difference!(field, index)
         h = 1.0e-6

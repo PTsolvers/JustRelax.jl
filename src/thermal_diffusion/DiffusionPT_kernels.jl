@@ -509,9 +509,9 @@ end
         dτ_ρ,
         dirichlet,
         _dt,
-        _di_center,
+        _di_vertex,
     ) where {_T}
-    _dx, _dy = @dxi(_di_center, i, j)
+    _dx, _dy = @dxi(_di_vertex, i, j)
     I1 = i + 1, j + 1
 
     if isdirichlet(dirichlet, I1...)

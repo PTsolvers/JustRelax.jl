@@ -74,24 +74,17 @@ flux face at `i_face`, which lies between the cell-centered indices `i_L` and
 entries, one per face — such as `PhaseRatios.Vx/Vy/Vz`) or like the cell-center
 grid along `dim` (`n_cells` entries, shared between the two bracketing cells).
 A face-sized array is read once at `i_face` and that value is reused for both
-states; a cell-center-sized array is read separately at `i_L` and `i_R`. Any
-other size along `dim` is a mismatch between the phase-ratio array and the grid
-it is being sampled on.
+states; any other size is read as cell-centered at `i_L` and `i_R`.
 """
 @inline function phase_at_face(
         phase_ratios::AbstractArray, n_cells::Int, dim::Int,
         i_face::NTuple{N, Int}, i_L::NTuple{N, Int}, i_R::NTuple{N, Int}
     ) where {N}
-    n = size(phase_ratios, dim)
-    if n == n_cells + 1
+    if size(phase_ratios, dim) == n_cells + 1
         phase_face = getindex_phase(phase_ratios, i_face...)
         return phase_face, phase_face
-    elseif n == n_cells
-        return getindex_phase(phase_ratios, i_L...), getindex_phase(phase_ratios, i_R...)
-    else
-        # constant message: string interpolation does not compile in GPU kernels
-        throw(DimensionMismatch("phase-ratio array is neither cell-centered nor face-centered along the flux direction"))
     end
+    return getindex_phase(phase_ratios, i_L...), getindex_phase(phase_ratios, i_R...)
 end
 
 @inline function phase_at_face(

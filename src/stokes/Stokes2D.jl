@@ -28,7 +28,8 @@ the sixth argument also accepts, for simpler/benchmark setups:
 - `igg`: the distributed-grid context (`IGG`).
 
 # Keyword arguments
-- `iterMax = 50e3`, `iterMin = 100`: min/max pseudo-transient iterations.
+- `iterMax = 50e3` (`10e3` for the `K, G` and single-`MaterialParams` forms), `iterMin = 100`:
+  min/max pseudo-transient iterations.
 - `nout = 500`: check convergence every `nout` iterations.
 - `viscosity_cutoff = (-Inf, Inf)`: clamp bounds for the effective viscosity.
 - `viscosity_relaxation = 1e-2`: relaxation factor for nonlinear viscosity updates.
@@ -56,8 +57,8 @@ function _solve!(
         grid::Geometry{2},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
-        G,
         K,
+        G,
         dt,
         igg::IGG;
         iterMax = 10.0e3,
@@ -202,14 +203,14 @@ function _solve!(
         di::Union{NTuple{2, <:Real}, NamedTuple},
         flow_bcs::AbstractFlowBoundaryConditions,
         ρg,
-        G,
         K,
+        G,
         dt,
         igg::IGG;
         kwargs...,
     )
     grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
-    return _solve!(stokes, pt_stokes, grid, flow_bcs, ρg, G, K, dt, igg; kwargs...)
+    return _solve!(stokes, pt_stokes, grid, flow_bcs, ρg, K, G, dt, igg; kwargs...)
 end
 
 # GeoParams: general (visco-elasto-plastic) solver

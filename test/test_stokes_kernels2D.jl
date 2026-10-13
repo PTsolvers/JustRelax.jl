@@ -808,12 +808,12 @@ quiet(f) = redirect_stdout(f, devnull)
     ρg = @zeros(ni_s...), @zeros(ni_s...)
     η0, G0, K0, dt = 1.3, 1.0, 5.0, 0.8
 
-    @testset "visco-elastic G, K form" begin
+    @testset "visco-elastic K, G form" begin
         stokes, flow_bcs = pure_shear_state(grid_nu)
         stokes.viscosity.η .= η0
         G = @fill(G0, ni_s...)
         K = @fill(K0, ni_s...)
-        quiet(() -> solve!(stokes, pt_stokes, grid_nu, flow_bcs, ρg, G, K, dt, igg; kwargs = solver_kwargs))
+        quiet(() -> solve!(stokes, pt_stokes, grid_nu, flow_bcs, ρg, K, G, dt, igg; kwargs = solver_kwargs))
         check_pure_shear(stokes, grid_nu, 2 * ηve(η0, G0, dt) * εbg)
         @test maximum(abs, Array(stokes.P)) < 1.0e-8
     end
@@ -894,7 +894,7 @@ quiet(f) = redirect_stdout(f, devnull)
         phase_ratios = single_phase_ratios()
         K, G = @fill(K0, ni_s...), @fill(G0, ni_s...)
         forms = (
-            (s -> (s.viscosity.η .= η0; (G, K, dt)), false),
+            (s -> (s.viscosity.η .= η0; (K, G, dt)), false),
             (s -> (rheo_ve, (; T = @zeros(ni_s .+ 2...), P = s.P, dt), dt), false),
             (s -> (phase_ratios, (rheo_ve,), (; T = @zeros(ni_s .+ 2...), P = s.P, dt), dt), true),
         )
@@ -906,8 +906,10 @@ quiet(f) = redirect_stdout(f, devnull)
                 quiet(() -> solve!(stokes, pt_stokes, g, flow_bcs, ρg, fargs..., igg; kwargs = (; solver_kwargs..., verbose = true)))
                 Array.((stokes.V.Vx, stokes.V.Vy, stokes.τ.xx, stokes.τ.xy))
             end
-            @test all(results[2] .≈ results[1])
-            @test all(results[3] .≈ results[1])
+            # τxy is round-off noise in pure shear: compare it on the scale of τxx
+            atol = 1.0e-9 * maximum(abs, results[1][3])
+            @test all(isapprox.(results[2], results[1]; rtol = sqrt(eps()), atol))
+            @test all(isapprox.(results[3], results[1]; rtol = sqrt(eps()), atol))
             @test all(isapprox.(results[1][3], 2 * ηve(η0, G0, dt) * εbg; rtol = 1.0e-6))
         end
     end

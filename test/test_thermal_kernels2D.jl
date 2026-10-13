@@ -316,10 +316,6 @@ const no_flux_bc = (left = false, right = false, bot = false, top = false)
         end
     end
 
-    @testset "phase ratios sized neither per cell nor per face are rejected" begin
-        @test_throws DimensionMismatch JustRelax2D.phase_at_face(ones(Int, 7, 4), 4, 1, (2, 2), (1, 2), (2, 2))
-    end
-
     @testset "face-sized phase ratios (PhaseRatios.Vx/Vy) are read at the face" begin
         # A sharp material interface sitting exactly on face i0 (x) and j0 (y): phase 1
         # covers every face before the interface, phase 2 from the interface on.

@@ -38,7 +38,7 @@ export checkpointing_jld2, load_checkpoint_jld2
 
 include("VTK.jl")
 
-export VTKDataSeries, append!, save_vtk, save_pvtk, save_marker_chain, save_particles
+export VTKDataSeries, save_vtk, save_pvtk, save_marker_chain, save_particles
 
 export metadata
 

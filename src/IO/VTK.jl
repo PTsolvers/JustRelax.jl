@@ -82,7 +82,7 @@ end
 Write `data` as a new VTK snapshot on `data_series`'s grid and add it to the time series at
 time `seconds`, under the name `time_step`.
 """
-function append!(data_series, data::NamedTuple, time_step, seconds)
+function Base.append!(data_series::VTKDataSeries, data::NamedTuple, time_step, seconds)
     # unpack data names and arrays
     data_names = string.(keys(data))
     data_arrays = values(data)

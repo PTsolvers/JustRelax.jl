@@ -131,6 +131,10 @@ The loop is two-level: an outer Powell–Hestenes loop on the pressure/plastic m
 loop on velocity (`iterMax_DR`, `λ_relaxation_DR`, `rel_drop`), with `total_iterMax`
 bounding the sum. `verbose_PH` and `verbose_DR` control the two progress streams
 separately. `linear_viscosity = true` skips the non-linear viscosity update.
+The Gershgorin bound and DYREL parameters refresh every `nout` inner iterations. The
+variational adjoint differentiates the converged viscosity law and vertex-to-center shear
+interpolation in one pointwise pullback. Nonlinear material-parameter sensitivities are not
+yet available.
 
 ## `heatdiffusion_PT!` — pseudo-transient thermal diffusion
 

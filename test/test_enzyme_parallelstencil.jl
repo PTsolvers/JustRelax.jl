@@ -16,6 +16,59 @@ const Enzyme = JustRelax2D.Enzyme
     return nothing
 end
 
+@testset "Variational DYREL strain-viscosity pullback" begin
+    ni = (3, 2)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    phases = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _init_enzyme_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phases, 0)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            CompositeRheology = CompositeRheology((PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),)),
+        ),
+    )
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+    stokes.ε.xx .= 0.3
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.2
+    stokes.ε.xy[2, 2] = 0.27
+    weights = reshape(collect(1.0:6.0), ni...)
+
+    function objective()
+        JustRelax2D.compute_viscosity_strain_DRYEL!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
+        return sum(weights .* stokes.viscosity.η)
+    end
+    objective()
+    fused_η = copy(stokes.viscosity.η)
+    fused_ηv = copy(stokes.viscosity.ηv)
+    fused_εxy_c = copy(stokes.ε.xy_c)
+    JustRelax2D.interpolate_shear_ε_to_centers(stokes, Val(2))
+    compute_viscosity!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
+    @test stokes.viscosity.η ≈ fused_η
+    @test stokes.viscosity.ηv ≈ fused_ηv
+    @test stokes.ε.xy_c ≈ fused_εxy_c
+    adjoint.viscosity.η .= weights
+    JustRelax2D.enzyme_compute_viscosity_εII!(
+        copy(stokes.viscosity.η), stokes, adjoint, phases, ϕ, args, rheology, (-Inf, Inf)
+    )
+
+    function finite_difference!(field, index)
+        h = 1.0e-6
+        field[index...] += h
+        plus = objective()
+        field[index...] -= 2h
+        minus = objective()
+        field[index...] += h
+        return (plus - minus) / (2h)
+    end
+    @test adjoint.ε.xx[2, 1] ≈ finite_difference!(stokes.ε.xx, (2, 1)) rtol = 1.0e-5
+    @test adjoint.ε.xy[2, 2] ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
+end
+
 @parallel_indices (i, j) function _init_G_gradient_phases!(phase)
     @index phase[1, i, j] = 0.2
     @index phase[2, i, j] = 0.5

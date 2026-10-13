@@ -908,12 +908,13 @@ end
         η_vep, ΔPψ, ϕ::JustRelax.RockRatio, rheology, phase_ratios_center,
         phase_ratios_vertex, λ_relaxation, dt, periodic, I::Vararg{Integer, 2},
     )
-    compute_stress_DRYEL_vertex!(
+
+    all(I .<= size(phase_ratios_center)) && compute_stress_DRYEL_center!(
         τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, λv, η, η_vep,
         ΔPψ, ϕ, rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         periodic, I...,
     )
-    all(I .<= size(phase_ratios_center)) && compute_stress_DRYEL_center!(
+    compute_stress_DRYEL_vertex!(
         τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, λv, η, η_vep,
         ΔPψ, ϕ, rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         periodic, I...,

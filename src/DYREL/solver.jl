@@ -30,7 +30,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Compatibility alias for `iterMax_DR`; used when `iterMax_DR` is not given.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
-- `nout`: Output frequency for residuals. Default: `100`.
+- `nout`: Frequency for residual checks and DYREL parameter updates. Default: `100`.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
@@ -108,7 +108,7 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Alias for `iterMax_DR`; used when `iterMax_DR` is not given.
 - `total_iterMax`: Maximum number of total dynamic-relaxation iterations. Default: `50.0e3`.
-- `nout`: Output frequency for residuals. Default: `100`.
+- `nout`: Frequency for residual checks and DYREL parameter updates. Default: `100`.
 - `rel_drop`: Relative residual drop tolerance. Default: `1.0e-2`.
 - `verbose_PH`: Print Powell-Hestenes iteration info. Default: `true`.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.

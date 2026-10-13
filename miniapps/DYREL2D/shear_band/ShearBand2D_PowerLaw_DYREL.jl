@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 
 import JustPIC.GridGeometryUtils as GGU
@@ -106,6 +106,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     origin = 0.0, 0.0
     circle = GGU.Circle(origin, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
@@ -134,34 +136,38 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
     # IO -------------------------------------------------
     take(figdir)
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, Inf; ϵ = 1.0e-6)
-    1
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, Inf; ϵ = 1.0e-6, CFL = 0.99, γfact = 10.0)
+    # dyrel = DYREL(
+    #     backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt;
+    #     ϵ = 1.0e-4, CFL = 0.3, γfact = 10.0,
+    # )
     # Time loop
     t, it = 0.0, 0
 
     # Stokes solver ----------------
-    solve_DYREL!(
+    solve_VariationalDYREL!(
         stokes,
         ρg,
         dyrel,
         flow_bcs,
         phase_ratios,
+        ϕ,
         rheology,
         args,
         grid,
         dt,
         igg;
         kwargs = (;
-            verbose_PH = false,
+            verbose_PH = true,
             verbose_DR = false,
             iterMax = 50.0e3,
-            nout = 400,
-            rel_drop = 1.0e-5,
+            nout = 100,
+            rel_drop = 1.0e-2,
             # λ_relaxation_DR = 0,
             # λ_relaxation_PH = 0,
             λ_relaxation_DR = 1,
             λ_relaxation_PH = 1,
-            viscosity_relaxation = 1.0e-1,
+            viscosity_relaxation = 1.0e-2,
             viscosity_cutoff = (-Inf, Inf),
         )
     )

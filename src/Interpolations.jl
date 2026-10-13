@@ -110,7 +110,14 @@ end
         center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2},
         ghost_x, ghost_y, ::Bool, periodic_x, periodic_y, ::Bool, nx, ny,
     ) where {T}
-    i, j = I
+    vertex2center_kernel_point!(center, vertex, ghost_x, ghost_y, periodic_x, periodic_y, nx, ny, I...)
+    return nothing
+end
+
+@inline function vertex2center_kernel_point!(
+        center::AbstractArray{T, 2}, vertex::AbstractArray{T, 2},
+        ghost_x, ghost_y, periodic_x, periodic_y, nx, ny, i::Integer, j::Integer,
+    ) where {T}
     i_next = periodic_x && i == nx ? 1 : i + 1
     j_next = periodic_y && j == ny ? 1 : j + 1
     center[i + ghost_x, j + ghost_y] = 0.25 * (

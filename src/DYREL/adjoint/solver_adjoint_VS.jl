@@ -11,8 +11,7 @@ iterations converge and before history-dependent state is updated. Mirrors
 forward solve and stay frozen. Adjoint velocities and pressures of eliminated rows and cells
 are held at zero, like their forward counterparts.
 
-Only `linear_viscosity = true` is supported: the separate τII-viscosity refresh of the
-variational solver is not differentiated.
+Nonlinear viscosity is differentiated as the converged constitutive relation `η(εII)`.
 """
 function solve_VariationalDYREL_adjoint!(
         stokes,
@@ -65,8 +64,8 @@ function solve_VariationalDYREL_adjoint!(
     get(args, :P, nothing) === stokes.P ||
         throw(ArgumentError("the adjoint solve requires args.P === stokes.P"))
 
-    linear_viscosity || throw(
-        ArgumentError("the variational DYREL adjoint requires linear_viscosity = true")
+    (!linear_viscosity && !isempty(gradients)) && throw(
+        ArgumentError("nonlinear viscosity parameter sensitivities are not yet supported")
     )
 
     igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (variational DYREL) ########\n")
@@ -88,6 +87,7 @@ function solve_VariationalDYREL_adjoint!(
     dyrel.dVydτ .= 0
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
+    viscosity_target = linear_viscosity ? nothing : copy(stokes.viscosity.η)
 
     # Iteration loop
     err_min = Inf
@@ -111,6 +111,7 @@ function solve_VariationalDYREL_adjoint!(
         variational_adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni,
             dt, λ_relaxation_PH, free_surface, air_phase, maskP,
+            viscosity_target, viscosity_cutoff,
         )
 
         # Residual check
@@ -170,6 +171,7 @@ function solve_VariationalDYREL_adjoint!(
             variational_adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
                 ni, dt, λ_relaxation_DR, free_surface, air_phase, maskP,
+                viscosity_target, viscosity_cutoff,
             )
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
@@ -238,17 +240,26 @@ function solve_VariationalDYREL_adjoint!(
 end
 
 # One reverse sweep through the masked forward kernels, in the reverse order of the forward
-# update: momentum residual, stress, strain rate and continuity residual, boundary conditions.
+# update: momentum residual, stress, viscosity, strain rate and continuity residual,
+# boundary conditions.
 # Seeds are set by the caller. The adjoint pressure residual of eliminated cells is dropped.
 function variational_adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni, dt,
-        λ_relaxation, free_surface, air_phase, maskP,
+        λ_relaxation, free_surface, air_phase, maskP, viscosity_target, viscosity_cutoff,
     )
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, ϕ, _di, ni, rheology, phase_ratios, args;
         free_surface_dt = dt * free_surface, air_phase,
     )
+    fill!(stokes_ad.viscosity.η, 0)
     enzyme_compute_stress_DRYEL!(stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args)
+    if !isnothing(viscosity_target)
+        fill!(stokes_ad.ε.xy_c, 0)
+        enzyme_compute_viscosity_εII!(
+            viscosity_target, stokes, stokes_ad, phase_ratios, ϕ, args, rheology,
+            viscosity_cutoff; air_phase,
+        )
+    end
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
     stokes_ad.P .*= maskP

@@ -9,7 +9,8 @@
 # in-register divergence instead of reading ∇V back. As in the non-variational fused kernel, ∇V
 # itself is NOT stored inside the loop (RP is derived from the in-register `div_ij`); the public
 # `stokes.∇V` diagnostic is recomputed once from the converged velocity field after the loop.
-# ε.*_c interpolation is likewise skipped in-loop (the stress kernel reads ε.xy at vertices).
+# ε.*_c interpolation is skipped here; the solver supplies it before strain-based viscosity
+# updates, while the stress kernel reads ε.xy at vertices.
 # ϕ selects which entries are written but does not scale ε: the rock fraction reaches the
 # deviatoric term once, in the stress divergence taken by the momentum kernels below.
 function compute_∇V_strain_rate_RP!(

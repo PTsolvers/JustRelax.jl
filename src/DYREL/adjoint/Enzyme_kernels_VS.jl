@@ -131,11 +131,9 @@ propagated to strain rate, pressure and the plastic pressure correction (`adjoin
 The variational kernel has no vertex viscosity of its own: it evaluates `harm_clamped(η)` of
 the surrounding centers. With `η` active, the vertex contributions are therefore folded into
 the center field `adjoint.viscosity.η` through the harmonic mean, and `adjoint.viscosity.ηv`
-is left untouched. `adjoint.viscosity.η` accumulates across calls, so the caller zeroes it
-before the pass whose viscosity sensitivity it wants to keep.
+is left untouched. The caller clears `adjoint.viscosity.η` before each reverse sweep.
 
-The separate τII-viscosity refresh (`update_viscosity_τII!`) is not differentiated here, so
-this covers `linear_viscosity = true`.
+The viscosity update is reversed separately from the stress kernel.
 """
 function enzyme_compute_stress_DRYEL!(
         stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt,
@@ -169,6 +167,41 @@ function enzyme_compute_stress_DRYEL!(
             λ_relaxation => nothing,
             dt => nothing,
             periodic => nothing,
+        ),
+    )
+    return nothing
+end
+
+# Reverse the converged constitutive relation η = η(εII), not the relaxation step used to
+# reach it. The stress sweep has already seeded adjoint.viscosity.η, including contributions
+# from harmonic interpolation to vertices. The point function also interpolates vertex
+# shear to centers. η_target is scratch so the primal solve is intact.
+function enzyme_compute_viscosity_εII!(
+        η_target, stokes, adjoint, phase_ratios, ϕ::JustRelax.RockRatio, args,
+        rheology, cutoff; air_phase::Integer = 0,
+    )
+    periodic = periodic_dims(stokes)
+    ni = size(η_target)
+    enzyme_reverse_pointwise!(
+        compute_viscosity_strain_center_point!,
+        ni,
+        (
+            η_target => adjoint.viscosity.η,
+            one(eltype(η_target)) => nothing,
+            phase_ratios.center => nothing,
+            stokes.ε.xx => adjoint.ε.xx,
+            stokes.ε.yy => adjoint.ε.yy,
+            stokes.ε.xy => adjoint.ε.xy,
+            stokes.ε.xy_c => adjoint.ε.xy_c,
+            args => nothing,
+            rheology => nothing,
+            air_phase => nothing,
+            cutoff => nothing,
+            ϕ => nothing,
+            periodic[1] => nothing,
+            periodic[2] => nothing,
+            ni[1] => nothing,
+            ni[2] => nothing,
         ),
     )
     return nothing

@@ -155,10 +155,6 @@ Passing `stokes` refreshes `thermal.adiabatic` before the loop; passing `phase` 
 the PT coefficients from the local phase ratios each iteration. Shear heating comes from
 `compute_shear_heating!` (`src/thermal_diffusion/ShearHeating.jl`).
 
-An explicit forward-Euler alternative lives in
-`src/thermal_diffusion/DiffusionExplicit.jl` (`ThermalDiffusion1D/2D/3D.solve!`), using a
-precomputed diffusivity `κ = K/ρCp` from `ThermalParameters`.
-
 ## Editing a solver
 
 - Kernels go in `src/common.jl` or a file it includes; the 2D and 3D kernel files are

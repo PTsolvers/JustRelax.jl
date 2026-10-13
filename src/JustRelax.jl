@@ -255,6 +255,16 @@ export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 include("grid/Grid.jl")
 export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
 
+# Internal GMG hierarchy foundation; public solver wiring follows transfer proof.
+include("GMG/types.jl")
+include("GMG/communication.jl")
+include("GMG/constructors.jl")
+include("GMG/levels.jl")
+include("GMG/transfers.jl")
+include("GMG/exchange.jl")
+include("GMG/operator.jl")
+include("GMG/cycle_types.jl")
+
 include("JustRelax_CPU.jl")
 
 include("IO/DataIO.jl")

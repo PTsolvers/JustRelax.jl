@@ -134,6 +134,13 @@ include("DYREL/velocity_kernels_VS.jl")
 include("DYREL/Gershgorin.jl")
 include("DYREL/Gershgorin_VS.jl")
 
+## Geometric multigrid transfers
+
+include("GMG/transfer_kernels.jl")
+include("GMG/operator_kernels.jl")
+include("GMG/cycle.jl")
+include("GMG/velocity_cycle.jl")
+
 # thermal diffusion
 
 include("thermal_diffusion/DiffusionPT.jl")

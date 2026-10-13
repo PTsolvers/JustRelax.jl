@@ -4,6 +4,8 @@ Standalone design and implementation plan for JustRelax.jl (JR). Prepared 2026-1
 
 **Implementation order: (1) hierarchy and transfer design; (2) GMG with a dynamic-relaxation smoother; (3) safeguarded Anderson acceleration. GPU and MPI requirements belong to every stage.**
 
+**Mandatory implementation rules:** use structs for meaningful solver state and configuration; keep all new GMG code type stable and free of runtime dynamic dispatch; follow the existing `src/` style and backend traits; place the new GMG solver and associated implementation in a dedicated `src/GMG/` folder; support GeoParams material models through JR's existing rheology interfaces. These are acceptance requirements from Stage 1 onward, not later cleanup tasks. Sections 10.2, 10.4, and 10.5 make them concrete.
+
 This document proposes work; it does not report a production implementation or new validation results. Numerical thresholds called *proposed gates* are acceptance targets to freeze before experiments, not established performance guarantees. The prior prototypes provide evidence for choosing an architecture, but their assumptions must not become undocumented restrictions in JR.
 
 ## 1. Intended result and design decisions
@@ -585,7 +587,7 @@ Promote acceleration only where repeated total time/work improves and robustness
 
 ### 10.1 Opt-in API
 
-Prefer one opt-in workspace keyword on `solve_DYREL!` over a second public solver family. Preserve existing argument order, plain keywords, and bundled `kwargs` support through `flatten_solver_kwargs`. With no MG workspace supplied, the existing path must reproduce current behavior.
+Prefer one opt-in workspace keyword on `solve_DYREL!` over a second public solver family. Preserve existing argument order, plain keywords, and bundled `kwargs` support through `flatten_solver_kwargs`. With no MG workspace supplied, the existing path must reproduce current behavior. The opt-in is a thin route to the new GMG solver implementation in `src/GMG/solver.jl`; GMG iteration logic and helpers do not live in the existing DYREL folder.
 
 Illustrative future API; these names are proposals, not currently callable functions:
 
@@ -617,21 +619,22 @@ Make recovery visible. On numerical failure, restore the last accepted physical-
 
 ### 10.2 Proposed source ownership
 
-Keep a small reusable transfer/communication core separate from DYREL-specific constitutive decisions. These are logical responsibilities; combine small files if that fits repository conventions.
+All new GMG solver code and associated functions belong in the dedicated `src/GMG/` folder, separate from `src/DYREL/`. Keep the reusable transfer/communication core separate from constitutive decisions within that folder. These are logical responsibilities; combine small files if that fits repository conventions. Existing source files receive only the necessary includes, exports, trait forwarding, thin opt-in routing, or narrowly scoped reuse of existing primitives.
 
 | Proposed location | Owns |
 |---|---|
-| `src/multigrid/levels.jl` | Explicit level geometry, ownership, transitions, cache identity, workspace lifecycle |
-| `src/multigrid/transfers.jl` | Shared transfer dispatch and weights |
-| `src/multigrid/transfers2D.jl`, `transfers3D.jl` | Dimension-specific ParallelStencil transfer kernels, if separate definitions are needed |
-| `src/multigrid/communication.jl` | Level exchange, owned reductions, redistribution/agglomeration |
-| `src/DYREL/multigrid/operator.jl` | Homogeneous augmented secant action and coefficient restriction |
-| `src/DYREL/multigrid/secant.jl` | Effective-strain/secant evaluation, explicitly experimental plastic shrink |
-| `src/DYREL/multigrid/smoother.jl` | Restarted DR/PH primitive, bounds, coarsest relaxation |
-| `src/DYREL/multigrid/cycle.jl` | Linear recursion, nonlinear fine cycle, statuses/work accounting |
-| `src/DYREL/multigrid/anderson.jl` | Final-stage history, stable least squares, collective safeguarded trial |
-| `src/DYREL/solver.jl` | Opt-in selection and shared accepted-step lifecycle |
-| `src/DYREL/solver_VS.jl` | Later masked-operator integration, with separate support gates |
+| `src/GMG/types.jl`, `constructors.jl` | Parametric configuration, level/workspace, smoother, material-context, status, and Anderson structs; backend allocation |
+| `src/GMG/levels.jl` | Explicit level geometry, ownership, transitions, cache identity, workspace lifecycle |
+| `src/GMG/transfers.jl` | Shared transfer dispatch and weights |
+| `src/GMG/transfers2D.jl`, `transfers3D.jl` | Dimension-specific ParallelStencil transfer kernels, if separate definitions are needed |
+| `src/GMG/communication.jl` | Level exchange, owned reductions, redistribution/agglomeration |
+| `src/GMG/operator.jl` | Homogeneous augmented secant action and coefficient restriction |
+| `src/GMG/secant.jl` | GeoParams/JR material evaluation, effective-strain/secant construction, explicitly experimental plastic shrink |
+| `src/GMG/smoother.jl` | Restarted DR/PH primitive, bounds, coarsest relaxation |
+| `src/GMG/cycle.jl` | Linear recursion, nonlinear fine cycle, statuses/work accounting |
+| `src/GMG/solver.jl` | New GMG solve orchestration and accepted-step transaction |
+| `src/GMG/anderson.jl` | Final-stage history, stable least squares, collective safeguarded trial |
+| `src/GMG/solver_VS.jl` | Later masked-operator integration, with separate support gates |
 
 Before implementation, read JR's `.agents/api.md`, `.agents/grid.md`, `.agents/solvers.md`, and `.agents/mpi.md`. Include reusable shared definitions through `src/common.jl` or its include tree; include dimension-specific kernels only in their matching initialized modules. Keep root types/constructors and dimension-specific kernel definitions consistent with JR's existing split.
 
@@ -649,18 +652,46 @@ Factor only the lifecycle pieces genuinely shared with the existing solver:
 
 Inspect every mutated field and alias, including `args.P`, center/vertex stresses, `λ/λv`, `ΔPψ`, `η/ηv/η_vep`, and DYREL recurrence arrays. A nominally read-only residual function that advances a multiplier or old stress is not suitable for probes without isolated scratch and a defined evaluation order.
 
+### 10.4 Structs, type stability, and repository style
+
+Use structs whenever data has a persistent identity, ownership, invariant, or lifecycle. Prefer parametric immutable structs holding mutable backend arrays, as JR's `StokesArrays` and `DYREL` do. Use a `mutable struct` only where scalar bookkeeping or owned references genuinely need mutation. Keep small statically shaped bundles as concrete `NamedTuple`s or tuples when that already matches JR; do not introduce a wrapper with no useful contract.
+
+Proposed ownership types are `GMGOptions`, `GMGLevel`, `GMGWorkspace`, `GMGMaterialContext`, `DRSmootherState`, `AndersonState`, and a concrete solve-status/work-counter container. Names and exact fields remain implementation decisions. Their fields must expose concrete inferred types through parameters: geometry, arrays, transfer metadata, communication context, rheology, argument bundles, scalar type, and policy objects. Do not store `Any`, abstractly typed arrays or levels, unparameterized containers, or `Function` fields. A callable field is `f::F` with specialization on `F`; an abstract argument annotation is acceptable if the call specializes on the concrete argument and its fields remain inferable.
+
+All new GMG paths must be type stable, including construction, material refresh, transfers, DR, cycle recursion, reductions, rollback, and Anderson. Preserve one concrete return schema across success, budget exhaustion, stagnation, nonfinite trials, and fallback; change status values rather than returning differently shaped objects. Normalize and validate keywords once at entry into typed options, then cross a function barrier into the specialized implementation. Avoid global mutable caches, string-keyed policy lookups, runtime method lookup, and changing an iterate's scalar or container type inside a loop.
+
+The hierarchy must not erase level types. Prefer `Vector{L}` with concrete `L` when all levels share the same representation; changing array sizes does not by itself require changing array types. Keep the nonlinear fine state separate from a homogeneous coarse-level vector when useful. If levels genuinely have different concrete types, use a typed tuple or typed recursive hierarchy and recurse through concrete elements. Do not dynamically index a heterogeneous tuple and assume dispatch stays static. Active/inactive MPI ownership must retain a known concrete communication representation, with participation encoded explicitly; agglomeration is not an excuse for `Vector{Any}`.
+
+Follow JR's existing public-entry, backend-trait forwarding, and shared implementation pattern. Multiple dispatch remains the source-level mechanism, but calls must resolve from concrete types without runtime dynamic dispatch. Resolve backend, dimension, transfer/smoother policy, and material evaluator through concrete traits or typed callables; use `Val(N)` where dimension specialization matches existing kernels. Runtime sweep counts and tolerances remain values rather than creating a new compiled method for every parameter choice.
+
+Reuse JR naming, `!` for mutation, constructor allocation conventions, field-access helpers, docstring style, `flatten_solver_kwargs`, and ParallelStencil kernel organization. Match nearby `src/` code and Runic formatting; do not introduce a second backend abstraction or a configuration framework. Root-level type definitions may be included from `src/GMG/types.jl`; common wrappers/constructors and per-dimension kernels must enter the same module layers as their existing counterparts, without duplicating type definitions or cross-including 2D/3D kernels.
+
+Type stability and absence of dynamic dispatch are explicit review gates. Check representative concrete specializations with `@inferred` where appropriate and inspect inferred IR for unresolved calls, including the body of functions that return `nothing` or a simple status. Use `@code_warntype` as a diagnostic, not as sole proof: a concrete return type alone does not establish an inferable body. Exercise heterogeneous phase tuples, every supported backend/dimension, active/inactive coarse ranks, optional Anderson, and failure/rollback paths. GPU compilation must resolve material/helper calls on device; CPU inference is not accelerator proof. After warm-up, account for allocations and reject avoidable per-cell/per-sweep host allocations and new device work buffers.
+
+### 10.5 GeoParams support is part of the solver contract
+
+Accept JR's existing GeoParams-based material representations: a single `GeoParams.MaterialParams` where the JR material path supports it, and concrete per-phase material tuples with `JustPIC.PhaseRatios` for multiphase problems. Carry the concrete rheology and `args` `NamedTuple` types in `GMGMaterialContext`; preserve phase ordering, scalar precision, units/nondimensionalization, and existing viscosity cutoff/relaxation semantics. Support the single-material route directly or through a tested one-phase adapter, rather than forcing users to replace material laws with hand-built constant-viscosity arrays.
+
+Evaluate the fine physical residual, constitutive closure, and nonlinear DR substeps through JR's existing GeoParams rheology algebra. Reuse the applicable viscosity evaluators in `src/rheology/Viscosity.jl`, phase averaging in `src/phases/`, modulus/thermal helpers in `src/rheology/GeoParams.jl`, and stress/yield primitives used by DYREL. Cover supported linear viscous, nonlinear creep/power-law, elastic/compressible, and plastic/composite material paths. A specialized constant-coefficient fixture may remain a useful oracle, but cannot be the production material interface. Document and reject unsupported material/device combinations early and collectively rather than silently changing their physics.
+
+Coarse levels solve linear correction equations using numeric frozen secant/effective material coefficients derived from those same fine GeoParams evaluations. They do not create replacement coarse material histories or reevaluate a nonlinear material trajectory independently. Restrict derived coefficient fields according to Section 6, retaining compliance and staggered locations; do not average material structs or phase labels as though they were residuals. Old stress, old pressure, accumulated plastic strain, temperature, and other material inputs retain their declared physical-step lifecycle. Rebinding `args.P` to trial pressure must be explicit and reversible, and temperature/material argument fields remain on the selected backend with the correct grid locations.
+
+The device material evaluator must use concrete, GPU-compatible GeoParams objects/callables and JR's existing kernel argument conventions. Validate device compatibility at setup; no host per-cell material loop, CPU material fallback, abstract material collection, or dynamically dispatched callback is allowed. New adapters belong in `src/GMG/` and reuse the established rheology functions rather than duplicating constitutive laws.
+
+Add dedicated GeoParams compatibility tests: single material versus an equivalent one-phase mixture; a heterogeneous phase tuple with different law types; nonlinear viscosity dependent on the supported `T`/`P` arguments; finite `G`/`K` with nonzero old stress/pressure; and supported VEP/composite cases with fresh yield/closure audits. Compare material fields and physical residuals against independent calls to the existing JR path at identical trial states before comparing full solves. Repeat relevant fixtures on CUDA, AMDGPU, MPI, and GPU+MPI, verifying type inference, phase ordering, coarse coefficient refresh, trial rollback, and one-time history commitment. Any missing resource remains unvalidated in the support table.
+
 ## 11. Implementation milestones and reviewable units
 
 Implementation should advance in the user's requested order. Parallel hardware verification within a milestone does not change that dependency order.
 
 | Milestone | Concrete deliverable | Exit condition |
 |---|---|---|
-| M0: contracts | Actual kernel/include map; physical/augmented residual distinction; DOF ownership and support envelope | No unresolved sign, row-scaling, nullspace, or history ambiguity in the first fixture |
-| M1: geometry/level context | Explicit nested coordinates, coarsening tuples, level communication interface, CPU/GPU allocation | Coarse-spacing regression test and fine/coarse isolation pass |
+| M0: contracts | Actual kernel/include map; `src/GMG/` ownership; typed state/policy design; GeoParams interface; physical/augmented residual distinction; DOF ownership and support envelope | No unresolved sign, row-scaling, nullspace, history, source ownership, or material-interface ambiguity in the first fixture |
+| M1: geometry/level context | Parametric structs, concrete hierarchy, explicit nested coordinates, coarsening tuples, level communication interface, CPU/GPU allocation | Coarse-spacing regression and fine/coarse isolation pass; inferred level/transfer calls without dynamic dispatch |
 | M2: transfer design | Prototype interpolant, conservative reference, pressure transfer, weighted transpose, decision record | Stage 1 tests pass on CPU, both GPUs, and 2/4-rank transfer actions; selected pair frozen |
 | M3: frozen two-grid | Homogeneous operator, diagonal/bounds oracle, DR primitive, test-only ideal coarse comparison | Stable coupled action and matching operator/recurrence tests |
 | M4: unaccelerated hierarchy | Matrix-free V-cycle and DR coarsest solve, 2D standard integration | Linear refinement gate; full costs and statuses; no matrix/factorization path |
-| M5: nonlinear lifecycle | True fine constitutive smoothing, coefficient epochs, transactions, stopping and recovery | Accepted power-law/VEP audits; field/step comparisons; limitations recorded with AA off |
+| M5: nonlinear lifecycle | GeoParams single/multiphase evaluation, true fine constitutive smoothing, coefficient epochs, transactions, stopping and recovery | JR material-field/residual parity, accepted power-law/VEP audits, type/dispatch checks, field/step comparisons; limitations recorded with AA off |
 | M6: distributed/backend/3D hardening | GPU+MPI cycles, rank agglomeration, standard 3D path, BC coverage | Decomposition invariance and actual CPU/CUDA/AMDGPU resource gates |
 | M7: supported-envelope hardening | Semicoarsening, contrast diagnosis, separately scoped variational extension | Honest geometry/rheology/contrast/mask support table; relevant Stage 2 gates pass |
 | M8: Anderson | Full-map history, stable distributed least squares, safeguards, resets | Depth-zero equivalence, rollback/collective tests, accepted equal-accuracy benefit |
@@ -670,7 +701,7 @@ Stage 1 comprises M0-M2 plus its tiny numerical coarse-space screen. Stage 2 com
 
 If M7 exposes unresolved very-high-contrast or cut-cell cases, record them as unsupported and keep the core opt-in method scoped to the envelope it has passed. Do not expand into an unrelated nonlinear solver merely to declare all possible geodynamic problems handled. If those cases are required for the release, their failing gate remains open and release waits.
 
-Each review unit includes its contract, smallest meaningful tests, actual resource results, and a support-table update. Do not commit ignored simulation output, local manifests, generated documentation, or archived benchmark data as implementation source.
+Each review unit includes its contract, smallest meaningful tests, type-inference/dispatch evidence for new paths, actual resource results, and a support-table update covering GeoParams material combinations as well as backend/geometry. Review compliance with the existing `src/` style and dedicated `src/GMG/` ownership at every milestone. Do not commit ignored simulation output, local manifests, generated documentation, or archived benchmark data as implementation source.
 
 ## 12. Validation and fair performance evidence
 
@@ -686,6 +717,8 @@ Suggested files follow the existing runner's `test_*` discovery and `*MPI*` sepa
 | Matrix-free coarse solve and linear hierarchy | `test_gmg_dyrel2D.jl`, `test_gmg_dyrel3D.jl` |
 | Communicators, agglomeration, distributed cycle | `test_gmg_dyrel_MPI.jl` |
 | Constitutive closure, lifecycle, exact rollback | `test_gmg_dyrel_nonlinear.jl` |
+| Concrete state types, inferred bodies, no runtime dynamic dispatch | `test_gmg_types.jl` |
+| GeoParams single/multiphase parity, material arguments, device support | `test_gmg_geoparams.jl`, `test_gmg_geoparams_MPI.jl` |
 | Masks, retained continuity, traction/interface topology | `test_gmg_variational_dyrel.jl` |
 | QR/rank truncation, map resets, depth-zero identity | `test_gmg_anderson.jl`, `test_gmg_anderson_MPI.jl` |
 
@@ -767,6 +800,9 @@ Promote Anderson separately. Its gain is measured against the already accepted G
 The work is complete when:
 
 - The transfer/hierarchy design has a documented mathematical contract and Stage 1 proof on the supported CPU/GPU/MPI cases.
+- Meaningful solver state/configuration uses concrete parametric structs; all new GMG paths are type stable with no runtime dynamic dispatch, including GeoParams evaluation, MPI participation, and recovery.
+- The new solver and associated functions live in `src/GMG/`, follow existing JR source conventions, and use the established backend/module wiring.
+- GeoParams single-material and multiphase interfaces preserve JR material fields, physical residuals, argument semantics, and histories on the advertised CPU/GPU/MPI combinations; nonlinear/composite support is demonstrated with dedicated tests.
 - GMG+DR uses matrix-free operators and coarse relaxation on every level, with correct coupled RHS, legal BCs/nullspaces, explicit budgets, and no hidden host field solve.
 - Standard 2D/3D support, geometry restrictions, contrast/aspect limits, and any variational support are stated from actual validation, not inferred from common source.
 - GPU+MPI correctness and coarse-rank scalability have been exercised on the advertised backends; missing resources remain clearly unvalidated.

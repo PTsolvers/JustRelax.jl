@@ -104,4 +104,31 @@ active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
             @test active_values(p, particles) ≈ τ_before .+ Δ
         end
     end
+
+    @testset "vanishing vorticity" begin
+        pτ = StressParticles(particles)
+        components = (JustRelax.normal_stress(pτ)..., JustRelax.shear_stress(pτ)...)
+        τ0 = (1.0, -0.5, -0.5, 0.1, -0.3, 0.2)
+        foreach((p, v) -> fill!(p.data, v), components, τ0)
+        foreach(ω -> fill!(ω.data, 0.0), JustRelax.shear_vorticity(pτ))
+
+        JustRelax3D.rotate_stress_particles!(components, JustRelax.shear_vorticity(pτ), particles, 1.0)
+
+        # the stress is left unchanged instead of producing NaNs
+        for (p, v) in zip(components, τ0)
+            @test all(==(v), active_values(p, particles))
+        end
+    end
+
+    @testset "shear history on cell edges" begin
+        pτ = StressParticles(particles)
+        foreach(p -> fill!(p.data, 1.0), (JustRelax.normal_stress(pτ)..., JustRelax.shear_stress(pτ)...))
+        for A in (stokes.τ_o.xy, stokes.τ_o.yz, stokes.τ_o.xz)
+            fill!(A, NaN)
+        end
+        stress2grid!(stokes, pτ, particles)
+        @test all(isfinite, Array(stokes.τ_o.xy)[2:(end - 1), 2:(end - 1), :])
+        @test all(isfinite, Array(stokes.τ_o.yz)[:, 2:(end - 1), 2:(end - 1)])
+        @test all(isfinite, Array(stokes.τ_o.xz)[2:(end - 1), :, 2:(end - 1)])
+    end
 end

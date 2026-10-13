@@ -15,9 +15,9 @@ julia --project=miniapps --startup-file=no miniapps/benchmarks/stokes2D/Blankenb
 
 ````julia
 const isCUDA = false
+# const isCUDA = true
 ````
 
-const isCUDA = true
 
 ````julia
 @static if isCUDA

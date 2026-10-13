@@ -124,7 +124,7 @@ end
             backend, linear_stokes, linear_rheology, phase_ratios, grid.di, dt
         )
         θc = copy(linear_dyrel.P_num)
-        JR3K.compute_stress_viscosity_DRYEL!(
+        JR3K.compute_stress_viscosity_DYREL!(
             linear_stokes, θc, linear_dyrel.γ_eff, linear_rheology, phase_ratios,
             1.0, dt, 1.0, linear_args, (-Inf, Inf), true,
         )

@@ -273,6 +273,43 @@ end
         _di_vertex,
         dt,
     ) where {T}
+    compute_DR_residual_update_V_point!(
+        Rx, Ry, Vx, Vy, dVxdτ, dVydτ, P, θc, τxx, τyy, τxy, ρgx, ρgy,
+        Dx, Dy, αVx, αVy, βVx, βVy, dτVx, dτVy, ϕ, _di_center, _di_vertex,
+        dt, i, j,
+    )
+    return nothing
+end
+
+@inline function compute_DR_residual_update_V_point!(
+        Rx::AbstractArray{T, 2},
+        Ry,
+        Vx,
+        Vy,
+        dVxdτ,
+        dVydτ,
+        P,
+        θc,
+        τxx,
+        τyy,
+        τxy,
+        ρgx,
+        ρgy,
+        Dx,
+        Dy,
+        αVx,
+        αVy,
+        βVx,
+        βVy,
+        dτVx,
+        dτVy,
+        ϕ::JustRelax.RockRatio,
+        _di_center,
+        _di_vertex,
+        dt,
+        i::Integer,
+        j::Integer,
+    ) where {T}
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose
     # forward neighbour is cell 1. Vertex reads (`τxy`, `ϕ.vertex`) need no wrap -- index `nx + 1`

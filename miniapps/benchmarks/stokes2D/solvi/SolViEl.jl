@@ -90,8 +90,8 @@ function solViEl(;
             grid,
             flow_bcs,
             ρg,
-            Gc,
             Kb,
+            Gc,
             dt,
             igg;
             kwargs = (;

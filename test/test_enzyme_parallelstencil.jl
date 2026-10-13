@@ -39,7 +39,8 @@ end
     weights = reshape(collect(1.0:6.0), ni...)
 
     function objective()
-        JustRelax2D.compute_viscosity_strain_DRYEL!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
+        JustRelax2D.interpolate_shear_ε_to_centers(stokes, Val(2))
+        compute_viscosity!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
         return sum(weights .* stokes.viscosity.η)
     end
     objective()

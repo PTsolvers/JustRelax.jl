@@ -42,19 +42,6 @@ function update_viscosity_τII!(
     return nothing
 end
 
-function compute_viscosity_strain_DRYEL!(
-        stokes::JustRelax.StokesArrays, phase_ratios::JustPIC.PhaseRatios,
-        ϕ::JustRelax.RockRatio, args, rheology, cutoff;
-        air_phase::Integer = 0, relaxation = 1.0e0,
-    )
-    interpolate_shear_ε_to_centers(stokes, Val(2))
-    compute_viscosity!(
-        stokes, phase_ratios, ϕ, args, rheology, cutoff;
-        air_phase, relaxation,
-    )
-    return nothing
-end
-
 function compute_viscosity!(
         ::CPUBackendTrait,
         stokes::JustRelax.StokesArrays,

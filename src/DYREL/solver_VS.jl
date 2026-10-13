@@ -163,7 +163,11 @@ function _solve_VariationalDYREL!(
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
         if !linear_viscosity
-            compute_viscosity_strain_DRYEL!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
+            interpolate_shear_ε_to_centers(stokes, dim)
+            compute_viscosity!(
+                stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff;
+                relaxation = viscosity_relaxation, air_phase,
+            )
         end
 
         # The stress kernel derives vertex viscosity as harm_clamped(η), matching the APT
@@ -254,7 +258,11 @@ function _solve_VariationalDYREL!(
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
             if !linear_viscosity
-                compute_viscosity_strain_DRYEL!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
+                interpolate_shear_ε_to_centers(stokes, dim)
+                compute_viscosity!(
+                    stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff;
+                    relaxation = viscosity_relaxation, air_phase,
+                )
             end
 
             # Deviatoric stress uses the current viscosity; then assemble θc = γ_eff·RP + ΔPψ.

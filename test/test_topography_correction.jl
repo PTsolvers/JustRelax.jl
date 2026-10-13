@@ -17,11 +17,11 @@ else
 end
 
 const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    JustRelax.CUDABackend
 else
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC

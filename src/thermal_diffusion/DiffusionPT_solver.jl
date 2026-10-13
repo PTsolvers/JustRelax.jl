@@ -103,7 +103,7 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.center,
+                _di.vertex,
                 ni,
             )
             thermal_bcs!(thermal, thermal_bc)
@@ -124,7 +124,7 @@ function _heatdiffusion_PT!(
                     ρCp,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.center,
+                    _di.vertex,
                 )
             end
 

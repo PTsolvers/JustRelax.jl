@@ -165,6 +165,46 @@ end
     end
 end
 
+@testset "Precomputed diffusion uses nonuniform cell widths" begin
+    ni = (8, 8)
+    xv = collect(range(0.0, 1.0; length = ni[1] + 1)) .^ 2
+    grid = Geometry(typeof(@zeros(1)), xv, xv)
+    init_mpi = !JustRelax.MPI.Initialized()
+    igg = IGG(init_global_grid(ni..., 1; init_MPI = init_mpi)...)
+    thermal = ThermalArrays(backend, ni)
+    initial = zeros((ni .+ 2)...)
+    xc = (xv[1:(end - 1)] + xv[2:end]) / 2
+    initial[2:(end - 1), 2:(end - 1)] .= xc .^ 2 .+ (xc .^ 2)'
+    thermal.T .= initial
+    K = @fill(1.0, ni...)
+    ρCp = @fill(1.0, ni...)
+    dt = 0.1
+    pt = PTThermalCoeffs(backend, K, ρCp, dt, (minimum(diff(xv)), minimum(diff(xv))), grid.li)
+    bc = TemperatureBoundaryConditions(;
+        no_flux = (left = true, right = true, top = true, bot = true),
+    )
+    try
+        @suppress heatdiffusion_PT!(
+            thermal, pt, bc, K, ρCp, dt, grid;
+            kwargs = (; igg, iterMax = 1, nout = 1, verbose = false),
+        )
+        T, R = Array(thermal.T), Array(thermal.ResT)
+        qx, qy = Array(thermal.qTx), Array(thermal.qTy)
+        qx2, qy2 = Array(thermal.qTx2), Array(thermal.qTy2)
+        dτ = Array(pt.dτ_ρ)
+        widths = diff(xv)
+        for j in 2:(ni[2] - 1), i in 2:(ni[1] - 1)
+            divq = (qx[i + 1, j] - qx[i, j]) / widths[i] + (qy[i, j + 1] - qy[i, j]) / widths[j]
+            expected = (initial[i + 1, j + 1] + dτ[i, j] * (initial[i + 1, j + 1] / dt - divq)) / (1 + dτ[i, j] / dt)
+            @test T[i + 1, j + 1] ≈ expected
+            divq2 = (qx2[i + 1, j] - qx2[i, j]) / widths[i] + (qy2[i, j + 1] - qy2[i, j]) / widths[j]
+            @test R[i, j] ≈ -(T[i + 1, j + 1] - initial[i + 1, j + 1]) / dt - divq2
+        end
+    finally
+        finalize_global_grid(; finalize_MPI = false)
+    end
+end
+
 @testset "Diffusion_2D" begin
     @suppress begin
         nx, ny = 32, 32

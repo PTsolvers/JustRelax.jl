@@ -276,7 +276,7 @@ function mean_penalty_viscosity(η)
     η_finite = η[.!isinf.(η)]
     η_mean = mean(η_finite)
     if MPI.Initialized()
-        η_sum = JustRelax.sum_mpi(η_finite)
+        η_sum = sum_mpi(η_finite)
         η_count = MPI.Allreduce(length(η_finite), MPI.SUM, MPI.COMM_WORLD)
         return η_sum / η_count
     end

@@ -16,7 +16,7 @@ const Enzyme = JustRelax2D.Enzyme
     return nothing
 end
 
-@testset "Variational DYREL viscosity pullback" begin
+@testset "Variational DYREL stress-viscosity pullback" begin
     ni = (3, 2)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
@@ -32,23 +32,27 @@ end
         ),
     )
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
-    stokes.ε.xx .= 0.3
-    stokes.ε.yy .= -0.1
-    stokes.ε.xy .= 0.2
-    stokes.ε.xy[2, 2] = 0.27
+    stokes.τ.xx .= 0.3
+    stokes.τ.yy .= -0.1
+    stokes.τ.xy_c .= 0.2
+    stokes.τ.xy_c[2, 2] = 0.27
     weights = reshape(collect(1.0:6.0), ni...)
 
     function objective()
-        JustRelax2D.interpolate_shear_ε_to_centers(stokes, Val(2))
-        compute_viscosity!(stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0)
+        JustRelax2D.update_viscosity_τII!(
+            stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 1.0,
+        )
         return sum(weights .* stokes.viscosity.η)
     end
     objective()
     adjoint.viscosity.η .= weights
-    JustRelax2D.enzyme_compute_viscosity_εII!(
-        copy(stokes.viscosity.η), stokes, adjoint, phases, ϕ, args, rheology, (-Inf, Inf)
+    JustRelax2D.enzyme_compute_viscosity_point!(
+        copy(stokes.viscosity.η), adjoint.viscosity.η, phases.center,
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
+        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+        args, rheology, (-Inf, Inf), JustRelax2D.compute_viscosity_τII,
+        JustRelax2D.local_viscosity_args,
     )
-    JustRelax2D.enzyme_interpolate_shear_ε_to_centers!(stokes, adjoint)
 
     function finite_difference!(field, index)
         h = 1.0e-6
@@ -59,8 +63,8 @@ end
         field[index...] += h
         return (plus - minus) / (2h)
     end
-    @test adjoint.ε.xx[2, 1] ≈ finite_difference!(stokes.ε.xx, (2, 1)) rtol = 1.0e-5
-    @test adjoint.ε.xy[2, 2] ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
+    @test adjoint.τ.xx[2, 1] ≈ finite_difference!(stokes.τ.xx, (2, 1)) rtol = 1.0e-5
+    @test adjoint.τ.xy_c[2, 2] ≈ finite_difference!(stokes.τ.xy_c, (2, 2)) rtol = 1.0e-5
 end
 
 @parallel_indices (i, j) function _init_G_gradient_phases!(phase)
@@ -152,6 +156,71 @@ function _linear_viscosity_residual_objective!(
     )
     return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
+end
+
+@testset "Variational DYREL nonlinear constitutive pullback" begin
+    ni = (3, 3)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    phases = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _init_enzyme_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phases, 0)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            CompositeRheology = CompositeRheology((
+                PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+            )),
+        ),
+    )
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+    stokes.ε.xx .= 0.3
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.2
+    center_weights = reshape(collect(1.0:9.0), ni...)
+    vertex_weights = reshape(collect(1.0:16.0), (ni .+ 1)...)
+
+    function converged_objective()
+        stokes.viscosity.η .= 2.0
+        for _ in 1:200
+            JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, 1.0)
+            JustRelax2D.update_viscosity_τII!(
+                stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 0.5,
+            )
+        end
+        JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, 1.0)
+        return sum(center_weights .* stokes.τ.xx) + sum(vertex_weights .* stokes.τ.xy)
+    end
+
+    converged_objective()
+    adjoint.τ.xx .= center_weights
+    adjoint.τ.xy .= vertex_weights
+    scratch = (;
+        η = similar(stokes.viscosity.η),
+        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
+        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
+        τII = similar(stokes.τ.II),
+    )
+    JustRelax2D.enzyme_compute_variational_stress_DRYEL!(
+        scratch, copy(stokes.viscosity.η), stokes, adjoint, rheology, phases, ϕ,
+        1.0, 1.0, args, (-Inf, Inf),
+    )
+    dεxx = adjoint.ε.xx[2, 2]
+    dεxy = adjoint.ε.xy[2, 2]
+
+    function finite_difference!(field, index)
+        h = 1.0e-6
+        field[index...] += h
+        plus = converged_objective()
+        field[index...] -= 2h
+        minus = converged_objective()
+        field[index...] += h
+        return (plus - minus) / (2h)
+    end
+    @test dεxx ≈ finite_difference!(stokes.ε.xx, (2, 2)) rtol = 1.0e-5
+    @test dεxy ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
 end
 
 @testset "Spatial elastic-modulus sensitivities" begin

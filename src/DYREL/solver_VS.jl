@@ -162,17 +162,13 @@ function _solve_VariationalDYREL!(
 
         # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
+        compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P))
         if !linear_viscosity
-            interpolate_shear_ε_to_centers(stokes, dim)
-            compute_viscosity!(
+            update_viscosity_τII!(
                 stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff;
-                relaxation = viscosity_relaxation, air_phase,
+                relaxation = viscosity_relaxation, air_phase = air_phase,
             )
         end
-
-        # The stress kernel derives vertex viscosity as harm_clamped(η), matching the APT
-        # variational stress kernel.
-        compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P))
 
         # compute velocity residuals (pressure residual stokes.R.RP already computed above;
         # free-surface stabilization via dt * free_surface)
@@ -257,16 +253,15 @@ function _solve_VariationalDYREL!(
             # compute divergence, deviatoric strain rate and pressure residual in one pass (masked)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
+            # Deviatoric stress uses the current viscosity; its invariant then updates viscosity
+            # for the next pass, matching the non-variational DYREL solver.
+            compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf = fluid_pressure(args, stokes.P))
             if !linear_viscosity
-                interpolate_shear_ε_to_centers(stokes, dim)
-                compute_viscosity!(
+                update_viscosity_τII!(
                     stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff;
-                    relaxation = viscosity_relaxation, air_phase,
+                    relaxation = viscosity_relaxation, air_phase = air_phase,
                 )
             end
-
-            # Deviatoric stress uses the current viscosity; then assemble θc = γ_eff·RP + ΔPψ.
-            compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf = fluid_pressure(args, stokes.P))
 
             # Exchange vertex-stress halos before the momentum kernel reads them.
             if linear_viscosity

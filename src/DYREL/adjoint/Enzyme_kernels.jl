@@ -315,13 +315,13 @@ end
 
 @inline function viscosity_fixed_point_map(
         η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf,
-        viscosity_args, cutoff,
+        viscosity_args, cutoff, air_phase,
     )
     τ = local_stress_from_viscosity(
         η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf
     )
     return compute_viscosity_value(
-        η, τ, ratio, viscosity_args, rheology, one(η), cutoff,
+        η, τ, viscosity_phase_ratio(air_phase, ratio), viscosity_args, rheology, one(η), cutoff,
         compute_viscosity_τII,
     )
 end
@@ -338,7 +338,7 @@ end
 # viscosity kernel. No viscosity adjoint is retained between global λV/λP iterations.
 @inline function implicit_τII_viscosity_adjoint(
         τ_bar, η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf,
-        viscosity_args, cutoff,
+        viscosity_args, cutoff, air_phase = 0, η_seed = zero(η),
     )
     dτdη = only(
         Enzyme.autodiff_deferred(
@@ -376,10 +376,11 @@ end
             Enzyme.Const(Pf),
             Enzyme.Const(viscosity_args),
             Enzyme.Const(cutoff),
+            Enzyme.Const(air_phase),
         ),
     )
 
-    η_bar = sum(dτdη .* τ_bar) / (one(feedback) - feedback)
+    η_bar = (η_seed + sum(dτdη .* τ_bar)) / (one(feedback) - feedback)
     return η_bar
 end
 

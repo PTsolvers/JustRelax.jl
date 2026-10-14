@@ -132,9 +132,9 @@ loop on velocity (`iterMax_DR`, `λ_relaxation_DR`, `rel_drop`), with `total_ite
 bounding the sum. `verbose_PH` and `verbose_DR` control the two progress streams
 separately. `linear_viscosity = true` skips the non-linear viscosity update.
 The Gershgorin bound and DYREL parameters refresh every `nout` inner iterations. The
-variational adjoint differentiates the converged viscosity law and vertex-to-center shear
-interpolation in one pointwise pullback. Nonlinear material-parameter sensitivities are not
-yet available.
+variational adjoint differentiates the converged stress-based viscosity law; its stress
+pullback includes the harmonic interpolation from center viscosity to vertex stress.
+Nonlinear material-parameter sensitivities are not yet available.
 
 ## `heatdiffusion_PT!` — pseudo-transient thermal diffusion
 

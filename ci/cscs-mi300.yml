@@ -1,10 +1,9 @@
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
-unit_tests julia 1.12:
+.unit_test_mi300:
   extends: .baremetal-runner-beverin-mi300
   variables:
-    JULIA: /users/lraess/julia_amd/julia_amd-1.12
     UENV: 56ebb909a6164680
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS_PER_NODE: 4
@@ -19,4 +18,14 @@ unit_tests julia 1.12:
       println("Instantiating project");
       using Pkg;
       Pkg.instantiate();
-      Pkg.test("JustRelax"; test_args=["--backend=AMDGPU"])'
+      Pkg.test("JustRelax"; test_args=["--backend=AMDGPU", "--no-mpi"])'
+
+UnitTest julia 1.12:
+  extends: .unit_test_mi300
+  variables:
+    JULIA: /users/lraess/julia_amd/julia_amd-1.12
+
+UnitTest julia 1.13:
+  extends: .unit_test_mi300
+  variables:
+    JULIA: /users/lraess/julia_amd/julia_amd-1.13

@@ -307,7 +307,7 @@ end
     ηb, γ_eff = @zeros(ni...), @zeros(ni...)
     η = @ones(ni...)
     @parallel (@idx ni) JustRelax2D.compute_bulk_viscosity_and_penalty!(
-        ηb, γ_eff, rheology, phase_ratios.center, η, ϕ, 1.0, 4.0, 1.0
+        ηb, γ_eff, rheology, phase_ratios.center, η, ϕ, 1.0, 4.0, 1.0, true
     )
 
     @test all(γ_eff .* ϕ.center .≈ γ_eff[1, 1])

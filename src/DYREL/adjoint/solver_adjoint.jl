@@ -30,7 +30,6 @@ function solve_DYREL_adjoint!(
         observation,
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
-        viscosity_relaxation = 1.0e-2,
         linear_viscosity = false,
         kwargs...,
     ) where {N}
@@ -65,6 +64,9 @@ function solve_DYREL_adjoint!(
     dyrel.dVydτ .= 0
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
+    viscosity_target = linear_viscosity ? nothing : (
+        copy(stokes.viscosity.η), copy(stokes.viscosity.ηv),
+    )
 
     # Iteration loop
     err_min = Inf
@@ -86,7 +88,8 @@ function solve_DYREL_adjoint!(
 
         adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-            λ_relaxation_PH, free_surface, viscosity_relaxation, viscosity_cutoff, linear_viscosity,
+            λ_relaxation_PH, free_surface, viscosity_cutoff, linear_viscosity,
+            viscosity_target,
         )
 
         # Residual check
@@ -140,7 +143,8 @@ function solve_DYREL_adjoint!(
 
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-                λ_relaxation_DR, free_surface, viscosity_relaxation, viscosity_cutoff, linear_viscosity,
+                λ_relaxation_DR, free_surface, viscosity_cutoff, linear_viscosity,
+                viscosity_target,
             )
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
@@ -204,20 +208,20 @@ function solve_DYREL_adjoint!(
     return stokes_ad
 end
 
-# One reverse sweep through the forward kernels, in the reverse order of the forward update:
-# momentum residual, fused stress and viscosity update, strain rate and continuity residual,
-# boundary conditions. Seeds are set by the caller.
+# One reverse sweep through the final forward equations: momentum residual, the separate stress
+# kernel with its local implicit viscosity correction, strain rate and continuity residual, then
+# boundary conditions. The relaxed forward viscosity update is not differentiated.
 function adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-        λ_relaxation, free_surface, viscosity_relaxation, viscosity_cutoff, linear_viscosity,
+        λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity, viscosity_target,
     )
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
         free_surface_dt = dt * free_surface,
     )
-    enzyme_compute_stress_viscosity_DRYEL!(
-        stokes, stokes_ad, dyrel.P_num, dyrel.γ_eff, rheology, phase_ratios,
-        λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
+    enzyme_compute_stress_DRYEL!(
+        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, args,
+        viscosity_cutoff, linear_viscosity, viscosity_target,
     )
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)

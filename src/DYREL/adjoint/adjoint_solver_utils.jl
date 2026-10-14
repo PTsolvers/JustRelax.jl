@@ -4,7 +4,8 @@ function initialize_adjoint_iteration!(adjoint, ni)
         adjoint.P,
         (adjoint.V.Vx, adjoint.V.Vy),
         (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
-        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy),
+        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c, adjoint.τ.II),
+        (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
         (adjoint.R.Rx, adjoint.R.Ry, adjoint.R.RP),
         (adjoint.λV.Vx, adjoint.λV.Vy),
         adjoint.λP,
@@ -13,15 +14,17 @@ function initialize_adjoint_iteration!(adjoint, ni)
 end
 
 @parallel_indices (i, j) function _initialize_adjoint_iteration!(
-        P, V, ε, τ, R, λV, λP
+        P, V, ε, τ_center, τ_vertex, R, λV, λP
     )
     if i ≤ size(P, 1) && j ≤ size(P, 2)
         @inbounds begin
             P[i, j] = 0.0
             ε[1][i, j] = 0.0
             ε[2][i, j] = 0.0
-            τ[1][i, j] = 0.0
-            τ[2][i, j] = 0.0
+            τ_center[1][i, j] = 0.0
+            τ_center[2][i, j] = 0.0
+            τ_center[3][i, j] = 0.0
+            τ_center[4][i, j] = 0.0
             R[3][i, j] = λP[i, j]
         end
     end
@@ -34,7 +37,9 @@ end
     if i ≤ size(ε[3], 1) && j ≤ size(ε[3], 2)
         @inbounds begin
             ε[3][i, j] = 0.0
-            τ[3][i, j] = 0.0
+            τ_vertex[1][i, j] = 0.0
+            τ_vertex[2][i, j] = 0.0
+            τ_vertex[3][i, j] = 0.0
         end
     end
     if i ≤ size(R[1], 1) && j ≤ size(R[1], 2)

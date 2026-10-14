@@ -150,32 +150,77 @@ end
 end
 
 """
-    enzyme_compute_stress_viscosity_DRYEL!(
-        stokes, adjoint, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt,
-        viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
+    enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, args,
+        viscosity_cutoff, linear_viscosity, viscosity_target,
     )
 
-Differentiate the same fused stress and viscosity-update kernel used by the
-two-dimensional forward solver. Stress and viscosity adjoints are propagated
-to strain rate, pressure, and the previous viscosity iterate.
+Differentiate the separate two-dimensional stress kernel used by the normal
+DYREL solver. For nonlinear viscosity, first correct the momentum stress seed
+for the converged constitutive equations
+
+```
+τ = stress(ε, P, η)
+η = viscosity(τII(τ)).
+```
+
+The correction uses the unrelaxed stress-based viscosity function. The corrected
+seed is then pulled back through `compute_stress_DRYEL_point!`; neither the
+forward viscosity relaxation nor its iteration history is differentiated.
 """
-function enzyme_compute_stress_viscosity_DRYEL!(
+function enzyme_compute_stress_DRYEL!(
         stokes,
         adjoint,
-        θc,
-        γ_eff,
         rheology,
         phase_ratios,
         λ_relaxation,
         dt,
-        viscosity_relaxation,
         args,
         viscosity_cutoff,
         linear_viscosity,
+        viscosity_target,
     )
     periodic = periodic_dims(stokes)
+
+    # The viscosity shadows are scratch for one constitutive pullback. They must not carry the
+    # relaxed forward iteration into the next adjoint iteration: the nonlinear correction below
+    # differentiates the final, unrelaxed constitutive equations directly.
+    fill!(adjoint.viscosity.η, 0)
+    fill!(adjoint.viscosity.ηv, 0)
+
+    if !linear_viscosity
+        @parallel (@idx size(phase_ratios.vertex)) implicit_τII_viscosity_seed!(
+            adjoint.viscosity.η,
+            adjoint.viscosity.ηv,
+            (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+            (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c),
+            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy),
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy),
+            stokes.P,
+            fluid_pressure(args, stokes.P),
+            stokes.λ,
+            stokes.λv,
+            stokes.viscosity.η,
+            stokes.viscosity.ηv,
+            stokes.EII_pl,
+            rheology,
+            phase_ratios.center,
+            phase_ratios.vertex,
+            λ_relaxation,
+            dt,
+            args,
+            viscosity_cutoff,
+            periodic,
+        )
+        enzyme_compute_viscosity_τII!(
+            viscosity_target, stokes, adjoint, phase_ratios, args, rheology,
+            viscosity_cutoff,
+        )
+    end
+
     enzyme_reverse_pointwise!(
-        compute_stress_viscosity_DRYEL_point!,
+        compute_stress_DRYEL_point!,
         size(phase_ratios.vertex),
         (
             (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
@@ -195,112 +240,197 @@ function enzyme_compute_stress_viscosity_DRYEL!(
             stokes.viscosity.ηv => adjoint.viscosity.ηv,
             stokes.viscosity.η_vep => nothing,
             stokes.ΔPψ => adjoint.θ,
-            θc => nothing,
-            stokes.R.RP => nothing,
-            γ_eff => nothing,
             rheology => nothing,
             phase_ratios.center => nothing,
             phase_ratios.vertex => nothing,
             λ_relaxation => nothing,
             dt => nothing,
-            viscosity_relaxation => nothing,
-            args => nothing,
-            viscosity_cutoff => nothing,
-            linear_viscosity => nothing,
             periodic => nothing,
         ),
     )
     return nothing
 end
 
-"""
-    enzyme_flow_bcs!(stokes, adjoint, bcs)
+# Reverse the two pointwise viscosity evaluations used by the normal 2D solver. The local
+# fixed-point correction above supplies the center and vertex viscosity seeds; Enzyme applies
+# (∂η/∂τ)' to them with the exact forward viscosity kernel and without numerical relaxation.
+function enzyme_compute_viscosity_point!(
+        η_target, η_adjoint, ratios, tensor, tensor_adjoint, args, rheology, cutoff,
+        fn_viscosity, fn_args; air_phase::Integer = 0,
+    )
+    enzyme_reverse_pointwise!(
+        compute_viscosity_kernel_point!,
+        size(η_target),
+        (
+            η_target => η_adjoint,
+            one(eltype(η_target)) => nothing,
+            ratios => nothing,
+            tensor[1] => tensor_adjoint[1],
+            tensor[2] => tensor_adjoint[2],
+            tensor[3] => tensor_adjoint[3],
+            args => nothing,
+            rheology => nothing,
+            air_phase => nothing,
+            cutoff => nothing,
+            fn_viscosity => nothing,
+            fn_args => nothing,
+        ),
+    )
+    return nothing
+end
 
-Reverse the two-dimensional velocity boundary kernels. Velocity sensitivities
-are accumulated in `adjoint.V`.
-"""
-function enzyme_flow_bcs!(stokes, adjoint, bcs)
-    Vx, Vy = stokes.V.Vx, stokes.V.Vy
-    dVx, dVy = adjoint.V.Vx, adjoint.V.Vy
-    n = bc_index((Vx, Vy))
+function enzyme_compute_viscosity_τII!(
+        viscosity_target, stokes, adjoint, phase_ratios, args, rheology, cutoff;
+        air_phase::Integer = 0,
+    )
+    η_target, ηv_target = viscosity_target
+    enzyme_compute_viscosity_point!(
+        η_target, adjoint.viscosity.η, phase_ratios.center,
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
+        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+        args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args;
+        air_phase,
+    )
+    enzyme_compute_viscosity_point!(
+        ηv_target, adjoint.viscosity.ηv, phase_ratios.vertex,
+        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
+        (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
+        args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args_vertex;
+        air_phase,
+    )
+    return nothing
+end
 
-    # Reverse the order used by `_flow_bcs!`.
-    if do_bc(bcs.periodic)
-        @parallel (@idx n) configcall = periodic_boundary!(Vx, Vy, bcs.periodic) ParallelStencil.AD.autodiff_deferred!(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            periodic_boundary!,
-            Enzyme.Duplicated(Vx, dVx),
-            Enzyme.Duplicated(Vy, dVy),
-            Enzyme.Const(bcs.periodic),
+# Return the three stress components produced by `compute_local_stress` while exposing only the
+# stored viscosity as the first argument. Forward-mode AD with a unit viscosity tangent therefore
+# gives ∂τ/∂η without forming the complete constitutive Jacobian.
+@inline function local_stress_from_viscosity(
+        η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf
+    )
+    result = compute_local_stress(
+        ε, τ_o, η, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf
+    )
+    return result[1], result[2], result[3]
+end
+
+@inline function viscosity_fixed_point_map(
+        η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf,
+        viscosity_args, cutoff,
+    )
+    τ = local_stress_from_viscosity(
+        η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf
+    )
+    return compute_viscosity_value(
+        η, τ, ratio, viscosity_args, rheology, one(η), cutoff,
+        compute_viscosity_τII,
+    )
+end
+
+# Correct one stress seed for the implicit final-state relationship
+#
+#     τ = stress(ε, P, η),       η = viscosity(τII(τ)).
+#
+# For a stress seed `τ_bar`, the scalar local viscosity adjoint is
+#
+#     η_bar = dot(∂τ/∂η, τ_bar) / (1 - ∂viscosity(stress(η))/∂η).
+#
+# `enzyme_compute_viscosity_τII!` then applies `(∂η/∂τ)' * η_bar` with the exact pointwise
+# viscosity kernel. No viscosity adjoint is retained between global λV/λP iterations.
+@inline function implicit_τII_viscosity_adjoint(
+        τ_bar, η, ε, τ_o, P, λ, λ_relaxation, rheology, ratio, dt, EII, Pf,
+        viscosity_args, cutoff,
+    )
+    dτdη = only(
+        Enzyme.autodiff_deferred(
+            Enzyme.Forward,
+            Enzyme.Const(local_stress_from_viscosity),
+            Enzyme.Duplicated,
+            Enzyme.Duplicated(η, one(η)),
+            Enzyme.Const(ε),
+            Enzyme.Const(τ_o),
+            Enzyme.Const(P),
+            Enzyme.Const(λ),
+            Enzyme.Const(λ_relaxation),
+            Enzyme.Const(rheology),
+            Enzyme.Const(ratio),
+            Enzyme.Const(dt),
+            Enzyme.Const(EII),
+            Enzyme.Const(Pf),
+        ),
+    )
+    feedback = only(
+        Enzyme.autodiff_deferred(
+            Enzyme.Forward,
+            Enzyme.Const(viscosity_fixed_point_map),
+            Enzyme.Duplicated,
+            Enzyme.Duplicated(η, one(η)),
+            Enzyme.Const(ε),
+            Enzyme.Const(τ_o),
+            Enzyme.Const(P),
+            Enzyme.Const(λ),
+            Enzyme.Const(λ_relaxation),
+            Enzyme.Const(rheology),
+            Enzyme.Const(ratio),
+            Enzyme.Const(dt),
+            Enzyme.Const(EII),
+            Enzyme.Const(Pf),
+            Enzyme.Const(viscosity_args),
+            Enzyme.Const(cutoff),
+        ),
+    )
+
+    η_bar = sum(dτdη .* τ_bar) / (one(feedback) - feedback)
+    return η_bar
+end
+
+@parallel_indices (i, j) function implicit_τII_viscosity_seed!(
+        η_bar,
+        ηv_bar,
+        τ_bar,
+        τ_bar_v,
+        τ_o,
+        τ_ov,
+        ε,
+        P,
+        Pf,
+        λ,
+        λv,
+        η,
+        ηv,
+        EII_pl,
+        rheology,
+        phase_ratios_center,
+        phase_ratios_vertex,
+        λ_relaxation,
+        dt,
+        viscosity_args,
+        cutoff,
+        periodic,
+    )
+    ni = size(phase_ratios_center)
+    @inbounds begin
+        vertex = stress_DRYEL_vertex_state(
+            τ_ov, ε, EII_pl, P, Pf, λv, ηv, phase_ratios_center,
+            phase_ratios_vertex, periodic, i, j,
         )
-    end
-    if do_bc(bcs.free_slip)
-        @parallel (@idx n) configcall = free_slip!(Vx, Vy, bcs.free_slip) ParallelStencil.AD.autodiff_deferred!(
-            Enzyme.set_runtime_activity(Enzyme.Reverse),
-            free_slip!,
-            Enzyme.Duplicated(Vx, dVx),
-            Enzyme.Duplicated(Vy, dVy),
-            Enzyme.Const(bcs.free_slip),
+        τbar_ij_v = τ_bar_v[1][i, j], τ_bar_v[2][i, j], τ_bar_v[3][i, j]
+        ηv_bar[i, j] = implicit_τII_viscosity_adjoint(
+            τbar_ij_v, vertex.η, vertex.ε, vertex.τ_o, vertex.P, vertex.λ,
+            λ_relaxation, rheology, vertex.ratio, dt, vertex.EII, vertex.Pf,
+            local_viscosity_args_vertex(viscosity_args, i, j), cutoff,
         )
+
+        if i ≤ ni[1] && j ≤ ni[2]
+            center = stress_DRYEL_center_state(
+                τ_o, ε, EII_pl, P, Pf, λ, η, phase_ratios_center, i, j
+            )
+            τbar_ij = τ_bar[1][i, j], τ_bar[2][i, j], τ_bar[3][i, j]
+            η_bar[i, j] = implicit_τII_viscosity_adjoint(
+                τbar_ij, center.η, center.ε, center.τ_o, center.P, center.λ,
+                λ_relaxation, rheology, center.ratio, dt, center.EII, center.Pf,
+                local_viscosity_args(viscosity_args, i, j), cutoff,
+            )
+        end
     end
-    if do_bc(bcs.no_slip)
-        enzyme_no_slip!(Vx, dVx, Vy, dVy, bcs.no_slip)
-    end
-    return nothing
-end
-
-"""
-    enzyme_no_slip!(Vx, dVx, Vy, dVy, bc)
-
-Reverse the active two-dimensional no-slip boundary kernels. The four kernels
-are called in the reverse order of `no_slip!`.
-"""
-function enzyme_no_slip!(Vx, dVx, Vy, dVy, bc)
-    n1 = max(size(Vx, 2), size(Vy, 2))
-    n2 = max(size(Vx, 1), size(Vy, 1))
-    bc.top && _enzyme_no_slip_top!(Vx, dVx, Vy, dVy, n2)
-    bc.bot && _enzyme_no_slip_bot!(Vx, dVx, Vy, dVy, n2)
-    bc.right && _enzyme_no_slip_right!(Vx, dVx, Vy, dVy, n1)
-    bc.left && _enzyme_no_slip_left!(Vx, dVx, Vy, dVy, n1)
-    return nothing
-end
-
-function _enzyme_no_slip_left!(Vx, dVx, Vy, dVy, n)
-    @parallel (@idx n) configcall = _no_slip_left!(Vx, Vy) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _no_slip_left!,
-        Enzyme.Duplicated(Vx, dVx),
-        Enzyme.Duplicated(Vy, dVy),
-    )
-    return nothing
-end
-
-function _enzyme_no_slip_right!(Vx, dVx, Vy, dVy, n)
-    @parallel (@idx n) configcall = _no_slip_right!(Vx, Vy) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _no_slip_right!,
-        Enzyme.Duplicated(Vx, dVx),
-        Enzyme.Duplicated(Vy, dVy),
-    )
-    return nothing
-end
-
-function _enzyme_no_slip_bot!(Vx, dVx, Vy, dVy, n)
-    @parallel (@idx n) configcall = _no_slip_bot!(Vx, Vy) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _no_slip_bot!,
-        Enzyme.Duplicated(Vx, dVx),
-        Enzyme.Duplicated(Vy, dVy),
-    )
-    return nothing
-end
-
-function _enzyme_no_slip_top!(Vx, dVx, Vy, dVy, n)
-    @parallel (@idx n) configcall = _no_slip_top!(Vx, Vy) ParallelStencil.AD.autodiff_deferred!(
-        Enzyme.set_runtime_activity(Enzyme.Reverse),
-        _no_slip_top!,
-        Enzyme.Duplicated(Vx, dVx),
-        Enzyme.Duplicated(Vy, dVy),
-    )
     return nothing
 end

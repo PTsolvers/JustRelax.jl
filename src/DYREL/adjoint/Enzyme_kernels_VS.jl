@@ -179,25 +179,12 @@ function enzyme_compute_viscosity_εII!(
         η_target, stokes, adjoint, phase_ratios, ϕ::JustRelax.RockRatio, args,
         rheology, cutoff; air_phase::Integer = 0,
     )
-    ni = size(η_target)
-    enzyme_reverse_pointwise!(
-        compute_viscosity_kernel_point!,
-        ni,
-        (
-            η_target => adjoint.viscosity.η,
-            one(eltype(η_target)) => nothing,
-            phase_ratios.center => nothing,
-            stokes.ε.xx => adjoint.ε.xx,
-            stokes.ε.yy => adjoint.ε.yy,
-            stokes.ε.xy_c => adjoint.ε.xy_c,
-            args => nothing,
-            rheology => nothing,
-            air_phase => nothing,
-            cutoff => nothing,
-            compute_viscosity_εII => nothing,
-            local_viscosity_args => nothing,
-            ϕ => nothing,
-        ),
+    enzyme_compute_viscosity_point!(
+        η_target, adjoint.viscosity.η, phase_ratios.center,
+        (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy_c),
+        (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy_c),
+        args, rheology, cutoff, compute_viscosity_εII, local_viscosity_args;
+        air_phase,
     )
     return nothing
 end

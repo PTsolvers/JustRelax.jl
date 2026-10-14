@@ -69,58 +69,109 @@ end
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         periodic,
     )
+    compute_stress_DRYEL_point!(
+        τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, λv, η,
+        ηv, η_vep, ΔPψ, rheology, phase_ratios_center, phase_ratios_vertex,
+        λ_relaxation, dt, periodic, I...,
+    )
+    return nothing
+end
 
+# Pointwise form shared by the normal forward stress kernel and its Enzyme pullback.
+@inline function compute_stress_DRYEL_point!(
+        τ, τ_v, τ_o, τ_ov, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, λv, η,
+        ηv, η_vep, ΔPψ, rheology, phase_ratios_center, phase_ratios_vertex,
+        λ_relaxation, dt, periodic, I::Vararg{Integer, 2},
+    )
+    compute_stress_DRYEL_vertex!(
+        τ_v, τ_ov, ε, ε_pl, EII_pl, P, Pf, λv, ηv, rheology,
+        phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, periodic, I...,
+    )
+    all(I .≤ size(phase_ratios_center)) && compute_stress_DRYEL_center!(
+        τ, τ_o, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, η, η_vep, ΔPψ,
+        rheology, phase_ratios_center, λ_relaxation, dt, I...,
+    )
+    return nothing
+end
+
+@inline function stress_DRYEL_vertex_state(
+        τ_ov, ε, EII_pl, P, Pf, λv, ηv, phase_ratios_center,
+        phase_ratios_vertex, periodic, I::Vararg{Integer, 2},
+    )
+    Ic = clamped_indices(size(phase_ratios_center), periodic, I...)
+    Pij = av_clamped(P, Ic...)
+    return (;
+        ε = (av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]),
+        τ_o = (τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]),
+        η = ηv[I...],
+        P = Pij,
+        λ = λv[I...],
+        ratio = phase_ratios_vertex[I...],
+        EII = av_clamped(EII_pl, Ic...),
+        Pf = sample_Pf(Pf, av_clamped, Pij, Ic...),
+    )
+end
+
+@inline function stress_DRYEL_center_state(
+        τ_o, ε, EII_pl, P, Pf, λ, η, phase_ratios_center,
+        I::Vararg{Integer, 2},
+    )
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
+    Pij = P[I...]
+    return (;
+        ε = (ε[1][I...], ε[2][I...], av(ε[3])),
+        τ_o = (τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]),
+        η = η[I...],
+        P = Pij,
+        λ = λ[I...],
+        ratio = phase_ratios_center[I...],
+        EII = EII_pl[I...],
+        Pf = sample_Pf(Pf, getindex, Pij, I...),
+    )
+end
 
-    ni = size(phase_ratios_center)
-
-    ## VERTEX CALCULATION
+@inline function compute_stress_DRYEL_vertex!(
+        τ_v, τ_ov, ε, ε_pl, EII_pl, P, Pf, λv, ηv, rheology,
+        phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt, periodic,
+        I::Vararg{Integer, 2},
+    )
     @inbounds begin
-        # The cell stencil of a vertex wraps across a periodic seam instead of degenerating onto
-        # the cells on one side of it, so both copies of the seam plane see the same material.
-        Ic = clamped_indices(ni, periodic, I...)
-        τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
-        εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
-        λvij = λv[I...]
-        # ηij   = harm_clamped(η, Ic...)
-        ηij = ηv[I...]
-        Pij = av_clamped(P, Ic...)
-        Pfij = sample_Pf(Pf, av_clamped, Pij, Ic...)
-        EIIv = av_clamped(EII_pl, Ic...)
-        ratio = phase_ratios_vertex[I...]
-        # compute local stress
-        τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, _, λ_I, = compute_local_stress(εij, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv, Pfij)
-
-        # update arrays
-        τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
+        state = stress_DRYEL_vertex_state(
+            τ_ov, ε, EII_pl, P, Pf, λv, ηv, phase_ratios_center,
+            phase_ratios_vertex, periodic, I...,
+        )
+        τxx, τyy, τxy, _, _, εxy_pl, _, λ_new, = compute_local_stress(
+            state.ε, state.τ_o, state.η, state.P, state.λ, λ_relaxation, rheology,
+            state.ratio, dt, state.EII, state.Pf,
+        )
+        τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx, τyy, τxy
         ε_pl[3][I...] = εxy_pl
-        λv[I...] = λ_I
-
-        ## CENTER CALCULATION
-        if all(I .≤ ni)
-            τij_o = τ_o[1][I...], τ_o[2][I...], τ_o[3][I...]
-            εij = ε[1][I...], ε[2][I...], av(ε[3])
-            λij = λ[I...]
-            ηij = η[I...]
-            Pij = P[I...]
-            Pfij = sample_Pf(Pf, getindex, Pij, I...)
-            EII = EII_pl[I...]
-            ratio = phase_ratios_center[I...]
-
-            # compute local stress
-            τxx_I, τyy_I, τxy_I, εxx_pl, εyy_pl, εxy_pl, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-                compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij)
-            # update arrays
-            τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
-            ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
-            ε_vol_pl[I...] = ε_vol_pl_I
-            τII[I...] = τII_I
-            η_vep[I...] = ηvep_I
-            λ[I...] = λ_I
-            ΔPψ[I...] = ΔPψ_I
-        end
+        λv[I...] = λ_new
     end
+    return nothing
+end
 
+@inline function compute_stress_DRYEL_center!(
+        τ, τ_o, τII, ε, ε_pl, EII_pl, ε_vol_pl, P, Pf, λ, η, η_vep, ΔPψ,
+        rheology, phase_ratios_center, λ_relaxation, dt, I::Vararg{Integer, 2},
+    )
+    @inbounds begin
+        state = stress_DRYEL_center_state(
+            τ_o, ε, EII_pl, P, Pf, λ, η, phase_ratios_center, I...
+        )
+        τxx, τyy, τxy, εxx_pl, εyy_pl, _, τII_new, λ_new, ΔPψ_new, ηvep_new, εvol_new =
+            compute_local_stress(
+                state.ε, state.τ_o, state.η, state.P, state.λ, λ_relaxation,
+                rheology, state.ratio, dt, state.EII, state.Pf,
+            )
+        τ[1][I...], τ[2][I...], τ[3][I...] = τxx, τyy, τxy
+        ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
+        ε_vol_pl[I...] = εvol_new
+        τII[I...] = τII_new
+        η_vep[I...] = ηvep_new
+        λ[I...] = λ_new
+        ΔPψ[I...] = ΔPψ_new
+    end
     return nothing
 end
 

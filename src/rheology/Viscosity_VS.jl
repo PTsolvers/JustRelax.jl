@@ -109,38 +109,7 @@ end
     ) where {F1, F2}
     compute_viscosity_kernel_point!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase, cutoff,
-        fn_viscosity, fn_args, ϕ, I...,
+        fn_viscosity, fn_args, I...,
     )
-    return nothing
-end
-
-@inline function compute_viscosity_kernel_point!(
-        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2,
-        ϕ::JustRelax.RockRatio, I::Vararg{Integer, 2},
-    ) where {F1, F2}
-    @inbounds begin
-        A = Axx[I...], Ayy[I...], Axyv[I...]
-
-        # we need strain rate not to be zero, otherwise we get NaNs
-        AII_0 = allzero(A...) * eps()
-
-        # argument fields at local index
-        args_ij = fn_args(args, I...)
-
-        # local phase ratio, with air dropped and the remainder renormalized; a cell holding
-        # nothing but air keeps its own ratio, because the harmonic phase mean over an empty
-        # ratio is not finite
-        ratio_ij = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
-
-        # compute second invariant of strain rate tensor
-        Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
-        AII = second_invariant(Aij...)
-
-        # compute and update stress viscosity
-        ηi = compute_phase_viscosity(rheology, ratio_ij, AII, fn_viscosity, args_ij)
-        ηi = clamp(continuation_linear(ηi, η[I...], ν), cutoff...)
-        η[I...] = ηi
-    end
-
     return nothing
 end

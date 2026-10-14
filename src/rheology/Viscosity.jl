@@ -406,12 +406,18 @@ end
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer, cutoff, fn_viscosity::F1, fn_args::F2
     ) where {F1, F2}
+    compute_viscosity_kernel_point!(
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase, cutoff,
+        fn_viscosity, fn_args, I...,
+    )
+    return nothing
+end
 
-    # convenience closure
-    Base.@propagate_inbounds @inline gather(A) = _gather(A, I...)
-
+@inline function compute_viscosity_kernel_point!(
+        η, ν, ratios_center, Axx, Ayy, Axyv, args, rheology, air_phase::Integer,
+        cutoff, fn_viscosity::F1, fn_args::F2, I::Vararg{Integer, 2},
+    ) where {F1, F2}
     @inbounds begin
-        # cache
         A = Axx[I...], Ayy[I...], Axyv[I...]
 
         # we need strain rate not to be zero, otherwise we get NaNs
@@ -419,7 +425,6 @@ end
 
         # argument fields at local index
         args_ij = fn_args(args, I...)
-        # args_ij = local_viscosity_args(args, I...)
 
         # local phase ratio, with the air dropped if requested
         ratio_ij = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))

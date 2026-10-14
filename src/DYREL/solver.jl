@@ -251,8 +251,21 @@ function _solve_DYREL!(
         # isone(itPH) &&
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
-        # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
-        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        # First compute stress from the viscosity currently stored in `stokes`. For nonlinear
+        # rheology, the following viscosity kernel then evaluates the new viscosity from this
+        # stress. Keeping these as separate calls exposes the same two constitutive operations to
+        # the adjoint while preserving the forward iteration order.
+        compute_stress_DRYEL!(
+            stokes, rheology, phase_ratios, λ_relaxation_PH, dt;
+            Pf = fluid_pressure(args, stokes.P),
+        )
+        @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
+        if !linear_viscosity
+            compute_viscosity_τII!(
+                stokes, phase_ratios, args, rheology, viscosity_cutoff;
+                relaxation = viscosity_relaxation,
+            )
+        end
         update_stress_halo!(stokes, dim, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
@@ -328,8 +341,19 @@ function _solve_DYREL!(
             # compute divergence, deviatoric strain rate and pressure residual in one pass
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
-            # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            # Apply the same split constitutive sequence as the outer iteration: stress uses the
+            # current viscosity, then the stress invariant updates viscosity for the next pass.
+            compute_stress_DRYEL!(
+                stokes, rheology, phase_ratios, λ_relaxation_DR, dt;
+                Pf = fluid_pressure(args, stokes.P),
+            )
+            @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
+            if !linear_viscosity
+                compute_viscosity_τII!(
+                    stokes, phase_ratios, args, rheology, viscosity_cutoff;
+                    relaxation = viscosity_relaxation,
+                )
+            end
             update_stress_halo!(stokes, dim, linear_viscosity)
             free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
@@ -421,7 +445,6 @@ function _solve_DYREL!(
             observation,
             gradients,
             viscosity_cutoff,
-            viscosity_relaxation,
             linear_viscosity,
             kwargs...,
         )

@@ -126,6 +126,10 @@ recomputes per-node pseudo-time steps `dτVx/dτVy` and damping `βV`, `αV`, `c
 outer Powell–Hestenes iteration. This removes CFL/damping hand-tuning for strongly
 heterogeneous or non-linear rheologies.
 
+`DYREL(...; global_penalty=true)` uses mean finite viscosity for the numerical penalty
+scale; `global_penalty=false` uses local viscosity. The default is global for standard and
+variational DYREL. Under MPI, the mean is reduced across ranks.
+
 The loop is two-level: an outer Powell–Hestenes loop on the pressure/plastic multiplier
 (`iterMax_PH`, `λ_relaxation_PH`, `pressure_relaxation`) around an inner dynamic-relaxation
 loop on velocity (`iterMax_DR`, `λ_relaxation_DR`, `rel_drop`), with `total_iterMax`
@@ -154,10 +158,6 @@ applies `thermal_bcs!` and `update_halo!(thermal.T)`. Convergence is
 Passing `stokes` refreshes `thermal.adiabatic` before the loop; passing `phase` recomputes
 the PT coefficients from the local phase ratios each iteration. Shear heating comes from
 `compute_shear_heating!` (`src/thermal_diffusion/ShearHeating.jl`).
-
-An explicit forward-Euler alternative lives in
-`src/thermal_diffusion/DiffusionExplicit.jl` (`ThermalDiffusion1D/2D/3D.solve!`), using a
-precomputed diffusivity `κ = K/ρCp` from `ThermalParameters`.
 
 ## Editing a solver
 

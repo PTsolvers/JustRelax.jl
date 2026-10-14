@@ -15,5 +15,6 @@ Pages = [
     "rheology/Solubility.jl",
     "phases/topography_correction.jl",
     "rheology/StressUpdate.jl",
+    "rheology/CapReturnMapping.jl",
 ]
 ```

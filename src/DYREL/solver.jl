@@ -43,6 +43,7 @@ Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_DYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    reject_incompressible_cap(rheology_of(args), "`solve_DYREL!`")
     return solve_DYREL!(backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs))
 end
 
@@ -97,6 +98,7 @@ Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 """
 function solve_VariationalDYREL!(stokes::JustRelax.StokesArrays, args...; kwargs...)
+    reject_incompressible_cap(rheology_of(args), "`solve_VariationalDYREL!`")
     return solve_VariationalDYREL!(
         backend(stokes), stokes, args...; kwargs = flatten_solver_kwargs(kwargs)
     )
@@ -205,7 +207,7 @@ function _solve_DYREL!(
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
-        compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
         update_stress_halo!(stokes, dim, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
@@ -275,7 +277,7 @@ function _solve_DYREL!(
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
             # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DRYEL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
             update_stress_halo!(stokes, dim, linear_viscosity)
             free_surface_stress_bcs!(stokes, flow_bcs, dim)
 
@@ -515,7 +517,7 @@ function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
 
     numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
     denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
-    return abs(numerator) / denominator
+    return rayleigh_quotient(numerator, denominator)
 end
 
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})

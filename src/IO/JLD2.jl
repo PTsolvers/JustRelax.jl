@@ -4,11 +4,13 @@ checkpoint_name(dst, igg::IGG) = "$dst/checkpoint" * lpad("$(igg.me)", 4, "0") *
 """
     checkpointing_jld2(dst, stokes, [thermal,] time, timestep[, igg]; kwargs...)
 
-Save necessary data in `dst` as a jld2 file to restart the model from the state at `time`.
-If run in parallel, the file will be named after the corresponidng rank e.g. `checkpoint0000.jld2`
-and thus can be loaded by the processor while restarting the simulation.
-If you want to restart your simulation from the checkpoint you can use load() and specify the MPI rank
-by providing a dollar sign and the rank number.
+Save Stokes and optional thermal arrays in the directory `dst` as CPU arrays.
+The serial method writes `checkpoint.jld2`; passing `igg` writes a rank-specific
+file such as `checkpoint0000.jld2`. Each call replaces the previous file at that
+path. Restart MPI checkpoints with the same domain decomposition.
+
+Load the checkpoint with [`load_checkpoint_jld2`](@ref), or use `JLD2.load` on
+the file to access additional fields saved through keyword arguments.
 
 # Arguments
 - `dst`: The destination directory where the checkpoint file will be saved.
@@ -99,27 +101,22 @@ function checkpointing_jld2(dst, stokes, thermal, time, timestep, fname::String;
     return nothing
 end
 """
-    load_checkpoint_jld2(file_path)
+    load_checkpoint_jld2(dst[, igg])
 
-Load the state of the simulation from a .jld2 file.
+Load a checkpoint from the directory `dst` (not a file path). The serial method
+reads `checkpoint.jld2`; passing `igg` selects the file matching its MPI rank.
 
-# Arguments
-- `file_path`: The path to the .jld2 file.
+Return `(stokes, thermal, time, timestep)`, with arrays on the CPU and `thermal`
+set to `nothing` if it was not saved. Additional fields are available by loading
+the file directly with `JLD2.load`; the saved time-step key is `"timestep"`.
 
-# Returns
-- `stokes`: The loaded state of the stokes variable.
-- `thermal`: The loaded state of the thermal variable. Can be `nothing` if not present in the file.
-- `time`: The loaded simulation time.
-- `timestep`: The loaded time step.
-- `igg`: The IGG struct if needed for parallel runs.
-
-## Example
+# Example
 ```julia
-stokes, thermal, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2", igg)
+stokes, thermal, time, timestep = load_checkpoint_jld2("path/to/dst", igg)
 ```
-or without thermal
+Or, for a serial checkpoint without thermal arrays:
 ```julia
-stokes, _, time, timestep = load_checkpoint_jld2("path/to/checkpoint.jld2")
+stokes, _, time, timestep = load_checkpoint_jld2("path/to/dst")
 ```
 """
 function load_checkpoint_jld2(file_path)

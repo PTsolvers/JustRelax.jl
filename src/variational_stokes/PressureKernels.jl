@@ -39,6 +39,7 @@ function compute_variational_P!(
     ) where {N}
     ΔT = get(args, :ΔT, nothing)
     melt_fraction = get(args, :melt_fraction, nothing)
+    check_ghosted_ΔT(ΔT, size(P))
     @parallel (@idx size(P)) compute_variational_P_kernel!(
         P,
         P0,
@@ -109,7 +110,7 @@ end
         G = fn_ratio(get_shear_modulus, rheology, phase_ratio_I)
         α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
         @inbounds RP_I, P[I...] = _compute_P!(
-            P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+            P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
         )
         @inbounds RP[I...] = variational_continuity_residual(RP_I, ϕ.center[I...])
     else
@@ -145,7 +146,7 @@ end
             (; ϕ = melt_fraction[I...]),
         )
         @inbounds RP_I, P[I...] = _compute_P!(
-            P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+            P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
         )
         @inbounds RP[I...] = variational_continuity_residual(RP_I, ϕ.center[I...])
     else

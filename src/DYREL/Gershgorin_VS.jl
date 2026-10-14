@@ -52,7 +52,7 @@ end
     return ϕij / (inv(ηij) + invGdt)
 end
 
-# Vertex viscosity seen by the variational operator. `compute_stress_DRYEL!` builds the
+# Vertex viscosity seen by the variational operator. `compute_stress_DYREL!` builds the
 # vertex stress from the harmonic mean of the four surrounding center viscosities, clamped
 # at the domain border, so the Gershgorin bound must sample that same combination for the
 # preconditioner to describe the operator being iterated.
@@ -62,7 +62,8 @@ end
 
 function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, phase_ratios, ϕ::JustRelax.RockRatio, rheology, di, dt, ρgy = nothing)
     ni = size(η)
-    @parallel (@idx ni) _Gershgorin_Stokes2D_SchurComplement!(
+    # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
+    @parallel (@idx ni) (cld(ni[1], 32), cld(ni[2], 8), 1) (32, 8, 1) _Gershgorin_Stokes2D_SchurComplement!(
         Dx,
         Dy,
         λmaxVx,

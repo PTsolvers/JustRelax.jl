@@ -55,8 +55,8 @@ _periodic_flow_bcs() = VelocityBoundaryConditions(;
     periodic = (left = true, right = true, top = false, bot = false),
 )
 
-_linear_phase(η) = SetMaterialParams(;
-    Phase = 1,
+_linear_phase(η, phase = 1) = SetMaterialParams(;
+    Phase = phase,
     Density = ConstantDensity(; ρ = 0.0),
     Gravity = ConstantGravity(; g = 0.0),
     CompositeRheology = CompositeRheology((LinearViscous(; η = η),)),
@@ -67,7 +67,7 @@ _linear_phase(η) = SetMaterialParams(;
     igg = IGG(init_global_grid(24, 24, 1; init_MPI = init_mpi)...)
 
     @testset "periodic directions get a momentum row" begin
-        ni = 6, 5
+        ni = (6, 5) .* 6
         nx, ny = ni
         bcs = _periodic_flow_bcs()
         @test JustRelax.periodic_dims(bcs) == (true, false)
@@ -93,13 +93,13 @@ _linear_phase(η) = SetMaterialParams(;
     @testset "shift invariance across the seam" begin
         # A material field that varies in x, translated by `m` cells, must translate the solution
         # by `m` cells. Any stencil that special-cases the seam instead of wrapping breaks this.
-        n, m = 24, 7
+        n, m = 32, 7
         ni = n, n
         li = 1.0, 1.0
         εbg, ly = 1.0, li[2]
         grid = Geometry(ni, li; origin = (0.0, 0.0))
         dt = Inf
-        rheology = (_linear_phase(1.0), _linear_phase(100.0))
+        rheology = (_linear_phase(1.0, 1), _linear_phase(100.0, 2))
 
         function solve_shifted(shift)
             phase_ratios = PhaseRatios(backend_JP, 2, ni)
@@ -202,8 +202,8 @@ _linear_phase(η) = SetMaterialParams(;
         end
 
         function solve_variational(shift; contrast = true, cut = false)
-            rheology = contrast ? (_linear_phase(1.0), _linear_phase(100.0)) :
-                (_linear_phase(1.0), _linear_phase(1.0))
+            rheology = contrast ? (_linear_phase(1.0, 1), _linear_phase(100.0, 2)) :
+                (_linear_phase(1.0, 1), _linear_phase(1.0, 2))
             phase_ratios = PhaseRatios(backend_JP, 2, ni)
             @parallel (@idx size(phase_ratios.center)) _init_x_center_phases_2D!(
                 phase_ratios.center, n, shift

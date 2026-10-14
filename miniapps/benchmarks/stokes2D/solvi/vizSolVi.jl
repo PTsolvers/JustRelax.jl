@@ -5,6 +5,8 @@ using ExactFieldSolutions
 #     general shear. Geophysical Journal International, 155(1):269–288, 2003.
 
 function solvi_solution(geometry, Δη, rc, εbg)
+    params = (mm = 1.0, mc = Δη, rc, gr = 0.0, er = -εbg)
+
     # Pressure
     x = geometry.xci[1]
     x = x .- (x[end] - x[1]) / 2
@@ -16,10 +18,7 @@ function solvi_solution(geometry, Δη, rc, εbg)
     P = zeros(size(X))
 
     for i in eachindex(P)
-        sol = Stokes2D_Schmid2003(
-            [X[i], Y[i]];
-            params = (mm = 1.0, mc = 1.0e-3, rc = 0.2, gr = 0.0, er = 1)
-        )
+        sol = Stokes2D_Schmid2003([X[i], Y[i]]; params)
         P[i] = sol.p
     end
 
@@ -34,10 +33,7 @@ function solvi_solution(geometry, Δη, rc, εbg)
     Vx = zeros(size(X))
 
     for i in eachindex(Vx)
-        sol = Stokes2D_Schmid2003(
-            [X[i], Y[i]];
-            params = (mm = 1.0, mc = 1.0e-3, rc = 0.2, gr = 0.0, er = -1)
-        )
+        sol = Stokes2D_Schmid2003([X[i], Y[i]]; params)
         Vx[i] = sol.V[1]
     end
 
@@ -52,16 +48,13 @@ function solvi_solution(geometry, Δη, rc, εbg)
     Vy = zeros(size(X))
 
     for i in eachindex(Vy)
-        sol = Stokes2D_Schmid2003(
-            [X[i], Y[i]];
-            params = (mm = 1.0, mc = 1.0e-3, rc = 0.2, gr = 0.0, er = -1)
-        )
+        sol = Stokes2D_Schmid2003([X[i], Y[i]]; params)
         Vy[i] = sol.V[2]
     end
     return (p = P, vx = Vx, vy = Vy)
 end
 
-function Li_error(geometry, stokes, Δη, εbg, rc, ; order = 2)
+function Li_error(geometry, stokes, Δη, εbg, rc; order = 2)
 
     # analytical solution
     sol = solvi_solution(geometry, Δη, rc, εbg)
@@ -70,7 +63,7 @@ function Li_error(geometry, stokes, Δη, εbg, rc, ; order = 2)
     Li(A, B; order = 2) = norm(A .- B, order)
 
     L2_vx = Li(stokes.V.Vx[:, 2:(end - 1)], PTArray(backend)(sol.vx); order = order) * gridsize
-    L2_vy = Li(stokes.V.Vy[2:(end - 1), 2:(end - 1)], PTArray(backend)(sol.vy); order = order) * gridsize
+    L2_vy = Li(stokes.V.Vy[2:(end - 1), :], PTArray(backend)(sol.vy); order = order) * gridsize
     L2_p = Li(stokes.P, PTArray(backend)(sol.p); order = order) * gridsize
 
     return L2_vx, L2_vy, L2_p
@@ -79,7 +72,7 @@ end
 function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
 
     # analytical solution
-    sol = solvi_solution(geometry, Δη, εbg, rc)
+    sol = solvi_solution(geometry, Δη, rc, εbg)
 
     cx, cy = (geometry.xvi[1][end] - geometry.xvi[1][1]) / 2,
         (geometry.xvi[2][end] - geometry.xvi[2][1]) / 2
@@ -138,7 +131,7 @@ function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
         ax1,
         geometry.xvi[1],
         geometry.xci[2],
-        stokes.V.Vx;
+        stokes.V.Vx[:, 2:(end - 1)];
         # colorrange=(-1, 1),
         colormap = :romaO,
     )
@@ -179,9 +172,9 @@ function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
     ax1 = Axis(f[3, 1]; title = "Vy numeric", aspect = 1)
     h1 = heatmap!(
         ax1,
-        geometry.xvi[1],
-        geometry.xci[2],
-        stokes.V.Vy;
+        geometry.xci[1],
+        geometry.xvi[2],
+        stokes.V.Vy[2:(end - 1), :];
         # colorrange=(-1, 1),
         colormap = :romaO,
     )
@@ -190,8 +183,8 @@ function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
     ax1 = Axis(f[3, 2]; title = "Vy analytical", aspect = 1)
     h = heatmap!(
         ax1,
-        geometry.xvi[1],
-        geometry.xci[2],
+        geometry.xci[1],
+        geometry.xvi[2],
         sol.vy;
         colormap = :romaO
     )
@@ -203,9 +196,9 @@ function plot_solVi_error(geometry, stokes, Δη, εbg, rc)
     ax1 = Axis(f[3, 4]; title = "Vy error", aspect = 1)
     h = heatmap!(
         ax1,
-        geometry.xvi[1],
-        geometry.xci[2],
-        log10.(err2(Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]), sol.vy));
+        geometry.xci[1],
+        geometry.xvi[2],
+        log10.(err2(Array(stokes.V.Vy[2:(end - 1), :]), sol.vy));
         colormap = :batlow,
     )
     lines!(ax1, ix, iy; linewidth = 3, color = :black)

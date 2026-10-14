@@ -229,7 +229,7 @@ PTArray(::T) where {T} = error(ArgumentError("Unknown backend $T"))
 export PTArray, CPUBackend, CUDABackend, AMDGPUBackend
 
 include("stress_rotation/types.jl")
-export unwrap
+export unwrap, stress_fields
 
 include("types/stokes.jl")
 

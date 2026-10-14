@@ -38,7 +38,7 @@ import JustRelax:
     check_periodic_bcs,
     reject_periodic_bcs
 
-import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress, unwrap
 import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
@@ -87,20 +87,20 @@ function JR2D.StokesArrays(
     return StokesArrays(ni, bcs)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool} = ntuple(_ -> false, Val(N)); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N}
-    return DYREL(ni, periodic; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool} = ntuple(_ -> false, Val(N)); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true) where {N}
+    return DYREL(ni, periodic; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    return DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, nx::Integer, ny::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true)
+    return DYREL((nx, ny); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
-function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR2D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
 function JR2D.update_α_β!(βVx::ROCArray, βVy, αVx, αVy, dτVx, dτVy, cVx, cVy)
@@ -326,10 +326,6 @@ function JR2D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, ϕ, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
-function JR2D.compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
-    return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
-end
-
 function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
@@ -344,10 +340,6 @@ function compute_viscosity!(
         ::AMDGPUBackendTrait, stokes, ν, phase_ratios, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn_viscosity::F
     ) where {F}
     return _compute_viscosity!(stokes, ν, phase_ratios, ϕ, args, rheology, air_phase, cutoff, fn_viscosity)
-end
-
-function compute_viscosity!(η, ν, εII::ROCArray, args, rheology, cutoff)
-    return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
 ## Stress
@@ -430,9 +422,16 @@ function shear2center!(::AMDGPUBackendTrait, A::JustRelax.SymmetricTensor)
 end
 
 function JR2D.vertex2center!(
-        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+        center::T,
+        vertex::T;
+        ghost_x::Bool = false,
+        ghost_y::Bool = false,
+        ghost_z::Bool = false,
+        periodic_x::Bool = false,
+        periodic_y::Bool = false,
+        periodic_z::Bool = false,
     ) where {T <: ROCArray}
-    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z)
 end
 
 function JR2D.center2vertex!(vertex::T, center::T) where {T <: ROCArray}
@@ -541,7 +540,7 @@ end
 
 function JR2D.compute_shear_heating!(::AMDGPUBackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)
-    @parallel (ni) compute_shear_heating_kernel!(
+    @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
         @tensor_center(stokes.τ),
         @tensor_center(stokes.τ_o),
@@ -579,18 +578,12 @@ function JR2D.rotate_stress_particles!(
         ω::NTuple,
         particles::Particles{ROCBackend},
         dt;
-        method::Symbol = :matrix,
+        method = nothing,
     )
-    fn = if method === :matrix
-        rotate_stress_particles_rotation_matrix!
-
-    elseif method === :jaumann
-        rotate_stress_particles_jaumann!
-
-    else
-        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
-    end
-    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+    warn_rotation_method(method)
+    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
+        τ..., ω..., particles.index, dt
+    )
 
     return nothing
 end

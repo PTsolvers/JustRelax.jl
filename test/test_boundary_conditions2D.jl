@@ -79,6 +79,27 @@ end
             @test typeof(
                 TemperatureBoundaryConditions(; no_flux = inactive)
             ).parameters[end] == 2
+
+            # omitted faces are filled with `false`
+            bcs = TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (top = 273.0, bot = 1573.0),
+                periodic = (left = true, right = true),
+            )
+            @test bcs.constant_value == (
+                front = false, back = false, left = false, right = false, top = 273.0, bot = 1573.0,
+            )
+            @test bcs.periodic == (
+                front = false, back = false, left = true, right = true, top = false, bot = false,
+            )
+            @test_throws "unknown 2D thermal boundary face `bottom`" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (top = 273.0, bottom = 1573.0),
+            )
+            @test_throws "unknown 2D thermal boundary face `front`" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (front = 273.0,),
+            )
         end
 
         @testset "VelocityBoundaryConditions" begin

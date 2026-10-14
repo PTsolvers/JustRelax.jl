@@ -61,6 +61,8 @@ This constructor derives:
 - nonuniform spacings with `diff.(xvi)`
 - staggered velocity grids with the required ghost points
 
+The 3D Stokes solvers (`solve!` and `solve_VariationalStokes!`) support only uniform grids and throw an `ArgumentError` when given a nonuniform 3D `Geometry`.
+
 The vertex coordinates are passed as a tuple. If you want the coordinate arrays stored in a specific array type, pass an array constructor as the first argument, in which case the coordinates are given as separate arguments:
 
 ```@example grid

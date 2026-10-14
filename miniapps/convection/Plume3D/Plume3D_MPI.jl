@@ -70,7 +70,10 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature and material phase carried by the particles
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Rectangular thermal and compositional anomaly
     xc_anomaly = lx / 2   # origin of thermal anomaly
@@ -210,6 +213,9 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
         # `igg` makes the velocity maximum a global reduction, so every rank marches
         # with the same dt
         dt = compute_dt(stokes, di, dt_diff, igg) * 0.8
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -254,9 +260,17 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         it += 1
         t += dt
@@ -271,7 +285,7 @@ function main3D(igg; ar = 1, nx = 16, ny = 16, nz = 16, figdir = "Plume3D_MPI", 
             vertex2center!(Vx_c, Vx_v)
             vertex2center!(Vy_c, Vy_v)
             vertex2center!(Vz_c, Vz_v)
-            phase_center = [argmax(p) for p in Array(phase_ratios.center)]
+            phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)]
 
             @views T_nohalo .= Array(thermal.T[3:(end - 2), 3:(end - 2), 3:(end - 2)])
             @views P_nohalo .= Array(stokes.P[2:(end - 1), 2:(end - 1), 2:(end - 1)])

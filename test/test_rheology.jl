@@ -651,10 +651,10 @@ end
 
         # CellArrays stores SVector per cell; copy to host first so we can
         # safely index per-cell on any backend.
-        center_h = Base.Array(pr.center)
-        vertex_h = Base.Array(pr.vertex)
-        Vx_h = Base.Array(pr.Vx)
-        Vy_h = Base.Array(pr.Vy)
+        center_h = to_cpu(pr.center)
+        vertex_h = to_cpu(pr.vertex)
+        Vx_h = to_cpu(pr.Vx)
+        Vy_h = to_cpu(pr.Vy)
 
         # Cell-center ratios reproduce the input cleanly (only one phase per cell).
         @test center_h[1, 1][1] ≈ 1.0 && center_h[1, 1][2] ≈ 0.0
@@ -682,7 +682,7 @@ end
         p2b = @fill(0.4, nx, ny)
         p3b = @fill(1.0e-6, nx, ny)             # below the 1e-5 threshold
         JustRelax2D.update_phase_ratios_2D!(pr3, (p1b, p2b, p3b), xci, xvi)
-        center3_h = Base.Array(pr3.center)
+        center3_h = to_cpu(pr3.center)
         @test center3_h[2, 2][3] == 0.0         # tiny phase zeroed out
         @test center3_h[2, 2][1] + center3_h[2, 2][2] ≈ 1.0
     end

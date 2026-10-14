@@ -198,7 +198,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)],
+                    phase_vertex = [argmax(p) for p in to_cpu(phase_ratios.vertex)],
                 )
                 data_c = (;
                     P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
@@ -206,7 +206,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
                     εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
                     η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
-                    phase_center = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_v = (
                     dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),

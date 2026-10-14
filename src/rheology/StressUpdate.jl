@@ -6,6 +6,7 @@ function _compute_τ_nonlinear!(
         ε::NTuple{N1, T},
         ε_pl::NTuple{N1, T},
         P,
+        Pf,
         ηij,
         η_vep,
         λ,
@@ -28,7 +29,7 @@ function _compute_τ_nonlinear!(
     (; is_pl, C, sinϕ, cosϕ, η_reg, volume) = plastic_parameters
 
     # yield stress (GeoParams could be used here...)
-    τy = @inbounds max(C * cosϕ + P[I...] * sinϕ, 0)
+    τy = @inbounds max(C * cosϕ + (P[I...] - sample_Pf(Pf, getindex, P[I...], I...)) * sinϕ, 0)
 
     # check if yielding; if so, compute plastic strain rate (λdQdτ),
     # plastic stress increment (dτ_pl), and update the plastic
@@ -469,6 +470,16 @@ elastic-only phases.
     n_normal = N == 6 ? 3 : 2                                  # 3 normals in 3D, 2 in 2D
     dQdτ = ntuple(i -> i ≤ n_normal ? g[i] : 0.5 * g[i], Val(N))
     return dQdτ, GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
+end
+
+# Older GeoParams tensor wrappers drop state keywords. The scalar cap interface
+# preserves pressure and returns Aτ, the physical tensor-flow coefficient.
+@inline function _plastic_grad_primitive(v::DruckerPragerCap, τij::NTuple{N, T}, args::NamedTuple) where {N, T}
+    s = second_invariant(τij)
+    Aτ = GeoParams.∂Q∂τII(v, s; args...)
+    factor = iszero(s) ? zero(T) : Aτ / s
+    return ntuple(i -> factor * τij[i], Val(N)),
+        GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
 end
 
 @generated function _plastic_grad_elements(elements::Tuple, τij, args::NamedTuple)

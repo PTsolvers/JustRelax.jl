@@ -17,14 +17,11 @@ Base.@propagate_inbounds @inline _d_ya(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) 
 Base.@propagate_inbounds @inline _d_za(A::T, ϕ::T, _dz, I::Vararg{Integer, N}) where {N, T} =
     (-center(A, ϕ, I...) + top(A, ϕ, I...)) * _dz
 
-Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, I::Vararg{Integer, N}) where {N, T} =
+Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, I::Vararg{Integer, 2}) where {T} =
     (-front(A, ϕ, I...) + next(A, ϕ, I...)) * _dx
 
-Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) where {N, T} =
+Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, 2}) where {T} =
     (-right(A, ϕ, I...) + next(A, ϕ, I...)) * _dy
-
-Base.@propagate_inbounds @inline _d_zi(A::T, ϕ::T, _dz, I::Vararg{Integer, N}) where {N, T} =
-    (-top(A, ϕ, I...) + next(A, ϕ, I...)) * _dz
 
 # Masked counterparts of `_d_xa_wrap` / `_av_xa_wrap` and friends: the forward neighbour along a
 # direction that may wrap, with both the field and its volume fraction taken at that neighbour.
@@ -81,14 +78,6 @@ Base.@propagate_inbounds @inline _av_ya(A::T, ϕ::T, I::Vararg{Integer, 3}) wher
 Base.@propagate_inbounds @inline _av_za(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
     (center(A, ϕ, I...) + top(A, ϕ, I...)) * 0.5
 
-Base.@propagate_inbounds @inline _av_xi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (front(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (right(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (top(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
 
 ## Because mymaskedsum(::generator) does not work inside CUDA kernels...
 Base.@propagate_inbounds @inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T, N}) where {T, N} =

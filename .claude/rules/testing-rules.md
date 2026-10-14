@@ -10,7 +10,7 @@ How to run tests: the `running-tests` skill.
 ## How the suite is assembled (`test/runtests.jl`)
 
 - Only `test_*.jl` files are collected, so a new test needs no registration — but a file not named `test_*.jl` is silently skipped (`deprecated_*.jl` are skipped on purpose).
-- Files with `MPI` in the name are pulled out of the parallel run and executed one at a time under `mpiexec -n 2`. A test-name filter does not apply to them.
+- Files with `MPI` in the name are pulled out of the parallel run and executed one at a time under `mpiexec -n 2`. A test-name filter does not apply to them; pass `--no-mpi` to skip them (the CSCS MI300 jobs do, since they run in a single-task `srun` step).
 - Each non-MPI test runs in its own worker process, except the light tests named in `test_worker` (traits, types, conversions, mask, mini kernels, interpolations, boundary conditions, JustPIC interface), which run in the main process. A light test must not call `@init_parallel_stencil` or depend on IGG state; a new light test has to be added to that list.
 - On GPU backends `runtests.jl` deletes the CPU-only tests (`test_variational_operators_2D`, `test_rheology`, `test_dyrel_solver_3D`, `test_dyrel_taylor_green_MPI`). These are legacy exclusions, not a pattern for new tests: all new or modified tests must run on CPU, CUDA, and AMDGPU. Fix backend incompatibilities rather than excluding tests.
 - `test_stokes_burstedde` and `test_VanKeken` are dropped from the default full run because they are slow; they run when named.

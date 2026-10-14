@@ -171,19 +171,19 @@ end
     grid = Geometry(typeof(@zeros(1)), xv, xv)
     init_mpi = !JustRelax.MPI.Initialized()
     igg = IGG(init_global_grid(ni..., 1; init_MPI = init_mpi)...)
-    thermal = ThermalArrays(backend, ni)
-    initial = zeros((ni .+ 2)...)
-    xc = (xv[1:(end - 1)] + xv[2:end]) / 2
-    initial[2:(end - 1), 2:(end - 1)] .= xc .^ 2 .+ (xc .^ 2)'
-    thermal.T .= initial
-    K = @fill(1.0, ni...)
-    ρCp = @fill(1.0, ni...)
-    dt = 0.1
-    pt = PTThermalCoeffs(backend, K, ρCp, dt, (minimum(diff(xv)), minimum(diff(xv))), grid.li)
-    bc = TemperatureBoundaryConditions(;
-        no_flux = (left = true, right = true, top = true, bot = true),
-    )
     try
+        thermal = ThermalArrays(backend, ni)
+        initial = zeros((ni .+ 2)...)
+        xc = (xv[1:(end - 1)] + xv[2:end]) / 2
+        initial[2:(end - 1), 2:(end - 1)] .= xc .^ 2 .+ (xc .^ 2)'
+        thermal.T .= PTArray(backend)(initial)
+        K = @fill(1.0, ni...)
+        ρCp = @fill(1.0, ni...)
+        dt = 0.1
+        pt = PTThermalCoeffs(backend, K, ρCp, dt, (minimum(diff(xv)), minimum(diff(xv))), grid.li)
+        bc = TemperatureBoundaryConditions(;
+            no_flux = (left = true, right = true, top = true, bot = true),
+        )
         @suppress heatdiffusion_PT!(
             thermal, pt, bc, K, ρCp, dt, grid;
             kwargs = (; igg, iterMax = 1, nout = 1, verbose = false),

@@ -278,9 +278,9 @@ end
             @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.0013938636779610848 rtol = 1.0e-6
             @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031580833163039165 rtol = 1.0e-6
             @test maximum(abs, Array(stokes.P)) ≈ 0.25701096604509777 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016306775444691899 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.0035636067234839051 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341866240639133 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016305181593957556 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.003563133270494997 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341934638642594 rtol = 1.0e-6
         end
 
         @testset "SolKz" begin
@@ -293,9 +293,9 @@ end
             @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010315674748001426  rtol = 1.0e-6
             @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045868650922067e-5 rtol = 1.0e-6
             @test maximum(abs, Array(stokes.P)) ≈ 0.10001155920216592  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.00010116331952357103  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.200123342537124e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.10244250706914182  rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.000105434676741088 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.162915680233704e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1029917627786186 rtol = 1.0e-6
         end
 
         @testset "SolVi" begin

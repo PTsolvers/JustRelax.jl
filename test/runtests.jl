@@ -97,7 +97,7 @@ function runtests(args)
     end
 
     # MPI tests
-    printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
+    isempty(mpi_keys) || printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
     for k in sort(mpi_keys)
         f = mpi_files[k]
         isfile(f) || continue

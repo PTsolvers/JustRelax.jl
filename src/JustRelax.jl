@@ -253,7 +253,10 @@ include("types/traits.jl")
 export BackendTrait, CPUBackendTrait, NonCPUBackendTrait
 
 include("grid/Grid.jl")
-export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g
+export IGG, lazy_grid, Geometry, GeometryAnnulus, velocity_grids, x_g, y_g, z_g, refined_grid_vertices
+
+include("particles/markerchain_mpi.jl")
+export DistributedMarkerChain
 
 include("JustRelax_CPU.jl")
 

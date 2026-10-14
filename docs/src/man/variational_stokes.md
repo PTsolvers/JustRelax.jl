@@ -319,3 +319,47 @@ Larionov, A., Batty, C. and Bridson, R. (2017), *Variational Stokes: A Unified
 Pressure-Viscosity Solver for Accurate Viscous Liquids*, ACM Transactions on
 Graphics, 36(4), Article 101. See the
 [publisher record and mathematical reference](https://doi.org/10.1145/3099564.3099569).
+
+
+## Distributed marker chains
+
+For a 2D free surface on an MPI grid, use the package surface container:
+
+```julia
+using JustRelax, JustRelax.JustRelax2D, JustPIC, PoissonGrids
+
+# ni counts local cells; initialize IGG before creating the geometry.
+xvi_global = refined_grid_vertices((nx_g(), ny_g()), li, monitors; origin, igg)
+grid = Geometry(PTArray(backend), xvi_global, igg)
+surface = DistributedMarkerChain(backend_JP, xvi_global, igg; initial_elevation = 0.0)
+
+# In the time loop, after solving Stokes:
+advect_markerchain!(surface, stokes, dt)
+update_phases_given_markerchain!(pPhases, surface.chain, particles,
+    grid.origin, grid.di.vertex, air_phase)
+compute_rock_fraction!(rock_ratio, surface.chain, grid.xvi, grid.di.vertex)
+update_halo!(rock_ratio.center, rock_ratio.vertex, rock_ratio.Vx, rock_ratio.Vy)
+```
+
+Here `backend_JP` is a JustPIC backend type (for example `JustPIC.CPU`), while
+`backend` is the matching JustRelax backend. Every rank calls the constructor
+and update, including ranks entirely below the surface. Initial global heights
+come from rank zero. Each update uses the same finite timestep on all ranks.
+The surface retains the global grid, local vertex indices, and communicator;
+application code only passes the surface, Stokes state, and timestep.
+
+`surface.chain` holds local backend markers for existing JustPIC operations.
+`surface.cell_vertices` and `surface.h_vertices` are replicated global CPU
+vectors. Pass `surface` directly to `JustRelax.DataIO.save_marker_chain` on rank
+zero for output. Sparse distributed velocity sampling preserves the serial RK2
+backtracking, slope smoothing, and mean-height correction without gathering
+volume fields. Failed characteristics leave both the global heights and local
+chain unchanged, and sampling failures propagate collectively.
+
+See [grid generation](./grid_generation.md) for root-generated refined meshes
+and [visualization](./visualization.md) for parallel field output.
+
+```@docs; canonical=false
+DistributedMarkerChain
+advect_markerchain!
+```

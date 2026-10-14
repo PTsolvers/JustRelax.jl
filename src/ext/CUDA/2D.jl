@@ -49,6 +49,10 @@ import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_inde
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 2)
 
+function JustPIC.advect_markerchain!(::CUDABackendTrait, surface::JustRelax.DistributedMarkerChain, stokes, dt)
+    return JustRelax._advect_markerchain_mpi!(surface, stokes, dt)
+end
+
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")
 include("../../variational_stokes/Stokes2D.jl")

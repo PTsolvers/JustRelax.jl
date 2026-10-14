@@ -89,8 +89,10 @@ vertex, velocity, and spacing arrays. Omitting `Array` selects CPU arrays;
 `PTArray(backend)` selects another backend's array type. Monitor validation and
 convergence errors propagate from PoissonGrids.
 
-With `igg` supplied, `ni` counts **local** cells, matching `init_global_grid`.
-The constructor generates global coordinates and partitions them internally:
+With `igg` supplied, construction is collective: every rank must call it.
+`ni` counts **local** cells, matching `init_global_grid`.
+Cartesian rank zero generates the global coordinates once, broadcasts the
+coordinate vectors, and each rank constructs its local geometry:
 
 ```julia
 ni = (58, 34)
@@ -101,7 +103,21 @@ grid = Geometry(Array, ni, (450.0, 210.0), (nothing, M);
 
 Without `igg`, this constructor always returns the full serial geometry,
 even when an IGG topology exists. This allows a global reference grid to be
-constructed alongside the distributed one. Nonuniform 3D geometry construction
+constructed alongside the distributed one. To retain the global coordinates
+without repeating the Poisson solve, call `refined_grid_vertices` collectively:
+
+```julia
+xvi_global = refined_grid_vertices((nx_g(), ny_g()), (450.0, 210.0),
+    (nothing, M); origin = (-225.0, -200.0), igg)
+grid = Geometry(Array, xvi_global, igg)
+```
+
+`refined_grid_vertices` always takes **global** cell counts and returns CPU
+vectors on every rank. Only rank zero evaluates the monitors; its grid
+parameters are authoritative. Generation errors propagate to all ranks with
+their original exception types. The global vectors are inexpensive metadata
+for the distributed marker-chain sampler; velocity and solution fields stay
+local. Nonuniform 3D geometry construction
 is supported; the solver restrictions described above still apply.
 
 ## MPI-distributed grids
@@ -154,6 +170,7 @@ particles = init_particles(backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
 ```@docs; canonical=false
 IGG
 Geometry
+refined_grid_vertices
 lazy_grid
 velocity_grids
 ```

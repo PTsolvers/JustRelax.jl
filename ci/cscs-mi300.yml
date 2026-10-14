@@ -14,7 +14,9 @@ include:
     - echo "Preparing the AMDGPU test environment"
     - export JULIA_JUSTRELAX_BACKEND=AMDGPU
     - export JULIA_CSCS_CI=true
+    # The uenv view sets FI_PROVIDER=cxi, which MPICH_jll cannot use; set it inside Julia as the view overrides earlier exports
     - srun -n 1 --uenv $UENV --view=default $JULIA --project -e '
+      ENV["FI_PROVIDER"] = "tcp";
       println("Instantiating project");
       using Pkg;
       Pkg.instantiate();

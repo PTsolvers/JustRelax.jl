@@ -113,16 +113,16 @@ Fields written to file carry stale halo values unless you `update_halo!` first.
 ## Testing
 
 Test files whose name contains `MPI` are pulled out of the parallel test suite by
-`test/runtests.jl` and run one at a time under `mpiexec -n 2`:
+`test/runtests.jl` and run one at a time under `mpiexec -n 2` (pass `--no-mpi` to skip them):
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CPU julia --project=test --startup-file=no test/runtests.jl
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
 ```
 
 Run one directly while iterating:
 
 ```sh
-mpiexec -n 2 julia --project=test --startup-file=no test/test_periodic_boundary_conditions_MPI.jl
+JULIA_JUSTRELAX_BACKEND=CPU mpiexec -n 2 julia --project=. --startup-file=no test/test_periodic_boundary_conditions_MPI.jl
 ```
 
 Existing coverage: `test_periodic_boundary_conditions_MPI.jl`,

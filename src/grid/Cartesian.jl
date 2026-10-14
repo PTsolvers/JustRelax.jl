@@ -96,3 +96,43 @@ function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractA
 end
 
 Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(Array, xvi...)
+
+"""
+    Geometry(TA, xvi_global::NTuple, igg::IGG)
+    Geometry(xvi_global::NTuple, igg::IGG)
+
+Partition explicit global vertex coordinates onto the initialized IGG topology.
+Supports nonperiodic grids with the default two-cell overlap. The coordinate
+lengths must match the global cell counts plus one. Global domain lengths are
+retained for solver scaling; `origin`, `xci`, `xvi`, and `xi_vel` describe the local
+rank. Transverse velocity ghosts use the actual neighboring global coordinates.
+`TA` selects the coordinate array type and defaults to `Array`.
+"""
+function Geometry(TA::Type{<:AbstractArray}, xvi_global::NTuple{N, AbstractVector}, igg::IGG) where {N}
+    ImplicitGlobalGrid.grid_is_initialized() || throw(ArgumentError("initialize IGG before constructing a distributed Geometry"))
+    gg = ImplicitGlobalGrid.global_grid()
+    all(==(2), gg.overlaps[1:N]) && all(iszero, gg.periods[1:N]) ||
+        throw(ArgumentError("explicit-coordinate distributed Geometry requires overlap=2 and nonperiodic boundaries"))
+    length.(xvi_global) == Tuple(gg.nxyz_g[1:N]) .+ 1 ||
+        throw(DimensionMismatch("global vertex coordinates must match the IGG global cell counts plus one"))
+    ni = Tuple(gg.nxyz[1:N])
+    ranges = ntuple(d -> (igg.coords[d] * (ni[d] - 2) + 1):(igg.coords[d] * (ni[d] - 2) + ni[d] + 1), N)
+    vertices = Array.(xvi_global)
+    local_grid = Geometry(TA, ntuple(d -> vertices[d][ranges[d]], N)...)
+    global_grid = Geometry(Array, vertices...)
+    xi_vel = ntuple(N) do component
+        ntuple(N) do d
+            r = ranges[d]
+            indices = component == d ? r : first(r):(last(r) + 1)
+            TA(global_grid.xi_vel[component][d][indices])
+        end
+    end
+    di = merge(local_grid.di, (; velocity = map(v -> diff.(v), xi_vel)))
+    _di = merge(local_grid._di, (; velocity = map(v -> map(x -> inv.(x), v), di.velocity)))
+    return typeof(local_grid)(
+        ni, global_grid.li, local_grid.origin, global_grid.max_li,
+        di, _di, local_grid.xci, local_grid.xvi, xi_vel,
+    )
+end
+
+Geometry(xvi_global::NTuple{N, AbstractVector}, igg::IGG) where {N} = Geometry(Array, xvi_global, igg)

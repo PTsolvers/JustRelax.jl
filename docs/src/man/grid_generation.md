@@ -70,6 +70,40 @@ grid = Geometry(Array, xv, yv)
 grid.xvi[1]
 ```
 
+## PoissonGrids refinement
+
+Loading the optional PoissonGrids package activates monitor-based geometry
+construction. Supply one monitor per axis; `nothing` keeps an axis uniform:
+
+```julia
+using JustRelax, PoissonGrids
+
+M = window_monitor(5.0, 0.25, 32.5, -27.5)
+grid = Geometry(Array, (112, 64), (450.0, 210.0), (nothing, M);
+    origin = (-225.0, -200.0))
+```
+
+The monitor uses the same coordinate units as `li` and `origin` (km here).
+`Geometry` calls `PoissonGrids.solve_grid` internally and constructs the center,
+vertex, velocity, and spacing arrays. Omitting `Array` selects CPU arrays;
+`PTArray(backend)` selects another backend's array type. Monitor validation and
+convergence errors propagate from PoissonGrids.
+
+With `igg` supplied, `ni` counts **local** cells, matching `init_global_grid`.
+The constructor generates global coordinates and partitions them internally:
+
+```julia
+ni = (58, 34)
+igg = IGG(init_global_grid(ni..., 1; select_device = false)...)
+grid = Geometry(Array, ni, (450.0, 210.0), (nothing, M);
+    origin = (-225.0, -200.0), igg)
+```
+
+Without `igg`, this constructor always returns the full serial geometry,
+even when an IGG topology exists. This allows a global reference grid to be
+constructed alongside the distributed one. Nonuniform 3D geometry construction
+is supported; the solver restrictions described above still apply.
+
 ## MPI-distributed grids
 
 For distributed runs, initialize `ImplicitGlobalGrid` first and then construct the grid exactly as in serial:
@@ -84,6 +118,20 @@ grid = Geometry((nx, ny), (1.0e6, 3.0e5); origin = (0.0, -3.0e5))
 ```
 
 Here `grid.xci`, `grid.xvi`, and `grid.xi_vel` correspond to the local rank, while the spacing is computed from the global grid dimensions returned by `ImplicitGlobalGrid`.
+
+For nonuniform coordinates generated elsewhere, pass the **global** vertex
+vectors explicitly:
+
+```julia
+grid = Geometry(Array, (xv_global, yv_global), igg)
+```
+
+Both distributed nonuniform constructors require nonperiodic boundaries and the
+default two-cell overlap. They preserve global domain lengths for solver scaling
+and use neighboring global coordinates for internal velocity ghost nodes. The
+plain `Geometry(Array, xv, yv)` constructor continues to interpret its vectors as
+local coordinates without partitioning. Parallel output can use the explicit
+coordinates as described in [Visualization](./visualization.md).
 
 ## Particle initialization
 

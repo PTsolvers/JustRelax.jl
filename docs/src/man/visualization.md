@@ -65,6 +65,23 @@ plotting from Julia. `save_vtk` writes the grid fields, `save_particles` and
 `save_marker_chain` the particle data; see
 [I/O and checkpointing](./api/io.md).
 
+For MPI runs on a refined rectilinear grid, pass the **local explicit
+coordinates** to `save_pvtk` on every rank:
+
+```julia
+save_pvtk("fields", Array.(grid.xvi), Array.(grid.xci),
+    (; Vx = Array(Vx_v), Vy = Array(Vy_v)),
+    (; P = Array(stokes.P)), (Array(Vx_v), Array(Vy_v)), igg;
+    t = time, pvd = "fields_series")
+```
+
+This produces `.vtr` pieces and a `.pvtr` index containing point and cell
+fields together. The coordinates must describe the local IGG cell grid,
+including its default two-cell overlap. Internal overlap cells are trimmed;
+pieces share their boundary vertices. This form supports nonuniform spacing
+and shifted origins on nonperiodic domains. The spacing-only form remains
+available for uniform grids. See [grid generation](./grid_generation.md).
+
 ## API reference
 
 ```@docs; canonical=false

@@ -592,3 +592,57 @@ function save_particles(
         end
     end
 end
+
+"""
+    save_pvtk(fname, xvi, xci, data_v, data_c, velocity, igg; t=0, precision=Float32, pvd=nothing)
+
+Write an IGG-distributed rectilinear grid using explicit local vertex and center
+coordinates, including refined spacing and a nonzero origin. Each rank writes a
+`.vtr` piece; rank zero writes the `.pvtr` index and optional `.pvd` collection.
+Vertex fields and velocity are point data and center fields are cell data on the
+same mesh. Local center arrays must match the grid sizes passed to
+`init_global_grid`, with the default two-cell overlap and nonperiodic boundaries.
+Internal overlap cells are omitted; adjacent pieces share their boundary vertices.
+"""
+function save_pvtk(
+        fname::String, xvi::NTuple{N}, xci::NTuple{N},
+        data_v::NamedTuple, data_c::NamedTuple, velocity::Tuple, igg::IGG;
+        t::Number = 0, precision = Float32, pvd::Union{Nothing, String} = nothing,
+    ) where {N}
+    gg = ImplicitGlobalGrid.global_grid()
+    all(==(2), gg.overlaps[1:N]) && all(iszero, gg.periods[1:N]) ||
+        throw(ArgumentError("explicit-coordinate save_pvtk requires overlap=2 and nonperiodic boundaries"))
+    ni = length.(xci)
+    ni == Tuple(gg.nxyz[1:N]) || throw(DimensionMismatch("local coordinates must match the IGG cell grid"))
+    length.(xvi) == ni .+ 1 || throw(DimensionMismatch("vertices must bracket every local cell"))
+    cell_slices(coords) = ntuple(N) do d
+        lo = coords[d] == 0 ? 1 : 2
+        hi = ni[d] - (coords[d] == igg.dims[d] - 1 ? 0 : 1)
+        lo:hi
+    end
+    cells = cell_slices(igg.coords)
+    vertices = map(r -> first(r):(last(r) + 1), cells)
+    extents = map(CartesianIndices(Tuple(igg.dims[1:N]))) do I
+        coords = Tuple(I) .- 1
+        slices = cell_slices(coords)
+        ntuple(d -> (first(slices[d]) + coords[d] * (ni[d] - 2)):(last(slices[d]) + 1 + coords[d] * (ni[d] - 2)), N)
+    end |> vec
+    part = LinearIndices(Tuple(igg.dims[1:N]))[(igg.coords[1:N] .+ 1)...]
+    xi = ntuple(d -> Array(xvi[d])[vertices[d]], N)
+    size(first(velocity)) == ni .+ 1 || throw(DimensionMismatch("velocity must be defined on vertices"))
+    pvtk_grid(fname, xi...; part, extents, ismain = igg.me == 0) do vtk
+        for (name, A) in Iterators.flatten((pairs(data_v), pairs(data_c)))
+            slices = size(A) == ni ? cells : vertices
+            size(A) in (ni, ni .+ 1) || throw(DimensionMismatch("$name does not match the local grid"))
+            add_field!(vtk, name, view(Array(A), slices...), length.(vertices), length.(cells), precision)
+        end
+        vtk["Velocity", VTKPointData()] = pack_velocity(velocity, precision, vertices)
+        vtk["TimeValue"] = t
+        if !isnothing(pvd) && igg.me == 0
+            paraview_collection(pvd; append = true) do collection
+                collection_add_timestep(collection, vtk, t)
+            end
+        end
+    end
+    return nothing
+end

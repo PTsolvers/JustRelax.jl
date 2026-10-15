@@ -250,6 +250,23 @@ function enzyme_compute_variational_stress_DRYEL!(
         ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
         air_phase::Integer = 0,
     )
+    enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
+    )
+    enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+    )
+    return nothing
+end
+
+# Form the corrected stress seeds and retain the implicit center-viscosity seed needed by the
+# material-gradient pass. The final reverse through the stress kernel is done by the caller.
+function enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phase_ratios,
+        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
+        air_phase::Integer = 0,
+    )
     # Direct path, including the transpose of the harmonic center-to-vertex interpolation.
     enzyme_compute_variational_viscosity_seed!(
         scratch, stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
@@ -277,7 +294,9 @@ function enzyme_compute_variational_stress_DRYEL!(
     # so it equals its transpose.
     @. adjoint.viscosity.η /= 1 - scratch.η
 
-    # Add the nonlinear viscosity path to the original center-stress seed.
+    # Preserve the implicit viscosity seed for material gradients before its reverse pass is
+    # consumed, then add the nonlinear viscosity path to the original center-stress seed.
+    copyto!(scratch.η, adjoint.viscosity.η)
     enzyme_compute_viscosity_point!(
         scratch.η_target, adjoint.viscosity.η, phase_ratios.center,
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
@@ -286,8 +305,5 @@ function enzyme_compute_variational_stress_DRYEL!(
         air_phase,
     )
     fill!(adjoint.viscosity.η, 0)
-    enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
-    )
     return nothing
 end

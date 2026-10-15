@@ -159,6 +159,7 @@ end
 function compute_viscosity_parameter_gradients!(
         stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients;
         air_phase::Integer = 0,
+        viscosity_seed = (adjoint.viscosity.η, adjoint.viscosity.ηv),
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -167,22 +168,23 @@ function compute_viscosity_parameter_gradients!(
         rheology,
     )
     any(_has_parameter_paths, parameters) || return nothing
+    η_bar, ηv_bar = viscosity_seed
 
     enzyme_pointwise_material_gradients!(
         compute_viscosity_kernel_point!, size(phases.center),
         map(entry -> entry.center, gradients), parameters,
         (
-            stokes.viscosity.η => copy(adjoint.viscosity.η),
+            stokes.viscosity.η => copy(η_bar),
             1.0 => nothing,
             phases.center => nothing,
-            stokes.ε.xx => nothing,
-            stokes.ε.yy => nothing,
-            stokes.ε.xy_c => nothing,
+            stokes.τ.xx => nothing,
+            stokes.τ.yy => nothing,
+            stokes.τ.xy_c => nothing,
             args => nothing,
             rheology => Enzyme.Active,
             air_phase => nothing,
             viscosity_cutoff => nothing,
-            compute_viscosity_εII => nothing,
+            compute_viscosity_τII => nothing,
             local_viscosity_args => nothing,
         ),
     )
@@ -190,17 +192,17 @@ function compute_viscosity_parameter_gradients!(
         compute_viscosity_kernel_point!, size(phases.vertex),
         map(entry -> entry.vertex, gradients), parameters,
         (
-            stokes.viscosity.ηv => copy(adjoint.viscosity.ηv),
+            stokes.viscosity.ηv => copy(ηv_bar),
             1.0 => nothing,
             phases.vertex => nothing,
-            stokes.ε.xx_v => nothing,
-            stokes.ε.yy_v => nothing,
-            stokes.ε.xy => nothing,
+            stokes.τ.xx_v => nothing,
+            stokes.τ.yy_v => nothing,
+            stokes.τ.xy => nothing,
             args => nothing,
             rheology => Enzyme.Active,
             air_phase => nothing,
             viscosity_cutoff => nothing,
-            compute_viscosity_εII => nothing,
+            compute_viscosity_τII => nothing,
             local_viscosity_args_vertex => nothing,
         ),
     )

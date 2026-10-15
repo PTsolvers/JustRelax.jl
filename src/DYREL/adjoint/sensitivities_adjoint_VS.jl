@@ -34,6 +34,7 @@ function compute_sensitivities!(
         viscosity_cutoff = (-Inf, Inf),
         free_surface = false,
         air_phase::Integer = 0,
+        constitutive_scratch = nothing,
     )
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
@@ -44,15 +45,26 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, ϕ, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # Pull the stress seeds back through the masked stress kernel to the viscosity field and the
-    # stress-path material parameters. The harmonic vertex viscosity is folded back into the
-    # centers.
+    viscosity_seed = if isnothing(constitutive_scratch)
+        (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
+    else
+        enzyme_prepare_variational_implicit_viscosity_τII!(
+            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+        )
+        (constitutive_scratch.η, stokes_ad.viscosity.ηv)
+    end
+
+    # For nonlinear viscosity the preparation above replaces the direct stress seeds by their
+    # implicit fixed-point correction and saves the center-viscosity seed. The harmonic vertex
+    # contribution is already folded into that center seed.
     compute_stress_sensitivities!(
         stokes, stokes_ad, phase_ratios, ϕ, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
     compute_viscosity_parameter_gradients!(
-        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients; air_phase
+        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients;
+        air_phase, viscosity_seed,
     )
 
     finish_density_sensitivities!(

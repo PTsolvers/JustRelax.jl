@@ -40,6 +40,7 @@ function compute_sensitivities!(
         ;
         viscosity_cutoff = (-Inf, Inf),
         free_surface = false,
+        constitutive_scratch = nothing,
     )
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
@@ -49,14 +50,26 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # Pull the stress seeds back through the stress kernel to the viscosity fields and the
-    # stress-path material parameters.
+    viscosity_seed = if isnothing(constitutive_scratch)
+        (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
+    else
+        enzyme_compute_implicit_viscosity_τII!(
+            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
+            λ_relaxation, dt, args, viscosity_cutoff,
+        )
+        (constitutive_scratch.η, constitutive_scratch.ηv)
+    end
+
+    # For nonlinear viscosity the preparation above replaces the direct stress seeds by their
+    # implicit fixed-point correction. Pull those seeds through stress, then use the saved
+    # viscosity seed for the viscosity-law parameters.
     compute_stress_sensitivities!(
         stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
     compute_viscosity_parameter_gradients!(
-        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients
+        stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients;
+        viscosity_seed,
     )
 
     finish_density_sensitivities!(stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic)

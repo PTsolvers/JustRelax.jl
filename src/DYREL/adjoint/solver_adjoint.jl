@@ -205,7 +205,7 @@ function solve_DYREL_adjoint!(
     # sensitivity evaluation
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg,
-        gradients, args; viscosity_cutoff, free_surface,
+        gradients, args; viscosity_cutoff, free_surface, constitutive_scratch,
     )
 
     # Do not carry adjoint iteration history into the next forward solve.

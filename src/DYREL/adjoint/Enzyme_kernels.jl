@@ -349,7 +349,10 @@ function enzyme_compute_implicit_viscosity_τII!(
     @. adjoint.viscosity.η /= 1 - scratch.η
     @. adjoint.viscosity.ηv /= 1 - scratch.ηv
 
-    # add `(∂η/∂τ)'η_bar` to the original stress seeds.
+    # Preserve the implicit viscosity seeds for the later material-parameter pullback, then add
+    # `(∂η/∂τ)'η_bar` to the original stress seeds.
+    copyto!(scratch.η, adjoint.viscosity.η)
+    copyto!(scratch.ηv, adjoint.viscosity.ηv)
     enzyme_compute_viscosity_τII!(
         (scratch.η_target, scratch.ηv_target),
         (adjoint.viscosity.η, adjoint.viscosity.ηv), (τ_bar, τv_bar),

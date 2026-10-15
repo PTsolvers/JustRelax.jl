@@ -169,16 +169,14 @@ end
     phases = PhaseRatios(JustPIC.CPU, 1, ni)
     @parallel (@idx ni) _init_enzyme_phase!(phases.center)
     @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
-    rheology = (
+    powerlaw_parameters = (; η0 = 2.0, n = 3.0, ε0 = 1.0)
+    make_rheology(parameters = powerlaw_parameters) = (
         SetMaterialParams(;
             Phase = 1,
-            CompositeRheology = CompositeRheology(
-                (
-                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
-                )
-            ),
+            CompositeRheology = CompositeRheology((PowerlawViscous(; parameters...),)),
         ),
     )
+    rheology = make_rheology()
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     stokes.ε.xx .= 0.3
     stokes.ε.yy .= -0.1
@@ -186,16 +184,16 @@ end
     center_weights = reshape(collect(1.0:9.0), ni...)
     vertex_weights = reshape(collect(1.0:16.0), (ni .+ 1)...)
 
-    function converged_objective()
+    function converged_objective(test_rheology = rheology)
         stokes.viscosity.η .= 2.0
         stokes.viscosity.ηv .= 2.0
         for _ in 1:200
-            JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, 1.0)
+            JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, 1.0, 1.0)
             JustRelax2D.compute_viscosity_τII!(
-                stokes, phases, args, rheology, (-Inf, Inf); relaxation = 0.5,
+                stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 0.5,
             )
         end
-        JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, 1.0)
+        JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, 1.0, 1.0)
         return sum(center_weights .* stokes.τ.xx) + sum(vertex_weights .* stokes.τ.xy)
     end
 
@@ -229,6 +227,41 @@ end
     end
     @test dεxx ≈ finite_difference!(stokes.ε.xx, (2, 2)) rtol = 1.0e-5
     @test dεxy ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
+
+    # Material gradients use the same implicit viscosity seed as the strain-rate pullback.
+    converged_objective()
+    adjoint.τ.xx .= center_weights
+    adjoint.τ.yy .= 0
+    adjoint.τ.xy_c .= 0
+    adjoint.τ.xx_v .= 0
+    adjoint.τ.yy_v .= 0
+    adjoint.τ.xy .= vertex_weights
+    adjoint.τ.II .= 0
+    adjoint.θ .= 0
+    adjoint.viscosity.η .= 0
+    adjoint.viscosity.ηv .= 0
+    JustRelax2D.enzyme_compute_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phases, 1.0, 1.0, args, (-Inf, Inf),
+    )
+    gradients = material_controls(
+        CPUBackend, ni, keys(powerlaw_parameters); nphases = 1
+    )
+    JustRelax2D.compute_viscosity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
+        viscosity_seed = (scratch.η, scratch.ηv),
+    )
+    for name in keys(powerlaw_parameters)
+        h = 1.0e-6
+        value = powerlaw_parameters[name]
+        plus = merge(powerlaw_parameters, NamedTuple{(name,)}((value + h,)))
+        minus = merge(powerlaw_parameters, NamedTuple{(name,)}((value - h,)))
+        finite_difference = (
+            converged_objective(make_rheology(plus)) -
+                converged_objective(make_rheology(minus))
+        ) / (2h)
+        predicted = sum(gradients[name].center) + sum(gradients[name].vertex)
+        @test predicted ≈ finite_difference rtol = 1.0e-5
+    end
 end
 
 @testset "Variational DYREL nonlinear constitutive pullback" begin
@@ -240,16 +273,14 @@ end
     @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
     ϕ = RockRatio(CPUBackend, ni)
     update_rock_ratio!(ϕ, phases, 0)
-    rheology = (
+    powerlaw_parameters = (; η0 = 2.0, n = 3.0, ε0 = 1.0)
+    make_rheology(parameters = powerlaw_parameters) = (
         SetMaterialParams(;
             Phase = 1,
-            CompositeRheology = CompositeRheology(
-                (
-                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
-                )
-            ),
+            CompositeRheology = CompositeRheology((PowerlawViscous(; parameters...),)),
         ),
     )
+    rheology = make_rheology()
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
     stokes.ε.xx .= 0.3
     stokes.ε.yy .= -0.1
@@ -257,15 +288,15 @@ end
     center_weights = reshape(collect(1.0:9.0), ni...)
     vertex_weights = reshape(collect(1.0:16.0), (ni .+ 1)...)
 
-    function converged_objective()
+    function converged_objective(test_rheology = rheology)
         stokes.viscosity.η .= 2.0
         for _ in 1:200
-            JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, 1.0)
+            JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, ϕ, 1.0, 1.0)
             JustRelax2D.update_viscosity_τII!(
-                stokes, phases, ϕ, args, rheology, (-Inf, Inf); relaxation = 0.5,
+                stokes, phases, ϕ, args, test_rheology, (-Inf, Inf); relaxation = 0.5,
             )
         end
-        JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, 1.0)
+        JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, ϕ, 1.0, 1.0)
         return sum(center_weights .* stokes.τ.xx) + sum(vertex_weights .* stokes.τ.xy)
     end
 
@@ -297,6 +328,40 @@ end
     end
     @test dεxx ≈ finite_difference!(stokes.ε.xx, (2, 2)) rtol = 1.0e-5
     @test dεxy ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
+
+    converged_objective()
+    adjoint.τ.xx .= center_weights
+    adjoint.τ.yy .= 0
+    adjoint.τ.xy_c .= 0
+    adjoint.τ.xx_v .= 0
+    adjoint.τ.yy_v .= 0
+    adjoint.τ.xy .= vertex_weights
+    adjoint.τ.II .= 0
+    adjoint.θ .= 0
+    adjoint.viscosity.η .= 0
+    adjoint.viscosity.ηv .= 0
+    JustRelax2D.enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phases, ϕ, 1.0, 1.0, args, (-Inf, Inf),
+    )
+    gradients = material_controls(
+        CPUBackend, ni, keys(powerlaw_parameters); nphases = 1
+    )
+    JustRelax2D.compute_viscosity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
+        viscosity_seed = (scratch.η, adjoint.viscosity.ηv),
+    )
+    for name in keys(powerlaw_parameters)
+        h = 1.0e-6
+        value = powerlaw_parameters[name]
+        plus = merge(powerlaw_parameters, NamedTuple{(name,)}((value + h,)))
+        minus = merge(powerlaw_parameters, NamedTuple{(name,)}((value - h,)))
+        finite_difference = (
+            converged_objective(make_rheology(plus)) -
+                converged_objective(make_rheology(minus))
+        ) / (2h)
+        predicted = sum(gradients[name].center) + sum(gradients[name].vertex)
+        @test predicted ≈ finite_difference rtol = 1.0e-5
+    end
 end
 
 @testset "Spatial elastic-modulus sensitivities" begin

@@ -15,8 +15,8 @@
     )
 
 Masked counterpart of the non-variational wrapper. `adjoint.ε` and `adjoint.R.RP` seed the
-strain-rate and pressure-residual outputs; velocity and pressure sensitivities accumulate in
-`adjoint.V` and `adjoint.P`. The rock-fraction scaling of the continuity residual is
+strain-rate and pressure-residual outputs; contributions to the velocity and pressure adjoint
+equations accumulate in `adjoint.V` and `adjoint.P`. The rock-fraction scaling of the continuity residual is
 differentiated along with it.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
@@ -69,8 +69,8 @@ end
 
 Differentiate the masked Powell–Hestenes momentum residual, including the ϕ-weighted
 free-surface stabilization term (`free_surface_dt = dt * free_surface`; `0` disables it).
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Velocity, pressure, stress and
-buoyancy sensitivities accumulate in their corresponding adjoint fields.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Contributions to the velocity,
+pressure, stress, and buoyancy adjoint equations accumulate in their corresponding fields.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, ϕ::JustRelax.RockRatio, _di, ni; free_surface_dt = 0

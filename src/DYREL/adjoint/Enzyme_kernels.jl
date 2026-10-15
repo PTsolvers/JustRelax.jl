@@ -7,8 +7,8 @@ using Enzyme
     )
 
 `adjoint.ε` and `adjoint.R.RP` are the reverse seeds for the strain-rate and
-pressure-residual outputs. The resulting velocity and pressure sensitivities
-accumulate in `adjoint.V` and `adjoint.P`; all remaining inputs are constant.
+pressure-residual outputs. The resulting contributions to the velocity and pressure
+adjoint equations accumulate in `adjoint.V` and `adjoint.P`; all remaining inputs are constant.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
         stokes,
@@ -57,9 +57,8 @@ end
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
 
 Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Velocity,
-pressure, stress, and buoyancy sensitivities accumulate in their corresponding
-adjoint fields.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Contributions to the velocity,
+pressure, stress, and buoyancy adjoint equations accumulate in their corresponding fields.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni; free_surface_dt = 0

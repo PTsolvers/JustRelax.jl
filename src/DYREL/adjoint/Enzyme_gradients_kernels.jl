@@ -54,15 +54,19 @@ cached fields back to the user-facing angles in degrees.
     path isa Tuple || error("a material-parameter path must be a tuple")
     isempty(path) && error("a material-parameter path must not be empty")
     name = last(path)
-    name in (:ϕ, :Ψ) || return :(_material_parameter_value(
-        _material_parameter(derivative, Val($(QuoteNode(path))))
-    ))
+    name in (:ϕ, :Ψ) || return :(
+        _material_parameter_value(
+            _material_parameter(derivative, Val($(QuoteNode(path))))
+        )
+    )
 
     value(object, field) = begin
         field_path = (path[1:(end - 1)]..., field)
-        :(_material_parameter_value(
-            _material_parameter($object, Val($(QuoteNode(field_path))))
-        ))
+        :(
+            _material_parameter_value(
+                _material_parameter($object, Val($(QuoteNode(field_path))))
+            )
+        )
     end
     angle = value(:material, name)
     angle_gradient = value(:derivative, name)
@@ -146,59 +150,47 @@ end
 end
 
 """
-    enzyme_stress_sensitivities!(
-        vertex_update!, center_update!, n, centers, vertices, parameters, args,
-    )
+    enzyme_stress_sensitivities!(update!, n, fields, parameters, args)
 
-Reverse-differentiate the local stress update point by point, at the vertices with
-`vertex_update!(primals..., i, j)` and at the centers with `center_update!(primals..., i, j)`,
-the two halves of a forward stress kernel. `args` lists their arguments as pairs, as for
-[`enzyme_reverse_pointwise!`](@ref), with the rheology given as `rheology => Enzyme.Active`.
+Reverse-differentiate one local stress update `update!(primals..., i, j)` point by point.
+`args` lists its arguments as pairs, as for [`enzyme_reverse_pointwise!`](@ref), with the
+rheology given as `rheology => Enzyme.Active`.
 
 The stress seeds in the shadows are consumed as in the adjoint iterations, and the field
 sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
 derivative with respect to `rheology` comes back per point and holds every material parameter of
 every phase; the requested ones (`parameters`, one resolved path set per phase) are added to
-`vertices` and `centers` at `[p, i, j]`. Because the forward functions themselves are
-differentiated, every input reconstruction (averages, harmonic vertex viscosity, masks) and
-phase weighting matches the forward solve by construction.
+`fields` at `[p, i, j]`. Because the forward function itself is differentiated, every input
+reconstruction, mask, and phase weighting matches the forward solve by construction.
 """
 function enzyme_stress_sensitivities!(
-        vertex_update!::FV, center_update!::FC, n, centers, vertices, parameters, args::Tuple,
-    ) where {FV, FC}
+        update!::F, n, fields, parameters, args::Tuple,
+    ) where {F}
     primals, shadows = map(first, args), map(last, args)
     k = findfirst(==(Enzyme.Active), shadows)
     isnothing(k) &&
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
-    op = StressSensitivityPoint{FV, FC, k}(vertex_update!, center_update!)
-    context = (; centers, vertices, parameters, ni = n .- 1)
+    op = StressSensitivityPoint{F, k}(update!)
+    context = (; fields, parameters)
     reverse_colored!(op, n, primals, shadows, context)
     return nothing
 end
 
-# Reverse of the vertex and center stress updates at one point, with the rheology (argument `k`)
-# active; its derivative is stored as the material-parameter sensitivities of that point.
-struct StressSensitivityPoint{FV, FC, k}
-    vertex_update!::FV
-    center_update!::FC
+# Reverse one stress update with the rheology (argument `k`) active and store its derivative as
+# the material-parameter gradients of that point.
+struct StressSensitivityPoint{F, k}
+    update!::F
 end
 
-@inline function apply_point!(op::StressSensitivityPoint{FV, FC, k}, primals, shadows, context, i, j) where {FV, FC, k}
-    (; centers, vertices, parameters, ni) = context
+@inline function apply_point!(op::StressSensitivityPoint{F, k}, primals, shadows, context, i, j) where {F, k}
+    (; fields, parameters) = context
     rheology = primals[k]
     annotations = map(annotate, primals, shadows)
     derivative = Enzyme.autodiff_deferred(
-        Enzyme.Reverse, Enzyme.Const(op.vertex_update!), Enzyme.Const, annotations...,
+        Enzyme.Reverse, Enzyme.Const(op.update!), Enzyme.Const, annotations...,
         Enzyme.Const(i), Enzyme.Const(j),
     )[1][k]
-    store_rheology_gradients!(vertices, parameters, rheology, derivative, (i, j))
-    if i ≤ ni[1] && j ≤ ni[2]
-        derivative = Enzyme.autodiff_deferred(
-            Enzyme.Reverse, Enzyme.Const(op.center_update!), Enzyme.Const, annotations...,
-            Enzyme.Const(i), Enzyme.Const(j),
-        )[1][k]
-        store_rheology_gradients!(centers, parameters, rheology, derivative, (i, j))
-    end
+    store_rheology_gradients!(fields, parameters, rheology, derivative, (i, j))
     return nothing
 end
 
@@ -277,11 +269,13 @@ end
     for k in eachindex(names)
         paths_type = parameter_types.parameters[k]
         for path_index in 1:fieldcount(paths_type)
-            push!(writes, quote
-                fields[$k][p, I...] += material_parameter_gradient(
-                    material, derivative, parameters[$k][$path_index]
-                )
-            end)
+            push!(
+                writes, quote
+                    fields[$k][p, I...] += material_parameter_gradient(
+                        material, derivative, parameters[$k][$path_index]
+                    )
+                end
+            )
         end
     end
     return quote

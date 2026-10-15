@@ -70,8 +70,8 @@ end
     )
 
 Pull the converged stress seeds in `adjoint.τ` (and the plastic pressure correction seed
-`adjoint.θ`) back through the fused stress kernel of the forward solve: its vertex and center
-halves are reverse-differentiated point by point with the rheology active. This fills the
+`adjoint.θ`) back through the separated stress kernel of the forward solve. Its vertex and
+center functions are reverse-differentiated point by point with the rheology active. This fills the
 viscosity sensitivities `adjoint.viscosity.η` / `ηv` and adds the stress-path material-parameter
 derivatives to `gradients`. The τII viscosity refresh is left out, as in the linear-viscosity
 adjoint.
@@ -81,22 +81,37 @@ function compute_stress_sensitivities!(
     )
     names = keys(gradients)
     parameters = map(material -> _resolve_parameter_paths(material, names, _stress_parameter_paths), rheology)
-    # the forward kernel also writes the pressure correction θc = γ_eff·RP + ΔPψ; it does not feed
-    # back into the stress, so scratch arrays keep the solver's own θc untouched
-    θc = similar(stokes.P)
-    γ_eff = zero(stokes.P)
     enzyme_stress_sensitivities!(
-        compute_stress_viscosity_DRYEL_vertex!,
-        compute_stress_viscosity_DRYEL_center!,
+        compute_stress_DRYEL_vertex!,
         size(phases.vertex),
-        map(entry -> entry.center, gradients),
         map(entry -> entry.vertex, gradients),
         parameters,
         (
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
             (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy) => (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
             (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy) => nothing,
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
+            (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
+            stokes.EII_pl => nothing,
+            stokes.P => adjoint.P,
+            fluid_pressure(args, stokes.P) => nothing,
+            stokes.λv => nothing,
+            stokes.viscosity.ηv => adjoint.viscosity.ηv,
+            rheology => Enzyme.Active,
+            phases.center => nothing,
+            phases.vertex => nothing,
+            λ_relaxation => nothing,
+            dt => nothing,
+            periodic => nothing,
+        ),
+    )
+    enzyme_stress_sensitivities!(
+        compute_stress_DRYEL_center!,
+        size(phases.center),
+        map(entry -> entry.center, gradients),
+        parameters,
+        (
+            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
             stokes.τ.II => adjoint.τ.II,
             (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
             (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
@@ -105,24 +120,13 @@ function compute_stress_sensitivities!(
             stokes.P => adjoint.P,
             fluid_pressure(args, stokes.P) => nothing,
             stokes.λ => nothing,
-            stokes.λv => nothing,
             stokes.viscosity.η => adjoint.viscosity.η,
-            stokes.viscosity.ηv => adjoint.viscosity.ηv,
             stokes.viscosity.η_vep => nothing,
             stokes.ΔPψ => adjoint.θ,
-            θc => nothing,
-            stokes.R.RP => nothing,
-            γ_eff => nothing,
             rheology => Enzyme.Active,
             phases.center => nothing,
-            phases.vertex => nothing,
             λ_relaxation => nothing,
             dt => nothing,
-            1.0 => nothing,
-            (;) => nothing,
-            (-Inf, Inf) => nothing,
-            true => nothing,
-            periodic => nothing,
         ),
     )
     return nothing

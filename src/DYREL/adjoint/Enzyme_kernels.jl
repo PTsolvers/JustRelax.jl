@@ -145,7 +145,9 @@ end
     gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
     # Momentum -> buoyancy -> density -> pressure. Add to the direct pressure
     # gradient and any objective seed already present in dP.
-    dP[I...] += dρdP * (gx * dρg[1][I...] + gy * dρg[2][I...])
+    # dJ/dP += dJ/dρ * dρ/dP
+    #        = (gx * dJ/d(ρgx) + gy * dJ/d(ρgy)) * dρ/dP
+    dP[I...] += (gx * dρg[1][I...] + gy * dρg[2][I...]) * dρdP
     return nothing
 end
 

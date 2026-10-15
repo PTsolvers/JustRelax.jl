@@ -90,11 +90,11 @@ function solve_VariationalDYREL_adjoint!(
     stokes_ad.viscosity.ηv .= 0
     viscosity_target = linear_viscosity ? nothing : copy(stokes.viscosity.η)
     constitutive_scratch = linear_viscosity ? nothing : (;
-        η = similar(stokes.viscosity.η),
-        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
-        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
-        τII = similar(stokes.τ.II),
-    )
+            η = similar(stokes.viscosity.η),
+            τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
+            τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
+            τII = similar(stokes.τ.II),
+        )
 
     # Iteration loop
     err_min = Inf

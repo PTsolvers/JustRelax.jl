@@ -107,9 +107,11 @@ function _elastic_rheology(moduli, bulk_moduli)
         SetMaterialParams(;
             Phase = p,
             Gravity = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((
-                LinearViscous(; η = 3.0), elasticity, plasticity,
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    LinearViscous(; η = 3.0), elasticity, plasticity,
+                )
+            ),
             Elasticity = elasticity,
             Plasticity = plasticity,
         )
@@ -135,9 +137,11 @@ function _plastic_rheology(parameters)
             Phase = p,
             Density = ConstantDensity(; ρ = 1.0),
             Gravity = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((
-                LinearViscous(; η = 2.0), elasticity, plasticity,
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    LinearViscous(; η = 2.0), elasticity, plasticity,
+                )
+            ),
             Elasticity = elasticity,
             Plasticity = plasticity,
         )
@@ -170,9 +174,11 @@ end
     rheology = (
         SetMaterialParams(;
             Phase = 1,
-            CompositeRheology = CompositeRheology((
-                PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+                )
+            ),
         ),
     )
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
@@ -359,7 +365,7 @@ end
     dt = 0.5
     parameters = (
         (; C = 0.15, ϕ = 25.0, Ψ = 8.0, η_vp = 0.07),
-        (; C = 0.10, ϕ = 20.0, Ψ = 5.0, η_vp = 0.05),
+        (; C = 0.1, ϕ = 20.0, Ψ = 5.0, η_vp = 0.05),
     )
     rheology = _plastic_rheology(parameters)
     phases = PhaseRatios(JustPIC.CPU, 2, ni)
@@ -700,9 +706,11 @@ end
             Phase = 1,
             Density = ConstantDensity(; ρ = 1.0),
             Gravity = ConstantGravity(; g = 1.0),
-            CompositeRheology = CompositeRheology((
-                PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+                )
+            ),
         ),
     )
     nonlinear_args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
@@ -784,9 +792,9 @@ end
             η_local = 0.5η_local + 0.5η_target
         end
         return JustRelax2D.local_stress_from_viscosity(
-            η_local, ε_local, τ_old_local, 0.0, 0.0, 1.0,
-            nonlinear_rheology, ratio, 1.0, 0.0, 0.0,
-        ), η_local
+                η_local, ε_local, τ_old_local, 0.0, 0.0, 1.0,
+                nonlinear_rheology, ratio, 1.0, 0.0, 0.0,
+            ), η_local
     end
     τ_local, η_local = converged_local_stress(ε_local)
     τ_bar_local = (1.0, -0.25, 0.5)

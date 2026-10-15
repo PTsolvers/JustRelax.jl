@@ -122,7 +122,7 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
         iterMax = 50.0e3,
         nout = 100,
         rel_drop = 1.0e-2,
-        verbose_PH = false,
+        verbose_PH = true,
         verbose_DR = false,
     )
 

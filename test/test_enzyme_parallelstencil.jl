@@ -162,6 +162,75 @@ function _linear_viscosity_residual_objective!(
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
 end
 
+@testset "Normal DYREL nonlinear constitutive pullback" begin
+    ni = (3, 3)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    phases = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _init_enzyme_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            CompositeRheology = CompositeRheology(
+                (
+                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+                )
+            ),
+        ),
+    )
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+    stokes.ε.xx .= 0.3
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.2
+    center_weights = reshape(collect(1.0:9.0), ni...)
+    vertex_weights = reshape(collect(1.0:16.0), (ni .+ 1)...)
+
+    function converged_objective()
+        stokes.viscosity.η .= 2.0
+        stokes.viscosity.ηv .= 2.0
+        for _ in 1:200
+            JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, 1.0)
+            JustRelax2D.compute_viscosity_τII!(
+                stokes, phases, args, rheology, (-Inf, Inf); relaxation = 0.5,
+            )
+        end
+        JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, 1.0)
+        return sum(center_weights .* stokes.τ.xx) + sum(vertex_weights .* stokes.τ.xy)
+    end
+
+    converged_objective()
+    adjoint.τ.xx .= center_weights
+    adjoint.τ.xy .= vertex_weights
+    scratch = (;
+        η_target = copy(stokes.viscosity.η),
+        ηv_target = copy(stokes.viscosity.ηv),
+        η = similar(stokes.viscosity.η),
+        ηv = similar(stokes.viscosity.ηv),
+        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
+        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
+        τII = similar(stokes.τ.II),
+        θ = similar(stokes.ΔPψ),
+    )
+    JustRelax2D.enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phases, 1.0, 1.0, args, (-Inf, Inf), false, scratch,
+    )
+    dεxx = adjoint.ε.xx[2, 2]
+    dεxy = adjoint.ε.xy[2, 2]
+
+    function finite_difference!(field, index)
+        h = 1.0e-6
+        field[index...] += h
+        plus = converged_objective()
+        field[index...] -= 2h
+        minus = converged_objective()
+        field[index...] += h
+        return (plus - minus) / (2h)
+    end
+    @test dεxx ≈ finite_difference!(stokes.ε.xx, (2, 2)) rtol = 1.0e-5
+    @test dεxy ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
+end
+
 @testset "Variational DYREL nonlinear constitutive pullback" begin
     ni = (3, 3)
     stokes = StokesArrays(CPUBackend, ni)
@@ -204,14 +273,15 @@ end
     adjoint.τ.xx .= center_weights
     adjoint.τ.xy .= vertex_weights
     scratch = (;
+        η_target = copy(stokes.viscosity.η),
         η = similar(stokes.viscosity.η),
         τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
         τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
         τII = similar(stokes.τ.II),
+        θ = similar(stokes.ΔPψ),
     )
     JustRelax2D.enzyme_compute_variational_stress_DRYEL!(
-        scratch, copy(stokes.viscosity.η), stokes, adjoint, rheology, phases, ϕ,
-        1.0, 1.0, args, (-Inf, Inf),
+        scratch, stokes, adjoint, rheology, phases, ϕ, 1.0, 1.0, args, (-Inf, Inf),
     )
     dεxx = adjoint.ε.xx[2, 2]
     dεxy = adjoint.ε.xy[2, 2]
@@ -726,6 +796,16 @@ end
             relaxation = 0.5,
         )
     end
+    nonlinear_scratch = (;
+        η_target = copy(stokes.viscosity.η),
+        ηv_target = copy(stokes.viscosity.ηv),
+        η = similar(stokes.viscosity.η),
+        ηv = similar(stokes.viscosity.ηv),
+        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
+        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
+        τII = similar(stokes.τ.II),
+        θ = similar(stokes.ΔPψ),
+    )
     # The final-state nonlinear path starts with the stress seed supplied by the momentum
     # residual. Viscosity is a locally eliminated constitutive variable, so a stale viscosity
     # seed must be ignored. The adjoint interface therefore has no relaxation argument.
@@ -743,8 +823,7 @@ end
     adjoint.viscosity.ηv .= 123.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
         stokes, adjoint, nonlinear_rheology, phase_ratios, 1.0, 1.0,
-        nonlinear_args, (-Inf, Inf), false,
-        (copy(stokes.viscosity.η), copy(stokes.viscosity.ηv)),
+        nonlinear_args, (-Inf, Inf), false, nonlinear_scratch,
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
@@ -765,74 +844,10 @@ end
     adjoint.viscosity.ηv .= -456.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
         stokes, adjoint, nonlinear_rheology, phase_ratios, 1.0, 1.0,
-        nonlinear_args, (-Inf, Inf), false,
-        (copy(stokes.viscosity.η), copy(stokes.viscosity.ηv)),
+        nonlinear_args, (-Inf, Inf), false, nonlinear_scratch,
     )
     @test adjoint.ε.xx ≈ nonlinear_εxx
     @test adjoint.ε.xy ≈ nonlinear_εxy
-
-    # Check the local implicit correction against finite differences of the converged
-    # constitutive equations, rather than against a finite number of relaxed updates.
-    ratio = phase_ratios.center[1, 1]
-    ε_local = (0.2, -0.1, 0.3)
-    τ_old_local = (0.0, 0.0, 0.0)
-    viscosity_args_local = JustRelax2D.local_viscosity_args(nonlinear_args, 1, 1)
-    function converged_local_stress(ε_local)
-        η_local = 2.0
-        τ_local = (0.0, 0.0, 0.0)
-        for _ in 1:200
-            τ_local = JustRelax2D.local_stress_from_viscosity(
-                η_local, ε_local, τ_old_local, 0.0, 0.0, 1.0,
-                nonlinear_rheology, ratio, 1.0, 0.0, 0.0,
-            )
-            η_target = JustRelax2D.compute_viscosity_value(
-                η_local, τ_local, ratio, viscosity_args_local, nonlinear_rheology,
-                1.0, (-Inf, Inf), JustRelax2D.compute_viscosity_τII,
-            )
-            η_local = 0.5η_local + 0.5η_target
-        end
-        return JustRelax2D.local_stress_from_viscosity(
-                η_local, ε_local, τ_old_local, 0.0, 0.0, 1.0,
-                nonlinear_rheology, ratio, 1.0, 0.0, 0.0,
-            ), η_local
-    end
-    τ_local, η_local = converged_local_stress(ε_local)
-    τ_bar_local = (1.0, -0.25, 0.5)
-    η_bar_local = JustRelax2D.implicit_τII_viscosity_adjoint(
-        τ_bar_local, η_local, ε_local, τ_old_local, 0.0, 0.0, 1.0,
-        nonlinear_rheology, ratio, 1.0, 0.0, 0.0, viscosity_args_local, (-Inf, Inf),
-    )
-    viscosity_from_stress(τ) = JustRelax2D.compute_viscosity_value(
-        η_local, τ, ratio, viscosity_args_local, nonlinear_rheology,
-        1.0, (-Inf, Inf), JustRelax2D.compute_viscosity_τII,
-    )
-    dηdτ_local = Enzyme.autodiff(
-        Enzyme.Reverse,
-        Enzyme.Const(viscosity_from_stress),
-        Enzyme.Active,
-        Enzyme.Active(τ_local),
-    )[1][1]
-    corrected_τ_bar = τ_bar_local .+ dηdτ_local .* η_bar_local
-    local_stress_objective(ε) = sum(
-        corrected_τ_bar .* JustRelax2D.local_stress_from_viscosity(
-            η_local, ε, τ_old_local, 0.0, 0.0, 1.0,
-            nonlinear_rheology, ratio, 1.0, 0.0, 0.0,
-        )
-    )
-    ε_bar_local = Enzyme.autodiff(
-        Enzyme.Reverse,
-        Enzyme.Const(local_stress_objective),
-        Enzyme.Active,
-        Enzyme.Active(ε_local),
-    )[1][1]
-    final_objective(ε) = sum(τ_bar_local .* first(converged_local_stress(ε)))
-    h = 1.0e-6
-    for component in eachindex(ε_local)
-        direction = ntuple(i -> i == component ? h : 0.0, length(ε_local))
-        plus = final_objective(ε_local .+ direction)
-        minus = final_objective(ε_local .- direction)
-        @test ε_bar_local[component] ≈ (plus - minus) / (2h) rtol = 1.0e-5
-    end
 
     bcs = VelocityBoundaryConditions()
     adjoint.V.Vx .= 1.0

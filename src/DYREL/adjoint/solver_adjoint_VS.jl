@@ -88,12 +88,13 @@ function solve_VariationalDYREL_adjoint!(
     dyrel.dVydτ .= 0
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
-    viscosity_target = linear_viscosity ? nothing : copy(stokes.viscosity.η)
     constitutive_scratch = linear_viscosity ? nothing : (;
+            η_target = copy(stokes.viscosity.η),
             η = similar(stokes.viscosity.η),
             τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
             τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
             τII = similar(stokes.τ.II),
+            θ = similar(stokes.ΔPψ),
         )
 
     # Iteration loop
@@ -118,7 +119,7 @@ function solve_VariationalDYREL_adjoint!(
         variational_adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni,
             dt, λ_relaxation_PH, free_surface, air_phase, maskP,
-            viscosity_target, constitutive_scratch, viscosity_cutoff,
+            constitutive_scratch, viscosity_cutoff,
         )
 
         # Residual check
@@ -178,7 +179,7 @@ function solve_VariationalDYREL_adjoint!(
             variational_adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
                 ni, dt, λ_relaxation_DR, free_surface, air_phase, maskP,
-                viscosity_target, constitutive_scratch, viscosity_cutoff,
+                constitutive_scratch, viscosity_cutoff,
             )
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
@@ -252,22 +253,22 @@ end
 # Seeds are set by the caller. The adjoint pressure residual of eliminated cells is dropped.
 function variational_adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni, dt,
-        λ_relaxation, free_surface, air_phase, maskP, viscosity_target,
-        constitutive_scratch, viscosity_cutoff,
+        λ_relaxation, free_surface, air_phase, maskP, constitutive_scratch,
+        viscosity_cutoff,
     )
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, ϕ, _di, ni, rheology, phase_ratios, args;
         free_surface_dt = dt * free_surface, air_phase,
     )
-    if isnothing(viscosity_target)
+    if isnothing(constitutive_scratch)
         fill!(stokes_ad.viscosity.η, 0)
         enzyme_compute_stress_DRYEL!(
             stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
         )
     else
         enzyme_compute_variational_stress_DRYEL!(
-            constitutive_scratch, viscosity_target, stokes, stokes_ad, rheology,
-            phase_ratios, ϕ, λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
         )
     end
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)

@@ -64,9 +64,16 @@ function solve_DYREL_adjoint!(
     dyrel.dVydτ .= 0
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
-    viscosity_target = linear_viscosity ? nothing : (
-        copy(stokes.viscosity.η), copy(stokes.viscosity.ηv),
-    )
+    constitutive_scratch = linear_viscosity ? nothing : (;
+            η_target = copy(stokes.viscosity.η),
+            ηv_target = copy(stokes.viscosity.ηv),
+            η = similar(stokes.viscosity.η),
+            ηv = similar(stokes.viscosity.ηv),
+            τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
+            τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
+            τII = similar(stokes.τ.II),
+            θ = similar(stokes.ΔPψ),
+        )
 
     # Iteration loop
     err_min = Inf
@@ -89,7 +96,7 @@ function solve_DYREL_adjoint!(
         adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
             λ_relaxation_PH, free_surface, viscosity_cutoff, linear_viscosity,
-            viscosity_target,
+            constitutive_scratch,
         )
 
         # Residual check
@@ -144,7 +151,7 @@ function solve_DYREL_adjoint!(
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
                 λ_relaxation_DR, free_surface, viscosity_cutoff, linear_viscosity,
-                viscosity_target,
+                constitutive_scratch,
             )
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
@@ -213,7 +220,8 @@ end
 # boundary conditions. The relaxed forward viscosity update is not differentiated.
 function adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-        λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity, viscosity_target,
+        λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
+        constitutive_scratch,
     )
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
@@ -221,7 +229,7 @@ function adjoint_residual!(
     )
     enzyme_compute_stress_DRYEL!(
         stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, args,
-        viscosity_cutoff, linear_viscosity, viscosity_target,
+        viscosity_cutoff, linear_viscosity, constitutive_scratch,
     )
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)

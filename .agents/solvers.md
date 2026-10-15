@@ -125,6 +125,10 @@ recomputes per-node pseudo-time steps `dτVx/dτVy` and damping `βV`, `αV`, `c
 outer Powell–Hestenes iteration. This removes CFL/damping hand-tuning for strongly
 heterogeneous or non-linear rheologies.
 
+`DYREL(...; global_penalty=true)` uses mean finite viscosity for the numerical penalty
+scale; `global_penalty=false` uses local viscosity. The default is global for standard and
+variational DYREL. Under MPI, the mean is reduced across ranks.
+
 The loop is two-level: an outer Powell–Hestenes loop on the pressure/plastic multiplier
 (`iterMax_PH`, `λ_relaxation_PH`, `pressure_relaxation`) around an inner dynamic-relaxation
 loop on velocity (`iterMax_DR`, `λ_relaxation_DR`, `rel_drop`), with `total_iterMax`

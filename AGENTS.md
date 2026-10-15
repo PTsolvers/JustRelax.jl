@@ -61,23 +61,24 @@ julia --project=. --startup-file=no -e 'using JustRelax; println("loaded")'
 
 ### CPU tests
 
-The test runner executes the regular tests in parallel and runs MPI tests separately with two ranks:
+There is no `test/Project.toml`; `Pkg.test` builds the test environment from the root `Project.toml`. The runner executes the regular tests in parallel and runs MPI tests separately with two ranks:
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CPU julia --project=test --startup-file=no test/runtests.jl
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
 ```
 
-Run one test file directly when iterating on a focused change:
+Run one test file directly when iterating on a focused change (files that use `Suppressor` need `Pkg.test`):
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CPU julia --project=test --startup-file=no test/test_diffusion2D.jl
+JULIA_JUSTRELAX_BACKEND=CPU julia --project=. --startup-file=no test/test_types.jl
 ```
 
-The runner accepts test filters and `--backend=CUDA` or `--backend=AMDGPU` for accelerator testing. GPU tests require the corresponding hardware and Julia package/runtime setup:
+The runner accepts test-name prefixes, `--no-mpi` to skip the MPI tests, and `--backend=CUDA` or `--backend=AMDGPU` for accelerator testing. GPU tests require the corresponding hardware and Julia package/runtime setup:
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CUDA julia --project=test --startup-file=no test/runtests.jl --backend=CUDA
-JULIA_JUSTRELAX_BACKEND=AMDGPU julia --project=test --startup-file=no test/runtests.jl --backend=AMDGPU
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("JustRelax"; test_args=["test_diffusion2D", "--no-mpi"])'
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("JustRelax"; test_args=["--backend=CUDA"])'
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("JustRelax"; test_args=["--backend=AMDGPU"])'
 ```
 
 ### Formatting

@@ -17,22 +17,26 @@ Load the package from the repository root:
 julia --project=. -e 'using JustRelax'
 ```
 
-Run the test suite (CPU by default; runs in parallel, plus MPI tests with two ranks):
+Run the test suite. `Pkg.test` builds the test environment from the root `Project.toml`; the CPU backend is the default:
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CPU julia --project=test test/runtests.jl
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
 ```
 
-Run a single test file directly when iterating on a focused change:
+Pass options through `test_args`:
+
+- Test names select files by prefix (`test_diffusion2D` also runs `test_diffusion2D_multiphase`). The slow `test_stokes_burstedde` and `test_VanKeken` run only when named.
+- `--backend=CUDA` or `--backend=AMDGPU` runs on the GPU (requires the hardware).
+- Files with `MPI` in their name run afterwards under `mpiexec -n 2`, whatever names are given; `--no-mpi` skips them.
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CPU julia --project=test test/test_diffusion2D.jl
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("JustRelax"; test_args=["test_diffusion2D", "--no-mpi"])'
 ```
 
-The runner also accepts `--backend=CUDA`/`--backend=AMDGPU` for accelerator testing (requires the corresponding hardware):
+Run a single test file directly when iterating on a focused change (files that use `Suppressor` need `Pkg.test`):
 
 ```sh
-JULIA_JUSTRELAX_BACKEND=CUDA julia --project=test test/runtests.jl --backend=CUDA
+JULIA_JUSTRELAX_BACKEND=CPU julia --project=. --startup-file=no test/test_types.jl
 ```
 
 Try out example/benchmark scripts using the `miniapps` environment, e.g.:

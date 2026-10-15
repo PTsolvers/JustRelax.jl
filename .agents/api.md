@@ -103,8 +103,9 @@ either precomputed `K`/`ρCp` arrays or `rheology` (with optional `phase_ratios`
 `RockRatio(backend, ni)` / `update_rock_ratio!(ϕ, phase_ratios, air_phase)` — the volume
 fractions the variational solvers use to mask air cells.
 
-`DYREL(backend, stokes, rheology, phase_ratios[, ϕ], di, dt; ...)` — dynamic-relaxation
-state; must be built before the time loop.
+`DYREL(backend, stokes, rheology, phase_ratios[, ϕ], di, dt; global_penalty=true, ...)` —
+dynamic-relaxation state; must be built before the time loop. `global_penalty=true` uses
+mean finite viscosity for the numerical penalty scale; `false` uses local viscosity.
 
 `StressParticles`, `PrincipalStress`, `WENO5` — see `src/stress_rotation/`,
 `src/stokes/PrincipalStresses.jl`, `src/types/weno.jl`.

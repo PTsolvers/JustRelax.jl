@@ -333,11 +333,11 @@ end
     copyto!(stokes.ε_pl.xy, εxy_e)
     εII_ref = [
         sqrt(
-                0.5 * (4.0 + 1.0 + 1.0) +
+            0.5 * (4.0 + 1.0 + 1.0) +
                 sum(abs2, εyz_e[i, j:(j + 1), k:(k + 1)]) / 4 +
                 sum(abs2, εxz_e[i:(i + 1), j, k:(k + 1)]) / 4 +
                 sum(abs2, εxy_e[i:(i + 1), j:(j + 1), k]) / 4
-            ) for i in 1:nx, j in 1:ny, k in 1:nz
+        ) for i in 1:nx, j in 1:ny, k in 1:nz
     ]
     JR3.accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, 0.5)
     @test Array(stokes.EII_pl) ≈ 0.5 .* εII_ref

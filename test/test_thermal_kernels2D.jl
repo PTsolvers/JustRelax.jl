@@ -511,9 +511,9 @@ const no_flux_bc = (left = false, right = false, bot = false, top = false)
         compute_shear_heating!(thermal, stokes, phase_ratios, rheo_sh, dt_sh)
         expected_mix = [
             begin
-                    w = work(φ1[i, j] * G[1] + (1 - φ1[i, j]) * G[2], i, j)
-                    max(0.0, (φ1[i, j] * Χ[1] + (1 - φ1[i, j]) * Χ[2]) * w)
-                end for i in 1:nx, j in 1:ny
+                w = work(φ1[i, j] * G[1] + (1 - φ1[i, j]) * G[2], i, j)
+                max(0.0, (φ1[i, j] * Χ[1] + (1 - φ1[i, j]) * Χ[2]) * w)
+            end for i in 1:nx, j in 1:ny
         ]
         @test Array(thermal.shear_heating) ≈ expected_mix
     end

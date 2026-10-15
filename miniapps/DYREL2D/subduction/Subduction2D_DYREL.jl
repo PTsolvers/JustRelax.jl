@@ -6,7 +6,7 @@ const isCUDA = false
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
-using Pkg; Pkg.activate("miniapps")
+# using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
     JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
@@ -30,7 +30,7 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams, CairoMakie
 
 
 # Load file with all the rheology configurations

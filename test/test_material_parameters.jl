@@ -38,7 +38,9 @@ end
 
     @test JustRelax2D.material_parameter_is_used(material, :ρ0)
     @test JustRelax2D.material_parameter_is_used(material, :η)
+    @test JustRelax2D.material_parameter_is_used(material, :g)
     @test JustRelax2D._density_parameter_paths(material, :α) == [(:Density, 1, :α)]
+    @test JustRelax2D._gravity_parameter_paths(material, :g) == [(:Gravity, 1, :g)]
     @test JustRelax2D._composite_parameter_paths(material, :η) ==
         [(:CompositeRheology, 1, :elements, 1, :η)]
     @test JustRelax2D.material_parameter_is_used(material, :G)
@@ -61,6 +63,50 @@ end
     @test JustRelax2D._viscosity_parameter_paths(powerlaw, :ε0) ==
         [(:CompositeRheology, 1, :elements, 1, :ε0)]
     @test JustRelax2D.material_parameter_is_used(powerlaw, :ε0)
+
+    nested = SetMaterialParams(;
+        Phase = 1,
+        CompositeRheology = CompositeRheology(
+            (
+                Parallel(
+                    PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+                    LinearViscous(; η = 4.0),
+                ),
+            )
+        ),
+    )
+    nested_η0 = [
+        (:CompositeRheology, 1, :elements, 1, :elements, 1, :η0),
+    ]
+    @test JustRelax2D._viscosity_parameter_paths(nested, :η0) == nested_η0
+    @test isempty(JustRelax2D._stress_parameter_paths(nested, :η0))
+
+    nested_plasticity = SetMaterialParams(;
+        Phase = 1,
+        CompositeRheology = CompositeRheology(
+            (
+                Parallel(
+                    DruckerPrager_regularised(; C = 0.2, ϕ = 30.0, Ψ = 5.0, η_vp = 0.1),
+                    LinearViscous(; η = 4.0),
+                ),
+            )
+        ),
+    )
+    @test JustRelax2D._stress_parameter_paths(nested_plasticity, :C) ==
+        [(:CompositeRheology, 1, :elements, 1, :elements, 1, :C)]
+    @test isempty(JustRelax2D._viscosity_parameter_paths(nested_plasticity, :C))
+
+    disabled_elasticity = SetMaterialParams(;
+        Phase = 1,
+        CompositeRheology = CompositeRheology(
+            (
+                LinearViscous(; η = 1.0),
+                ConstantElasticity(; G = Inf, Kb = 0.0),
+            )
+        ),
+    )
+    @test isempty(JustRelax2D._stress_parameter_paths(disabled_elasticity, :G))
+    @test isempty(JustRelax2D._viscosity_parameter_paths(disabled_elasticity, :Kb))
     @test !JustRelax2D.material_parameter_is_used(material, :sinϕ)
 end
 

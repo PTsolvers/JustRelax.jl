@@ -55,7 +55,7 @@ function finish_density_sensitivities!(
         stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic;
         air_phase::Integer = 0, ϕ = nothing,
     )
-    compute_density_parameter_sensitivities!(
+    compute_buoyancy_parameter_gradients!(
         ρg, stokes_ad, phase_ratios, rheology, args, dt, gradients; air_phase, ϕ
     )
 
@@ -109,34 +109,57 @@ end
 @inline _density_parameter_paths(material, name::Symbol) =
     _material_parameter_paths(material.Density, name, (:Density,))
 
+@inline _gravity_parameter_paths(material, name::Symbol) =
+    _material_parameter_paths(material.Gravity, name, (:Gravity,))
+
+@inline _buoyancy_parameter_paths(material, name::Symbol) =
+    (_density_parameter_paths(material, name)..., _gravity_parameter_paths(material, name)...)
+
 @inline _composite_parameter_paths(material, name::Symbol) =
     _material_parameter_paths(material.CompositeRheology, name, (:CompositeRheology,))
 
+function _parameter_has_parent(material, path, predicate)
+    object = material
+    for component in path[1:(end - 1)]
+        object = component isa Symbol ? getproperty(object, component) : object[component]
+        predicate(object) && return true
+    end
+    return false
+end
+
 function _composite_parameter_paths(material, name::Symbol, predicate)
-    paths = Tuple[]
-    for (rheology_index, composite) in pairs(material.CompositeRheology)
-        for (element_index, element) in pairs(composite.elements)
-            predicate(element) || continue
-            prefix = (:CompositeRheology, rheology_index, :elements, element_index)
-            append!(paths, _material_parameter_paths(element, name, prefix))
-        end
+    paths = _composite_parameter_paths(material, name)
+    filter!(path -> _parameter_has_parent(material, path, predicate), paths)
+    return paths
+end
+
+function _finite_parameter_paths!(paths, material)
+    filter!(paths) do path
+        value = _material_parameter_value(_material_parameter(material, Val(path)))
+        return isfinite(value)
     end
     return paths
 end
 
-@inline _viscosity_parameter_paths(material, name::Symbol) =
-    _composite_parameter_paths(material, name, element -> element isa GeoParams.AbstractCreepLaw)
+# Search all ancestors so laws nested inside Parallel or another composite route to the
+# pointwise kernel that actually evaluates them.
+function _viscosity_parameter_paths(material, name::Symbol)
+    paths = _composite_parameter_paths(
+        material, name, element -> element isa GeoParams.AbstractCreepLaw,
+    )
+    return _finite_parameter_paths!(paths, material)
+end
 
 function _stress_parameter_paths(material, name::Symbol)
     paths = _composite_parameter_paths(
         material, name,
         element -> element isa GeoParams.AbstractElasticity || element isa GeoParams.AbstractPlasticity,
     )
+    _finite_parameter_paths!(paths, material)
     filter!(paths) do path
-        element = material.CompositeRheology[path[2]].elements[path[4]]
-        element isa GeoParams.AbstractElasticity || return true
-        value = _material_parameter_value(_material_parameter(material, Val(path)))
-        return isfinite(value) && !iszero(value)
+        return !_parameter_has_parent(
+            material, path, element -> element isa GeoParams.AbstractElasticity,
+        ) || !iszero(_material_parameter_value(_material_parameter(material, Val(path))))
     end
     return paths
 end
@@ -153,6 +176,7 @@ end
 
 function material_parameter_is_used(material, parameter)
     return !isempty(_density_parameter_paths(material, parameter)) ||
+        !isempty(_gravity_parameter_paths(material, parameter)) ||
         !isempty(_composite_parameter_paths(material, parameter))
 end
 
@@ -233,7 +257,7 @@ function combine_center_vertex_gradient!(
     return center
 end
 
-function compute_density_parameter_sensitivities!(
+function compute_buoyancy_parameter_gradients!(
         ρg, adjoint, phases, rheology, args, dt, gradients;
         air_phase::Integer = 0, ϕ = nothing,
     )
@@ -241,7 +265,7 @@ function compute_density_parameter_sensitivities!(
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
     parameters = map(
-        material -> _resolve_parameter_paths(material, names, _density_parameter_paths),
+        material -> _resolve_parameter_paths(material, names, _buoyancy_parameter_paths),
         rheology,
     )
     any(_has_parameter_paths, parameters) || return nothing

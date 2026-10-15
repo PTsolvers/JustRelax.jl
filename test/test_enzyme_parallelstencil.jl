@@ -67,6 +67,56 @@ end
     @test adjoint.τ.xy_c[2, 2] ≈ finite_difference!(stokes.τ.xy_c, (2, 2)) rtol = 1.0e-5
 end
 
+@testset "Nested composite viscosity parameter pullback" begin
+    ni = (2, 2)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    phases = PhaseRatios(JustPIC.CPU, 1, ni)
+    @parallel (@idx ni) _init_enzyme_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
+    make_rheology(η0) = (
+        SetMaterialParams(;
+            Phase = 1,
+            CompositeRheology = CompositeRheology(
+                (
+                    Parallel(
+                        PowerlawViscous(; η0, n = 3.0, ε0 = 1.0),
+                        LinearViscous(; η = 4.0),
+                    ),
+                )
+            ),
+        ),
+    )
+    rheology = make_rheology(2.0)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
+    stokes.τ.xx .= 0.3
+    stokes.τ.yy .= -0.1
+    stokes.τ.xy_c .= 0.2
+    stokes.τ.xx_v .= 0.25
+    stokes.τ.yy_v .= -0.15
+    stokes.τ.xy .= 0.1
+
+    function objective(test_rheology)
+        JustRelax2D.compute_viscosity_τII!(
+            stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 1.0,
+        )
+        return sum(stokes.viscosity.η) + sum(stokes.viscosity.ηv)
+    end
+
+    objective(rheology)
+    adjoint.viscosity.η .= 1.0
+    adjoint.viscosity.ηv .= 1.0
+    gradients = material_controls(CPUBackend, ni, (:η0,); nphases = 1)
+    JustRelax2D.compute_viscosity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients,
+    )
+
+    h = 1.0e-6
+    finite_difference = (objective(make_rheology(2.0 + h)) - objective(make_rheology(2.0 - h))) / (2h)
+    predicted = sum(gradients.η0.center) + sum(gradients.η0.vertex)
+    @test predicted ≈ finite_difference rtol = 1.0e-5
+end
+
 @parallel_indices (i, j) function _init_G_gradient_phases!(phase)
     @index phase[1, i, j] = 0.2
     @index phase[2, i, j] = 0.5
@@ -581,7 +631,7 @@ end
     @test any(!iszero, mixed_gradients.G.center)
 end
 
-@testset "Spatial GeoParams density-parameter sensitivities" begin
+@testset "Spatial GeoParams density and gravity gradients" begin
     ni = (3, 2)
     grid = Geometry(ni, (3.0, 2.0))
     dt = 2.0
@@ -592,18 +642,19 @@ end
     )
     model_types = (PT_Density, T_Density, ConstantDensity)
     models = ntuple(p -> model_types[p](; parameters[p]...), 3)
-    rheology = ntuple(3) do p
+    make_rheology(gravity = 1.0) = ntuple(3) do p
         SetMaterialParams(;
             Phase = p,
             Density = models[p],
-            Gravity = ConstantGravity(; g = 1.0),
+            Gravity = ConstantGravity(; g = p == 1 ? gravity : 1.0),
             CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
         )
     end
+    rheology = make_rheology()
     phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_α_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_α_gradient_phases!(phases.vertex)
-    names = (:ρ0, :α, :β, :T0, :P0, :ρ)
+    names = (:ρ0, :α, :β, :T0, :P0, :ρ, :g)
     requested = names
     gradients = material_controls(CPUBackend, ni, requested; nphases = 3)
     @test keys(gradients) == names
@@ -634,10 +685,13 @@ end
         thermal && (args = merge(args, (; ΔT = fill(0.8, ni .+ 2))))
         # A local perturbation replaces just one phase's model at one cell.
         # The finite difference uses the original GeoParams calls, not the AD wrapper.
-        objective = function (p = 1, I = CartesianIndex(1, 1), perturbed = models[p])
-            compute_ρg!(ρg, phases, rheology, args)
+        objective = function (
+                p = 1, I = CartesianIndex(1, 1), perturbed = models[p];
+                test_rheology = rheology,
+            )
+            compute_ρg!(ρg, phases, test_rheology, args)
             JustRelax2D.compute_∇V_strain_rate_RP!(
-                stokes, dyrel, rheology, phases, grid._di, ni, dt, false; args...
+                stokes, dyrel, test_rheology, phases, grid._di, ni, dt, false; args...
             )
             local_args = JustRelax2D.getindex_NamedTuple(args, Tuple(I)...)
             ratio = phases.center[I][p]
@@ -665,7 +719,7 @@ end
             (; me = 0), gradients, args,
         )
         density_gradient = copy(adjoint.ρ)
-        for p in eachindex(models), name in names, I in CartesianIndices(stokes.P)
+        for p in eachindex(models), name in Base.front(names), I in CartesianIndices(stokes.P)
             if haskey(parameters[p], name)
                 h = 1.0e-6
                 plus = merge(parameters[p], NamedTuple{(name,)}((parameters[p][name] + h,)))
@@ -677,6 +731,13 @@ end
                 @test iszero(gradients[name].center[p, Tuple(I)...])
             end
         end
+        h = 1.0e-6
+        gravity_fd = (
+            objective(; test_rheology = make_rheology(1.0 + h)) -
+                objective(; test_rheology = make_rheology(1.0 - h))
+        ) / (2h)
+        @test sum(gradients.g.center[1, :, :]) ≈ gravity_fd rtol = 1.0e-6 atol = 1.0e-8
+        @test all(iszero, gradients.g.center[2:3, :, :])
         # The density VJP must remain available; material differentiation must not consume it.
         @test adjoint.ρ == density_gradient
         saved = deepcopy(gradients)

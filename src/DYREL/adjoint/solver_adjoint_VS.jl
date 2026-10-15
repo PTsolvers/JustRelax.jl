@@ -65,10 +65,6 @@ function solve_VariationalDYREL_adjoint!(
     get(args, :P, nothing) === stokes.P ||
         throw(ArgumentError("the adjoint solve requires args.P === stokes.P"))
 
-    (!linear_viscosity && !isempty(gradients)) && throw(
-        ArgumentError("nonlinear viscosity parameter sensitivities are not yet supported")
-    )
-
     igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (variational DYREL) ########\n")
 
     # Residual norms over the same reduced, boundary-trimmed space as the forward solver, so

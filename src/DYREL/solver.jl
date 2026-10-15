@@ -42,10 +42,9 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
   observed field (see `observation_mask`). `field` is `:Vx`, `:Vy` or `:P`. Default: `nothing`.
-- `gradients`: Optional buffers from `material_controls`, filled by the adjoint
-  solve with derivatives with respect to the actual material parameters. `G` is returned
-  on the center grid; phase-specific density-parameter gradients have size `(nphases, ni...)`. Default:
-  `nothing`.
+- `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
+  solve with derivatives with respect to the requested density, stress-law, and viscosity-law
+  parameters. Linear and nonlinear viscosity are supported. Default: `(;)`.
 - `η_multiplier`: Optional cell-wise viscosity scaling, given as a named tuple
   `(; center, vertex)` of arrays matching `stokes.viscosity.η` and `.ηv`. Applied right after
   the rheology-driven `compute_viscosity!` and before the DYREL coefficients are built, so
@@ -117,7 +116,9 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
   history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Default: `false`.
 - `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
-- `gradients`: Optional buffers from `material_controls`, filled by the adjoint solve. Default: `(;)`.
+- `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
+  solve with derivatives with respect to the requested density, stress-law, and viscosity-law
+  parameters. Linear and nonlinear viscosity are supported. Default: `(;)`.
 - `η_multiplier`: Optional cell-wise viscosity scaling `(; center, vertex)`, applied right after
   the rheology-driven viscosity update, for gradient tests. Pair it with `linear_viscosity = true`.
   Default: `nothing`.

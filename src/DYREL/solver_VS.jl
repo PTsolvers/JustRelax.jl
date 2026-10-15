@@ -43,8 +43,6 @@ function _solve_VariationalDYREL!(
 
     adjoint && isnothing(stokes_ad) &&
         throw(ArgumentError("adjoint = true requires AdjointStokesArrays as the second argument"))
-    adjoint && !linear_viscosity && !isempty(gradients) &&
-        throw(ArgumentError("nonlinear viscosity parameter sensitivities are not yet supported"))
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 

@@ -52,15 +52,23 @@ function compute_ρg!(
     return nothing
 end
 
+# Evaluate the complete local phase-weighted buoyancy relation in one differentiable function.
+@inline function compute_buoyancy_point(
+        rheology, ratio, args, air_phase::Integer, dimension::Val{N}
+    ) where {N}
+    corrected_ratio = correct_phase_ratio(air_phase, ratio)
+    gravity = compute_gravity(first(rheology))
+    return compute_buoyancies(rheology, corrected_ratio, args, gravity, dimension)
+end
+
 @parallel_indices (I...) function compute_ρg_kernel!(
         ρg, phase_ratios, rheology, args, air_phase::Integer
     )
     args_ijk = getindex_NamedTuple(args, I...)
     ratio_ijk = @cell phase_ratios[I...]
-    if air_phase > 0
-        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
-    end
-    ρg[I...] = compute_buoyancy(rheology, args_ijk, ratio_ijk)
+    ρg[I...] = compute_buoyancy_point(
+        rheology, ratio_ijk, args_ijk, air_phase, Val(1)
+    )
     return nothing
 end
 
@@ -68,12 +76,8 @@ end
         ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args, air_phase::Integer
     ) where {N}
     args_ijk = getindex_NamedTuple(args, I...)
-    gᵢ = compute_gravity(first(rheology))
     ratio_ijk = @cell phase_ratios[I...]
-    if air_phase > 0
-        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
-    end
-    ρgᵢ = compute_buoyancies(rheology, ratio_ijk, args_ijk, gᵢ, Val(N))
+    ρgᵢ = compute_buoyancy_point(rheology, ratio_ijk, args_ijk, air_phase, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
     return nothing
 end

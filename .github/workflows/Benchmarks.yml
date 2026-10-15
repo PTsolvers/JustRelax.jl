@@ -40,6 +40,9 @@ jobs:
       - name: Instantiate benchmark environment
         run: julia --project=benchmarking benchmarking/setup.jl
 
+      - name: Test benchmark harness
+        run: julia --project=benchmarking benchmarking/test/runtests.jl
+
       - name: Compare against base branch
         shell: bash
         run: |
@@ -51,7 +54,7 @@ jobs:
             echo
             cat "$RUNNER_TEMP/comparison.txt"
             echo
-            echo '<sub>Median time ± interquartile spread on a shared `ubuntu-latest` runner. 🔴/🟢 mark ratios outside the combined spread. GPU performance is not covered.</sub>'
+            echo '<sub>Median time ± interquartile spread on a shared `ubuntu-latest` runner. Change is the difference in median time; 🔴/🟢 mark changes larger than the combined spread of both runs. GPU performance is not covered.</sub>'
           } > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
 

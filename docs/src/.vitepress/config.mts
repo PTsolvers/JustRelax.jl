@@ -21,6 +21,7 @@ const nav = [
   { text: "Home", link: "/" },
   { text: "Documentation", link: "/man/installation" },
   { text: "API", link: "/man/listfunctions" },
+  { text: "Performance", link: "/performance" },
   {
     component: 'VersionPicker'
   }
@@ -98,12 +99,7 @@ export default defineConfig({
         detailedView: true
       }
     },
-    nav: [
-      { text: "Home", link: "/" },
-      { text: "Documentation", link: "/man/installation" },
-      { text: "API", link: "/man/listfunctions" },
-      { text: "Performance", link: "/performance" },
-    ],
+    nav,
     sidebar: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     sidebarDrawer: 'REPLACE_ME_DOCUMENTER_VITEPRESS_SIDEBAR_DRAWER',
     editLink: 'REPLACE_ME_DOCUMENTER_VITEPRESS',

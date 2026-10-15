@@ -123,6 +123,7 @@ onMounted(() => {
 
     const commits = hardwareRuns(state.hardware);
     const values = series.flatMap(([, items]) => items.map(item => definition.value(item.benchmark))).filter(Number.isFinite);
+    if (!values.length) { chart.innerHTML = `<div class="jp-empty">The benchmarks in this group record no ${escapeHTML(definition.label)}.</div>`; return; }
     const width = 920, height = 340, margin = { top: 18, right: 24, bottom: 62, left: 72 };
     const x = index => commits.length === 1 ? (margin.left + width - margin.right) / 2 : margin.left + index * (width - margin.left - margin.right) / (commits.length - 1);
     let minimum = Math.min(...values), maximum = Math.max(...values);
@@ -238,6 +239,7 @@ onMounted(() => {
       const delta = 100 * (benchmark.time_median_seconds / mean - 1);
       const deltaClass = delta < 0 ? "jp-good" : delta > 0 ? "jp-bad" : "";
       const commitURL = `${data.repository_url}/commit/${current.run.commit}`;
+      const peakShare = 100 * benchmark.effective_bandwidth_gb_per_second / benchmark.metadata.peak_memory_bandwidth_gb_per_second;
       return `<tr>
         <td><strong>${escapeHTML(name)}</strong>${current.run.dirty ? '<span class="jp-tag">dirty</span>' : ''}<span class="jp-desc">${escapeHTML(deviceName(current.run))}</span><span class="jp-desc">${escapeHTML(benchmark.performance_model_description || "")}</span></td>
         <td class="num">${formatNumber(1e3 * benchmark.time_median_seconds)} ms</td>
@@ -246,7 +248,7 @@ onMounted(() => {
         <td class="num">${formatNumber(benchmark.arithmetic_intensity_flops_per_byte)}</td>
         <td class="num">${formatNumber(benchmark.effective_gflops_per_second)}</td>
         <td class="num">${formatNumber(benchmark.effective_bandwidth_gb_per_second)}</td>
-        <td class="num">${formatNumber(100 * benchmark.effective_bandwidth_gb_per_second / benchmark.metadata.peak_memory_bandwidth_gb_per_second)}%</td>
+        <td class="num">${formatNumber(peakShare)}${Number.isFinite(peakShare) ? "%" : ""}</td>
         <td class="num"><a href="${commitURL}">${shortCommit(current.run.commit)}</a><span class="jp-desc">${escapeHTML(benchmark.metadata.commit_subject || "")}</span></td>
       </tr>`;
     }).join("");

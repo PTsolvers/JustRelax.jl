@@ -12,12 +12,16 @@ elseif BACKEND == "AMDGPU"
 end
 
 # Separate top-level statement: the vendor bindings exist only after `using` has run.
-backend, device = if BACKEND == "CUDA"
-    CUDABackend, CUDA.name(CUDA.device())
+# JustRelax and JustPIC tag backends with different types; CUDA.jl exports a `CUDABackend`
+# of its own, so both are qualified.
+backend, backend_JP, device = if BACKEND == "CUDA"
+    JustRelax.CUDABackend, CUDA.CUDABackend, CUDA.name(CUDA.device())
 elseif BACKEND == "AMDGPU"
-    AMDGPUBackend, string(AMDGPU.device())
+    JustRelax.AMDGPUBackend, AMDGPU.ROCBackend, string(AMDGPU.device())
 else
-    CPUBackend, nothing
+    JustRelax.CPUBackend, JustPIC.CPU, nothing
 end
 
-JustRelaxBenchmarks.main(filter(!startswith("--backend="), ARGS); backend, backend_name = BACKEND, device)
+JustRelaxBenchmarks.main(
+    filter(!startswith("--backend="), ARGS); backend, backend_JP, backend_name = BACKEND, device
+)

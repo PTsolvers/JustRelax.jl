@@ -30,13 +30,31 @@ throughput one.
 
 - `Stokes`: `solve!` for incompressible, linear viscous flow (infinite shear and bulk moduli)
   with a SolCx-like buoyancy field, a viscosity contrast of 10, and free-slip boundaries, on
-  `128²` cells in 2D and `32³` in 3D. The residual is never evaluated.
+  `128²` cells in 2D and `32³` in 3D on the CPU, and `2048²` and `128³` on GPUs. The
+  residual is never evaluated. `APT Stokes` uses the accelerated pseudo-transient `solve!`;
+  `DYREL Stokes` solves the same problem with `solve_DYREL!`, with two linear viscous phases
+  reproducing the viscosity field, one Powell-Hestenes pass, and neither residual checks nor
+  pseudo-time-step updates.
 - `Thermal diffusion`: `heatdiffusion_PT!` with unit properties, a hot bottom, a cold top, and
   insulated sides, on the same grids. The residual is evaluated once, after the last
   iteration.
+- `Nonlinear Stokes`: `solve!` with GeoParams rheology and phase ratios, on the same grids.
+  Two phases, a matrix and a spherical inclusion at the center of the domain, deform in pure
+  shear between free-slip boundaries, without buoyancy. The residual is never evaluated.
+  - `Shear band`: the visco-elasto-plastic Drucker-Prager material of
+    `miniapps/benchmarks/stokes2D/shear_band`, with a cohesion low enough for every cell to
+    yield in the measured time step, so the plastic stress correction is always taken.
+  - `Dislocation creep`: the temperature-dependent power-law materials of the shear-heating
+    benchmark of Duretz et al. (2014, doi:10.1002/2014GL060438) at 673 K. The initial stress
+    is the viscous stress of the imposed strain rate, so the stress-dependent viscosity is
+    finite from the first iteration.
+- `DYREL`: `solve_DYREL!` on the same two `Nonlinear Stokes` problems. One Powell-Hestenes
+  pass whose dynamic-relaxation tolerance is zero (`rel_drop = 0`) runs exactly the requested
+  number of iterations, including the eigenvalue and pseudo-time-step updates every `nout`
+  iterations.
 
 Each result is validated: the solver must report the expected iteration count and leave
-finite velocity, pressure, or temperature fields.
+finite velocity, pressure, or temperature fields, and the shear-band case must have yielded.
 
 ## Performance model
 
@@ -56,13 +74,25 @@ conditions and halo updates. FLOP counts are independent of the element type.
 | --- | --- | --- | ---: | ---: |
 | Stokes (2D) | `Vx`, `Vy`, `P` | `η`, `ρg` | `8 nᴰ sizeof(T)` | `123 nᴰ` |
 | Stokes (3D) | `Vx`, `Vy`, `Vz`, `P` | `η`, `ρg` | `10 nᴰ sizeof(T)` | `222 nᴰ` |
+| DYREL Stokes (2D) | `Vx`, `Vy` | `P`, `η`, `ηv`, `ρg` | `8 nᴰ sizeof(T)` | `268 nᴰ` |
+| DYREL Stokes (3D) | `Vx`, `Vy`, `Vz` | `P`, `η`, `ρg` | `9 nᴰ sizeof(T)` | `786 nᴰ` |
 | Thermal diffusion (2D) | `T` | `T_old`, `K`, `ρCp` | `5 nᴰ sizeof(T)` | `38 nᴰ` |
 | Thermal diffusion (3D) | `T` | `T_old`, `K`, `ρCp` | `5 nᴰ sizeof(T)` | `52 nᴰ` |
 
 The Stokes counts cover the divergence (5 in 2D, 8 in 3D), the compressible pressure update
 (24), the strain rate (13, 28), the visco-elastic stress update (47, 102), the velocity update
 (32, 57), and the velocity-to-displacement copy (2, 3). With `nout` beyond `iterMax`, the
-residual norms are never evaluated. The diffusion counts cover the damped heat-flux update
+residual norms are never evaluated.
+
+Pressure is fixed during the dynamic-relaxation iterations of DYREL and is therefore a known.
+The DYREL counts cover the divergence, strain rate, and pressure residual (19 in 2D, 35 in 3D),
+the stress update through the phase-weighted GeoParams rheology (204, 677), and the velocity
+residual with the damped velocity update (45, 74). The stress update dominates: each of its
+local stress evaluations, one per cell center and one per vertex (2D) or edge (3D), costs 91
+FLOPs in 2D and 123 in 3D, including four square roots that are not counted. Phases mixing at
+vertices or edges on the viscosity interface add a further evaluation there, which the counts
+exclude. The Powell-Hestenes pass around the iterations runs once per solve and is excluded.
+The diffusion counts cover the damped heat-flux update
 (22, 33) and the pseudo-transient temperature update (16, 19); the single residual evaluation
 per solve (11, 14 per cell) is excluded.
 
@@ -75,6 +105,9 @@ ceilings. The CPU FMA kernel does not vectorize across items, so the CPU compute
 lower bound. Measurements from hardware
 counters must use a distinct `performance_metric_source` label rather than silently replacing
 this model.
+
+The `Nonlinear Stokes` and `DYREL` cases carry no performance model: the FLOPs of a GeoParams rheology
+depend on the creep laws and on which cells yield. Their records omit the model fields.
 
 Useful options:
 
@@ -102,9 +135,10 @@ julia --project=benchmarking --threads=4 benchmarking/compare.jl --rev=origin/ma
 The script checks out `--rev` (default `main`) in a temporary git worktree, installs the
 working tree's benchmark harness into it, and runs the suite on that revision and then on the
 working tree, on the same machine and with the same arguments. It prints each benchmark's
-median time, interquartile spread, candidate-to-baseline ratio, and allocations. Both runs
-must share a backend, element type, and hardware fingerprint. A ratio within the printed
-spread is not evidence of a change; repeat the comparison before acting on it.
+change in median time in percent, median time, interquartile spread, and allocations. Both
+runs must share a backend, element type, and hardware fingerprint. A change larger than the
+combined spread of both runs is marked 🔴 (slower) or 🟢 (faster); a change within it is not
+evidence of a change. Repeat the comparison before acting on a marked change.
 
 Pull requests that touch `src/`, `ext/`, `benchmarking/`, or `Project.toml` run this
 comparison on a shared `ubuntu-latest` runner (`.github/workflows/Benchmarks.yml`) and post
@@ -160,5 +194,5 @@ builds of the same queue. Compare results only within one hardware fingerprint, 
 any regression threshold from repeated measurements on that fingerprint rather than from an
 arbitrary percentage.
 
-MPI, DYREL, variational Stokes, particle-coupled, and nonlinear-rheology benchmarks are not
-yet covered.
+MPI, variational Stokes, particle-coupled, and coupled thermo-mechanical benchmarks
+are not yet covered.

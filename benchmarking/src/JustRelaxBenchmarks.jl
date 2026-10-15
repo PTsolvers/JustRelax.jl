@@ -2,6 +2,8 @@ module JustRelaxBenchmarks
 
 using Chairmarks: @be
 using Dates: UTC, now
+using GeoParams: CompositeRheology, ConstantDensity, ConstantElasticity, ConstantGravity,
+    DislocationCreep, DruckerPrager_regularised, LinearViscous, SetMaterialParams
 using JSON: JSON
 using JustRelax
 using JustRelax: JustRelax2D, JustRelax3D
@@ -37,7 +39,8 @@ struct BenchmarkCase{S, R, V}
     work_units::Int
     work_unit::String
     parameters::Dict{String, Any}
-    performance_model::PerformanceModel
+    # `nothing` for rheologies whose cost per cell depends on the material state
+    performance_model::Union{PerformanceModel, Nothing}
 end
 
 teff_model(flops_per_cell, unknowns, knowns, cells, ::Type{T}, description) where {T} =
@@ -138,6 +141,68 @@ function stokes_case(backend, n, iterations, ::Type{T}, dims::Val{D}) where {T, 
 end
 
 """
+The `stokes_state` problem solved with `solve_DYREL!`. Two linear viscous phases reproduce its
+viscosity field, from which DYREL also takes the vertex viscosity; viscosity and buoyancy are
+not recomputed during the solve. One Powell-Hestenes pass with `rel_drop = 0` runs exactly
+`iterMax_DR + 1` iterations, without residual checks or pseudo-time-step updates.
+"""
+function dyrel_stokes_case(backend, backend_JP, n, iterations, ::Type{T}, dims::Val{D}) where {T, D}
+    JR = D == 2 ? JustRelax2D : JustRelax3D
+    ni = ntuple(_ -> n, Val(D))
+    function setup()
+        state = stokes_state(backend, dims, ni, T)
+        (; stokes, grid) = state
+        stiff = [x > 0.5 for x in first(Array.(grid.xci)), _ in CartesianIndices(ni[2:end])]
+        phase_ratios = PhaseRatios(backend_JP, 2, ni)
+        update_phase_ratios! = D == 2 ? JR.update_phase_ratios_2D! : JR.update_phase_ratios_3D!
+        update_phase_ratios!(
+            phase_ratios, device_array.(backend, (T.(.!stiff), T.(stiff))), grid.xci, grid.xvi
+        )
+        rheology = (
+            material_phase(1, LinearViscous(; η = 1.0)), material_phase(2, LinearViscous(; η = 10.0)),
+        )
+        dt = one(T)
+        args = (; T = device_array(backend, zeros(T, ni .+ 2)), P = stokes.P, dt)
+        η = Array(stokes.viscosity.η)
+        JR.compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+        Array(stokes.viscosity.η) == η || error("the phase viscosities differ from the APT Stokes viscosity")
+        dyrel = JR.DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = eps(T))
+        return merge(state, (; phase_ratios, rheology, args, dt, dyrel))
+    end
+    function run(state)
+        (; stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt) = state
+        out = JR.solve_DYREL!(
+            stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, IGG_HANDLE[];
+            iterMax_PH = 1, iterMax_DR = iterations - 1, rel_drop = 0, nout = NO_RESIDUAL_CHECK,
+            verbose_PH = false, verbose_DR = false, linear_viscosity = true, update_material = false,
+        )
+        state.iterations[] = out.iter
+        return state
+    end
+    function validate(state)
+        state.iterations[] == iterations ||
+            error("DYREL Stokes benchmark ran $(state.iterations[]) iterations instead of $iterations")
+        return validate_fields("DYREL Stokes", JR.unpack_velocity(state.stokes.V)..., state.stokes.P)
+    end
+    parameters = Dict{String, Any}(
+        "dimension" => D,
+        "float_type" => string(T),
+        "grid_cells" => collect(ni),
+        "iterations" => iterations,
+        "rheology" => "linear viscous (G = K = Inf)",
+    )
+    # The 2D stress kernel reads the vertex viscosity, the 3D one averages η to the edges.
+    model = teff_model(
+        D == 2 ? 268 : 786, D, D == 2 ? 4 : 3, n^D * iterations, T,
+        "$D velocity components updated; pressure, viscosity$(D == 2 ? ", vertex viscosity," : "") and buoyancy read",
+    )
+    return BenchmarkCase(
+        "DYREL Stokes ($(D)D, $(grid_label(ni)), $iterations iterations, $T)",
+        "Stokes", ni, setup, run, validate, iterations, "iterations", parameters, model,
+    )
+end
+
+"""
 Linear heat diffusion with uniform unit properties, from a cold interior toward a hot bottom
 and a cold top boundary; the side faces are insulated.
 """
@@ -193,15 +258,195 @@ function diffusion_case(backend, n, iterations, ::Type{T}, dims::Val{D}) where {
     )
 end
 
+function material_phase(Phase, laws...; Elasticity = nothing)
+    return SetMaterialParams(;
+        Phase, Elasticity, CompositeRheology = CompositeRheology(laws),
+        Density = ConstantDensity(; ρ = 0.0), Gravity = ConstantGravity(; g = 0.0),
+    )
+end
+
+"""
+Visco-elasto-plastic material of `miniapps/benchmarks/stokes2D/shear_band`: linear viscosity,
+elasticity, and regularized Drucker-Prager plasticity, with an inclusion of half the matrix
+shear modulus. The cohesion is low enough for every cell to yield within the first time step.
+"""
+function shear_band_material()
+    plasticity = DruckerPrager_regularised(; C = 0.1 / cosd(30), ϕ = 30, η_vp = 8.0e-3, Ψ = 0)
+    phase(Phase, G) = let elasticity = ConstantElasticity(; G, Kb = 4)
+        material_phase(Phase, LinearViscous(; η = 1.0), elasticity, plasticity; Elasticity = elasticity)
+    end
+    return (;
+        rheology = (phase(1, 1.0), phase(2, 0.5)), li = (1.0, 1.0, 1.0), εbg = 1.0, dt = 0.25,
+        temperature = 0.0, yields = true, description = "visco-elasto-plastic (Drucker-Prager)",
+    )
+end
+
+"""
+Temperature-dependent dislocation creep of the shear-heating benchmark of Duretz et al.
+(2014, doi:10.1002/2014GL060438): a power-law matrix with a weaker power-law inclusion at
+673 K, without elasticity or plasticity.
+"""
+function dislocation_creep_material()
+    matrix = DislocationCreep(; A = 3.2e-20, n = 3.0, E = 276.0e3, V = 0.0, r = 0.0, R = 8.3145)
+    inclusion = DislocationCreep(; A = 3.16e-26, n = 3.3, E = 186.0e3, V = 0.0, r = 0.0, R = 8.3145)
+    return (;
+        rheology = (material_phase(1, matrix), material_phase(2, inclusion)),
+        li = (70.0e3, 70.0e3, 40.0e3), εbg = 5.0e-14, dt = 1.0e11, temperature = 673.0,
+        yields = false, description = "power-law dislocation creep",
+    )
+end
+
+"""
+Two-phase Stokes flow with GeoParams rheology: a spherical inclusion at the center of the
+domain, deformed in pure shear at the strain rate `material.εbg` (extension along `x`,
+shortening along the vertical), free-slip on every side, without buoyancy.
+"""
+function nonlinear_stokes_state(backend, backend_JP, ::Val{D}, ni, ::Type{T}, material) where {D, T}
+    JR = D == 2 ? JustRelax2D : JustRelax3D
+    (; rheology, εbg, dt) = material
+    li = T.(material.li[(4 - D):3])
+    grid = JR.Geometry(ni, li; origin = ntuple(_ -> zero(T), Val(D)))
+    xc, xv = Array.(grid.xci), Array.(grid.xvi)
+
+    radius = minimum(li) / 10
+    inclusion = [sum(abs2, x .- li ./ 2) < radius^2 for x in Iterators.product(xc...)]
+    any(inclusion) || error("the inclusion of radius $radius contains no cell center of the $ni grid")
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    update_phase_ratios! = D == 2 ? JR.update_phase_ratios_2D! : JR.update_phase_ratios_3D!
+    update_phase_ratios!(
+        phase_ratios, device_array.(backend, (T.(.!inclusion), T.(inclusion))), grid.xci, grid.xvi
+    )
+
+    stokes = JR.StokesArrays(backend, ni)
+    velocity = JR.unpack_velocity(stokes.V)
+    first(velocity) .= device_array(backend, T.(εbg .* xv[1]))
+    last(velocity) .= device_array(backend, reshape(T.(-εbg .* xv[D]), ntuple(_ -> 1, D - 1)..., :))
+    sides = (:left, :right, :top, :bot, :front, :back)[1:(2 * D)]
+    flow_bcs = JR.VelocityBoundaryConditions(;
+        free_slip = NamedTuple{sides}(ntuple(_ -> true, 2 * D)),
+        no_slip = NamedTuple{sides}(ntuple(_ -> false, 2 * D)),
+    )
+    JR.flow_bcs!(stokes, flow_bcs)
+
+    ρg = ntuple(_ -> device_array(backend, zeros(T, ni)), Val(D))
+    args = (; T = device_array(backend, fill(T(material.temperature), ni .+ 2)), P = stokes.P, dt)
+    # Strain rate and viscous stress of the initial velocity. The solvers evaluate the viscosity
+    # from the stress invariant, which a power law maps to an unbounded viscosity at zero stress.
+    vertical = D == 2 ? :yy : :zz
+    stokes.ε.xx .= εbg
+    getfield(stokes.ε, vertical) .= -εbg
+    JR.compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+    @. stokes.τ.xx = 2 * stokes.viscosity.η * εbg
+    getfield(stokes.τ, vertical) .= .-stokes.τ.xx
+    pt_stokes = JR.PTStokesCoeffs(li, grid.di.center; CFL = 0.9 / √(D + 0.1))
+    return (; stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, iterations = Ref(0))
+end
+
+function nonlinear_stokes_case(backend, backend_JP, label, material, n, iterations, ::Type{T}, dims::Val{D}) where {T, D}
+    JR = D == 2 ? JustRelax2D : JustRelax3D
+    ni = ntuple(_ -> n, Val(D))
+    setup() = nonlinear_stokes_state(backend, backend_JP, dims, ni, T, material)
+    function run(state)
+        (; stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt) = state
+        out = JR.solve!(
+            stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, IGG_HANDLE[];
+            kwargs = (;
+                iterMax = iterations - 1, nout = NO_RESIDUAL_CHECK, verbose = false,
+                viscosity_cutoff = (-Inf, Inf),
+            ),
+        )
+        state.iterations[] = out.iter
+        return state
+    end
+    function validate(state)
+        state.iterations[] == iterations ||
+            error("$label benchmark ran $(state.iterations[]) iterations instead of $iterations")
+        material.yields && !any(>(0), Array(state.stokes.λ)) &&
+            error("$label benchmark did not yield; its plastic branch was not measured")
+        return validate_fields(label, JR.unpack_velocity(state.stokes.V)..., state.stokes.P)
+    end
+    parameters = Dict{String, Any}(
+        "dimension" => D,
+        "float_type" => string(T),
+        "grid_cells" => collect(ni),
+        "iterations" => iterations,
+        "rheology" => material.description,
+    )
+    return BenchmarkCase(
+        "$label ($(D)D, $(grid_label(ni)), $iterations iterations, $T)",
+        "Nonlinear Stokes", ni, setup, run, validate, iterations, "iterations", parameters, nothing,
+    )
+end
+
+"""
+The `nonlinear_stokes_state` problem solved with `solve_DYREL!`: one Powell-Hestenes pass
+whose dynamic-relaxation loop never meets its tolerance (`rel_drop = 0`), so the solver runs
+exactly `iterMax_DR + 1` iterations, including the eigenvalue and pseudo-time-step updates
+every `nout` iterations.
+"""
+function dyrel_case(backend, backend_JP, label, material, n, iterations, ::Type{T}, dims::Val{D}) where {T, D}
+    JR = D == 2 ? JustRelax2D : JustRelax3D
+    ni = ntuple(_ -> n, Val(D))
+    function setup()
+        state = nonlinear_stokes_state(backend, backend_JP, dims, ni, T, material)
+        (; stokes, rheology, phase_ratios, grid, dt) = state
+        dyrel = JR.DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = eps(T))
+        return merge(state, (; dyrel))
+    end
+    function run(state)
+        (; stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt) = state
+        out = JR.solve_DYREL!(
+            stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, IGG_HANDLE[];
+            iterMax_PH = 1, iterMax_DR = iterations - 1, rel_drop = 0, verbose_PH = false,
+            verbose_DR = false, viscosity_cutoff = (-Inf, Inf),
+        )
+        state.iterations[] = out.iter
+        return state
+    end
+    function validate(state)
+        state.iterations[] == iterations ||
+            error("DYREL $label benchmark ran $(state.iterations[]) iterations instead of $iterations")
+        material.yields && !any(>(0), Array(state.stokes.λ)) &&
+            error("DYREL $label benchmark did not yield; its plastic branch was not measured")
+        return validate_fields("DYREL $label", JR.unpack_velocity(state.stokes.V)..., state.stokes.P)
+    end
+    parameters = Dict{String, Any}(
+        "dimension" => D,
+        "float_type" => string(T),
+        "grid_cells" => collect(ni),
+        "iterations" => iterations,
+        "rheology" => material.description,
+    )
+    return BenchmarkCase(
+        "DYREL $label ($(D)D, $(grid_label(ni)), $iterations iterations, $T)",
+        "DYREL", ni, setup, run, validate, iterations, "iterations", parameters, nothing,
+    )
+end
+
+# GPU grids are large enough to saturate device memory bandwidth, yet fit an 8 GB card.
 function benchmark_cases(
-        backend = CPUBackend; size_2d = 128, size_3d = 32, iterations = 100,
-        precision::Type = Float64,
+        backend = CPUBackend; backend_JP = JustPIC.CPU,
+        size_2d = backend === CPUBackend ? 128 : 2048, size_3d = backend === CPUBackend ? 32 : 128,
+        iterations = 100, precision::Type = Float64,
+    )
+    nonlinear = (
+        ("Shear band", shear_band_material()), ("Dislocation creep", dislocation_creep_material()),
     )
     return (
         stokes_case(backend, size_2d, iterations, precision, Val(2)),
         stokes_case(backend, size_3d, iterations, precision, Val(3)),
+        dyrel_stokes_case(backend, backend_JP, size_2d, iterations, precision, Val(2)),
+        dyrel_stokes_case(backend, backend_JP, size_3d, iterations, precision, Val(3)),
         diffusion_case(backend, size_2d, iterations, precision, Val(2)),
         diffusion_case(backend, size_3d, iterations, precision, Val(3)),
+        (
+            nonlinear_stokes_case(backend, backend_JP, label, material, n, iterations, precision, dims)
+                for (label, material) in nonlinear for (n, dims) in ((size_2d, Val(2)), (size_3d, Val(3)))
+        )...,
+        (
+            dyrel_case(backend, backend_JP, label, material, n, iterations, precision, dims)
+                for (label, material) in nonlinear for (n, dims) in ((size_2d, Val(2)), (size_3d, Val(3)))
+        )...,
     )
 end
 
@@ -353,10 +598,8 @@ function measure(case::BenchmarkCase, samples, metadata)
     end
     timings = [sample.time for sample in trial.samples]
     median_time = median(timings)
-    model = case.performance_model
-    flops_per_second = model.flops / median_time
 
-    return Dict{String, Any}(
+    result = Dict{String, Any}(
         "name" => case.name,
         "group" => case.group,
         "unit" => "s",
@@ -372,25 +615,34 @@ function measure(case::BenchmarkCase, samples, metadata)
         "work_units" => case.work_units,
         "work_unit" => case.work_unit,
         "throughput_per_second" => case.work_units / median_time,
+        "sanity_check" => "passed",
+        "parameters" => case.parameters,
+        "metadata" => metadata,
+    )
+    return merge!(result, model_metrics(case.performance_model, median_time))
+end
+
+model_metrics(::Nothing, time) = Dict{String, Any}()
+
+function model_metrics(model::PerformanceModel, time)
+    flops_per_second = model.flops / time
+    return Dict{String, Any}(
         "modeled_flops" => model.flops,
         "modeled_memory_bytes" => model.memory_bytes,
         "arithmetic_intensity_flops_per_byte" => model.flops / model.memory_bytes,
         "effective_flops_per_second" => flops_per_second,
         "effective_gflops_per_second" => flops_per_second / 1.0e9,
-        "effective_bandwidth_gb_per_second" => model.memory_bytes / median_time / 1.0e9,
+        "effective_bandwidth_gb_per_second" => model.memory_bytes / time / 1.0e9,
         "performance_metric_source" => "algorithmic_model",
         "performance_model_version" => PERFORMANCE_MODEL_VERSION,
         "performance_model_description" => model.description,
-        "sanity_check" => "passed",
-        "parameters" => case.parameters,
-        "metadata" => metadata,
     )
 end
 
 function run_benchmarks(;
-        backend = CPUBackend, backend_name = "CPU", device = nothing,
+        backend = CPUBackend, backend_JP = JustPIC.CPU, backend_name = "CPU", device = nothing,
         samples = 10, group = "all", precision::Type = Float64,
-        cases = benchmark_cases(backend; precision),
+        cases = benchmark_cases(backend; backend_JP, precision),
     )
     samples > 0 || throw(ArgumentError("samples must be positive"))
     selected = group == "all" ? cases : filter(case -> case.group == group, cases)
@@ -468,11 +720,10 @@ format_timing(result) =
 """
     print_comparison(io, baseline, candidate)
 
-Print a markdown table of the median time of each benchmark in `candidate` relative to
-`baseline`, both result vectors as written by [`write_results`](@ref). The spread is the
-interquartile range as a percentage of the median. A ratio that differs from 1 by more than
-the two spreads combined is marked 🔴 (slower) or 🟢 (faster). Returns the
-candidate-to-baseline median ratios.
+Print a markdown table of the change in median time of each benchmark from `baseline` to
+`candidate`, both result vectors as written by [`write_results`](@ref), in percent. The spread
+is the interquartile range as a percentage of the median. A change larger than the two spreads
+combined is marked 🔴 (slower) or 🟢 (faster). Returns the candidate-to-baseline median ratios.
 """
 function print_comparison(io::IO, baseline, candidate)
     base_meta, cand_meta = baseline[1]["metadata"], candidate[1]["metadata"]
@@ -488,12 +739,13 @@ function print_comparison(io::IO, baseline, candidate)
     rows = map(baseline, candidate, ratios) do base, cand, ratio
         noise = relative_spread(base) + relative_spread(cand)
         marker = ratio > 1 + noise ? " 🔴" : ratio < 1 - noise ? " 🟢" : ""
+        change = round(100 * (ratio - 1); digits = 1)
         [
-            cand["name"], format_timing(base), format_timing(cand),
-            "$(base["allocations"]) → $(cand["allocations"])", "$(round(ratio; digits = 2))$marker",
+            cand["name"], "$(change > 0 ? "+" : "")$(change)%$marker", format_timing(base),
+            format_timing(cand), "$(base["allocations"]) → $(cand["allocations"])",
         ]
     end
-    header = ["Benchmark", "Baseline", "Candidate", "Allocations", "Ratio"]
+    header = ["Benchmark", "Change", "Baseline", "Candidate", "Allocations"]
     widths = [maximum(length, getindex.([[header]; collect(rows)], j)) for j in eachindex(header)]
     cells(row) = join((j == 1 ? rpad(x, w) : lpad(x, w) for (j, (x, w)) in enumerate(zip(row, widths))), " | ")
     label(meta) = "`$(first(meta["commit"], 8))`" * (meta["dirty"] ? " (dirty)" : "")
@@ -536,10 +788,12 @@ function parse_commandline(args)
     return (; output, samples, group, precision)
 end
 
-function main(args = ARGS; backend = CPUBackend, backend_name = "CPU", device = nothing)
+function main(
+        args = ARGS; backend = CPUBackend, backend_JP = JustPIC.CPU, backend_name = "CPU", device = nothing,
+    )
     options = parse_commandline(args)
     results = run_benchmarks(;
-        backend, backend_name, device, options.samples, options.group, options.precision
+        backend, backend_JP, backend_name, device, options.samples, options.group, options.precision
     )
     output = write_results(options.output, results)
     @info "Wrote benchmark results" output

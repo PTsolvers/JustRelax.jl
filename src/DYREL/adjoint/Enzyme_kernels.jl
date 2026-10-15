@@ -305,14 +305,6 @@ function enzyme_compute_viscosity_τII!(
     return nothing
 end
 
-# Apply the scalar implicit-function correction after the two pullbacks have produced the direct
-# viscosity seed and `[(∂η/∂τ)(∂τ/∂η)]ᵀ`. The feedback is a local 1×1 quantity, so it equals its
-# transpose.
-@parallel_indices (I...) function solve_implicit_viscosity_adjoint!(η_bar, feedback)
-    @inbounds η_bar[I...] /= one(eltype(η_bar)) - feedback[I...]
-    return nothing
-end
-
 zero_constitutive_stress_seed!(scratch) = foreach(
     A -> fill!(A, 0), (scratch.τ..., scratch.τ_v..., scratch.τII, scratch.θ)
 )
@@ -352,12 +344,10 @@ function enzyme_compute_implicit_viscosity_τII!(
         τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
         η_bar = scratch.η, ηv_bar = scratch.ηv,
     )
-    @parallel (@idx size(scratch.η)) solve_implicit_viscosity_adjoint!(
-        adjoint.viscosity.η, scratch.η,
-    )
-    @parallel (@idx size(scratch.ηv)) solve_implicit_viscosity_adjoint!(
-        adjoint.viscosity.ηv, scratch.ηv,
-    )
+    # Apply the local scalar implicit-function correction. The feedback is a 1×1 quantity,
+    # so it equals its transpose.
+    @. adjoint.viscosity.η /= 1 - scratch.η
+    @. adjoint.viscosity.ηv /= 1 - scratch.ηv
 
     # add `(∂η/∂τ)'η_bar` to the original stress seeds.
     enzyme_compute_viscosity_τII!(

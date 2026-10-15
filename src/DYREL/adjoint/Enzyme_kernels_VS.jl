@@ -253,9 +253,9 @@ function enzyme_compute_variational_stress_DRYEL!(
         τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
         η_bar = scratch.η,
     )
-    @parallel (@idx size(scratch.η)) solve_implicit_viscosity_adjoint!(
-        adjoint.viscosity.η, scratch.η,
-    )
+    # Apply the local scalar implicit-function correction. The feedback is a 1×1 quantity,
+    # so it equals its transpose.
+    @. adjoint.viscosity.η /= 1 - scratch.η
 
     # Add the nonlinear viscosity path to the original center-stress seed.
     enzyme_compute_viscosity_point!(

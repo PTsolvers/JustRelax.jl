@@ -89,100 +89,42 @@ end
 
 # Differentiate the original GeoParams evaluations with local reverse seeds.
 # Phase weighting is applied to the seeds by the caller, exactly once.
-@inline function density_parameter_objective(material, args, ρ_seed, α_seed, thermal_args)
-    result = ρ_seed * compute_density(material, args)
-    if !iszero(α_seed)
-        result += α_seed * material_thermal_expansion(material, thermal_args)
-    end
-    return result
-end
-
-@inline function enzyme_density_parameter_gradient(material, args, ρ_seed, α_seed, thermal_args)
-    return enzyme_material_gradient(
-        density_parameter_objective, material, args, ρ_seed, α_seed, thermal_args
-    )
-end
-
-@inline function viscosity_parameter_objective(
-        material, rheology, ::Val{p}, ratio, AII, args, seed, cutoff
-    ) where {p}
-    local_rheology = Base.setindex(rheology, material, p)
-    η = compute_phase_viscosity(
-        local_rheology, ratio, AII, compute_viscosity_εII, args
-    )
-    return seed * clamp(η, cutoff...)
-end
-
-@inline function enzyme_viscosity_parameter_gradient(material, args...)
-    return enzyme_material_gradient(viscosity_parameter_objective, material, args...)
-end
-
-# `air_phase` mirrors the forward viscosity update: the variational solver drops that phase from
-# the viscosity average through `viscosity_phase_ratio`; `0` keeps every phase.
-@parallel_indices (I...) function linear_viscosity_parameter_sensitivity_kernel!(
-        centers, vertices, parameters, material, rheology, phase::Val{p},
-        phase_center, phase_vertex, ε_center, ε_vertex, args,
-        η_seed, ηv_seed, cutoff, air_phase::Integer,
-    ) where {p}
-    Base.@propagate_inbounds @inline AII(A) = begin
-        AII_0 = allzero(A...) * eps()
-        second_invariant(AII_0 + A[1], -AII_0 + A[2], A[3])
-    end
-    ni = size(phase_center)
-    @inbounds begin
-        derivative = enzyme_viscosity_parameter_gradient(
-            material, rheology, phase, viscosity_phase_ratio(air_phase, phase_vertex[I...]),
-            AII((ε_vertex[1][I...], ε_vertex[2][I...], ε_vertex[3][I...])),
-            local_viscosity_args_vertex(args, I...), ηv_seed[I...], cutoff,
-        )
-        store_parameter_gradients!(vertices, parameters, material, derivative, p, I)
-
-        if all(I .≤ ni)
-            derivative = enzyme_viscosity_parameter_gradient(
-                material, rheology, phase, viscosity_phase_ratio(air_phase, phase_center[I...]),
-                AII((ε_center[1][I...], ε_center[2][I...], ε_center[3][I...])),
-                local_viscosity_args(args, I...), η_seed[I...], cutoff,
-            )
-            store_parameter_gradients!(centers, parameters, material, derivative, p, I)
-        end
-    end
-    return nothing
-end
+@inline thermal_expansion_parameter_objective(material, thermal_args, seed) =
+    seed * material_thermal_expansion(material, thermal_args)
 
 """
-    enzyme_stress_sensitivities!(update!, n, fields, parameters, args)
+    enzyme_pointwise_material_gradients!(update!, n, fields, parameters, args)
 
-Reverse-differentiate one local stress update `update!(primals..., i, j)` point by point.
+Reverse-differentiate one local forward update `update!(primals..., i, j)` point by point.
 `args` lists its arguments as pairs, as for [`enzyme_reverse_pointwise!`](@ref), with the
 rheology given as `rheology => Enzyme.Active`.
 
-The stress seeds in the shadows are consumed as in the adjoint iterations, and the field
-sensitivities (viscosity, strain rate, pressure, ...) accumulate in the other shadows. The
-derivative with respect to `rheology` comes back per point and holds every material parameter of
-every phase; the requested ones (`parameters`, one resolved path set per phase) are added to
-`fields` at `[p, i, j]`. Because the forward function itself is differentiated, every input
-reconstruction, mask, and phase weighting matches the forward solve by construction.
+Output seeds in the shadows are consumed by the reverse pass, while derivatives of duplicated
+inputs accumulate in their shadows. The derivative with respect to `rheology` comes back per
+point and holds every material parameter of every phase; the requested ones (`parameters`, one
+resolved path set per phase) are added to `fields` at `[p, i, j]`. Because the forward function
+itself is differentiated, every input reconstruction, mask, and phase weighting matches the
+forward solve by construction.
 """
-function enzyme_stress_sensitivities!(
+function enzyme_pointwise_material_gradients!(
         update!::F, n, fields, parameters, args::Tuple,
     ) where {F}
     primals, shadows = map(first, args), map(last, args)
     k = findfirst(==(Enzyme.Active), shadows)
     isnothing(k) &&
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
-    op = StressSensitivityPoint{F, k}(update!)
+    op = PointwiseMaterialGradient{F, k}(update!)
     context = (; fields, parameters)
     reverse_colored!(op, n, primals, shadows, context)
     return nothing
 end
 
-# Reverse one stress update with the rheology (argument `k`) active and store its derivative as
-# the material-parameter gradients of that point.
-struct StressSensitivityPoint{F, k}
+# Reverse one point update with rheology argument `k` active and store its material derivatives.
+struct PointwiseMaterialGradient{F, k}
     update!::F
 end
 
-@inline function apply_point!(op::StressSensitivityPoint{F, k}, primals, shadows, context, i, j) where {F, k}
+@inline function apply_point!(op::PointwiseMaterialGradient{F, k}, primals, shadows, context, i, j) where {F, k}
     (; fields, parameters) = context
     rheology = primals[k]
     annotations = map(annotate, primals, shadows)
@@ -237,22 +179,18 @@ end
 Base.@propagate_inbounds @inline _continuity_weight(::Nothing, I...) = 1.0
 Base.@propagate_inbounds @inline _continuity_weight(ϕ::JustRelax.RockRatio, I...) = ϕ.center[I...]
 
-# Density enters twice, with different phase weights: the buoyancy through the `air_phase`
-# corrected ratio of `compute_ρg!`, and the thermal expansion through the raw ratio of the
-# continuity residual, which the variational solver additionally scales by the rock fraction `ϕ`.
-@parallel_indices (I...) function density_parameter_sensitivity_kernel!(
-        centers, parameters, material, p, phase_ratios, args, dρ, λP, ΔT, melt_fraction, dt,
-        air_phase::Integer, ϕ,
+# Thermal expansion enters through the continuity residual rather than `compute_ρg!`. The
+# variational solver additionally weights that residual by the rock fraction `ϕ`.
+@parallel_indices (I...) function thermal_expansion_parameter_gradient_kernel!(
+        centers, parameters, material, p, phase_ratios, λP, ΔT, melt_fraction, dt, ϕ,
     )
     raw_ratio = @cell phase_ratios[I...]
-    ratio_ρ = correct_phase_ratio(air_phase, raw_ratio)[p]
     ratio_α = raw_ratio[p] * _continuity_weight(ϕ, I...)
-    if !(iszero(ratio_ρ) && iszero(ratio_α))
-        local_args = getindex_NamedTuple(args, I...)
+    if !iszero(ratio_α)
         thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
-        α_seed = isnothing(ΔT) ? 0.0 : -λP[I...] * ΔT[(I .+ 1)...] / dt
-        derivative = enzyme_density_parameter_gradient(
-            material, local_args, ratio_ρ * dρ[I...], ratio_α * α_seed, thermal_args
+        α_seed = -ratio_α * λP[I...] * ΔT[(I .+ 1)...] / dt
+        derivative = enzyme_material_gradient(
+            thermal_expansion_parameter_objective, material, thermal_args, α_seed
         )
         store_parameter_gradients!(centers, parameters, material, derivative, p, I)
     end

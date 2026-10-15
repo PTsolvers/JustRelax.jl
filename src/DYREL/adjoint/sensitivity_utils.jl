@@ -42,26 +42,29 @@ end
 
 """
     finish_density_sensitivities!(
-        stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic; air_phase=0, ϕ=nothing,
+        stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic;
+        air_phase=0, ϕ=nothing,
     )
 
-Turn the buoyancy adjoints into the density sensitivity `stokes_ad.ρ`, pull it back to the
-density parameters and fold every vertex gradient into the centers. `air_phase` and `ϕ` must
-match the forward buoyancy update and continuity residual.
+Differentiate the forward buoyancy function with respect to its material parameters, add the
+thermal-expansion contribution from continuity, form the diagnostic density adjoint
+`stokes_ad.ρ`, and fold every vertex gradient into the centers. `air_phase` and `ϕ` must match
+the forward buoyancy update and continuity residual.
 """
 function finish_density_sensitivities!(
-        stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic;
+        stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic;
         air_phase::Integer = 0, ϕ = nothing,
     )
+    compute_density_parameter_sensitivities!(
+        ρg, stokes_ad, phase_ratios, rheology, args, dt, gradients; air_phase, ϕ
+    )
+
     gravity = compute_gravity(first(rheology))
     gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
     # The residual depends on density through the buoyancy forces ρgx = ρ*gx and
     # ρgy = ρ*gy. The chain rule therefore gives dJ/dρ = gx*dJ/dρgx + gy*dJ/dρgy.
     @. stokes_ad.ρ = gx * stokes_ad.dρgx + gy * stokes_ad.ρ
 
-    compute_density_parameter_sensitivities!(
-        stokes_ad, phase_ratios, rheology, args, dt, gradients; air_phase, ϕ
-    )
     for gradient in values(gradients), p in eachindex(rheology)
         combine_center_vertex_gradient!(gradient.center, gradient.vertex, p, periodic)
     end
@@ -153,27 +156,54 @@ function material_parameter_is_used(material, parameter)
         !isempty(_composite_parameter_paths(material, parameter))
 end
 
-function compute_linear_viscosity_parameter_sensitivities!(
+function compute_viscosity_parameter_gradients!(
         stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients;
         air_phase::Integer = 0,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
-    centers = map(entry -> entry.center, gradients)
-    vertices = map(entry -> entry.vertex, gradients)
-    for (p, material) in enumerate(rheology)
-        parameters = _resolve_parameter_paths(
-            material, names, _viscosity_parameter_paths
-        )
-        _has_parameter_paths(parameters) || continue
+    parameters = map(
+        material -> _resolve_parameter_paths(material, names, _viscosity_parameter_paths),
+        rheology,
+    )
+    any(_has_parameter_paths, parameters) || return nothing
 
-        @parallel (@idx size(phases.vertex)) linear_viscosity_parameter_sensitivity_kernel!(
-            centers, vertices, parameters, material, rheology, Val(p),
-            phases.center, phases.vertex,
-            @strain_center(stokes), @tensor_vertex(stokes.ε), args,
-            adjoint.viscosity.η, adjoint.viscosity.ηv, viscosity_cutoff, air_phase,
-        )
-    end
+    enzyme_pointwise_material_gradients!(
+        compute_viscosity_kernel_point!, size(phases.center),
+        map(entry -> entry.center, gradients), parameters,
+        (
+            stokes.viscosity.η => copy(adjoint.viscosity.η),
+            1.0 => nothing,
+            phases.center => nothing,
+            stokes.ε.xx => nothing,
+            stokes.ε.yy => nothing,
+            stokes.ε.xy_c => nothing,
+            args => nothing,
+            rheology => Enzyme.Active,
+            air_phase => nothing,
+            viscosity_cutoff => nothing,
+            compute_viscosity_εII => nothing,
+            local_viscosity_args => nothing,
+        ),
+    )
+    enzyme_pointwise_material_gradients!(
+        compute_viscosity_kernel_point!, size(phases.vertex),
+        map(entry -> entry.vertex, gradients), parameters,
+        (
+            stokes.viscosity.ηv => copy(adjoint.viscosity.ηv),
+            1.0 => nothing,
+            phases.vertex => nothing,
+            stokes.ε.xx_v => nothing,
+            stokes.ε.yy_v => nothing,
+            stokes.ε.xy => nothing,
+            args => nothing,
+            rheology => Enzyme.Active,
+            air_phase => nothing,
+            viscosity_cutoff => nothing,
+            compute_viscosity_εII => nothing,
+            local_viscosity_args_vertex => nothing,
+        ),
+    )
     return nothing
 end
 
@@ -202,12 +232,33 @@ function combine_center_vertex_gradient!(
 end
 
 function compute_density_parameter_sensitivities!(
-        adjoint, phases, rheology, args, dt, gradients; air_phase::Integer = 0, ϕ = nothing,
+        ρg, adjoint, phases, rheology, args, dt, gradients;
+        air_phase::Integer = 0, ϕ = nothing,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
+    parameters = map(
+        material -> _resolve_parameter_paths(material, names, _density_parameter_paths),
+        rheology,
+    )
+    any(_has_parameter_paths, parameters) || return nothing
+    args_without_P, P = split_pressure_arg(args)
+    enzyme_pointwise_material_gradients!(
+        compute_ρg_kernel_point!, size(adjoint.ρ), centers, parameters,
+        (
+            ρg => (copy(adjoint.dρgx), copy(adjoint.ρ)),
+            phases.center => nothing,
+            rheology => Enzyme.Active,
+            args_without_P => nothing,
+            P => nothing,
+            air_phase => nothing,
+            size(adjoint.ρ) => nothing,
+        ),
+    )
+
     ΔT = get(args, :ΔT, nothing)
+    isnothing(ΔT) && return nothing
     melt_fraction = get(args, :melt_fraction, nothing)
     for (p, material) in enumerate(rheology)
         density_parameters = _resolve_parameter_paths(material, names, _density_parameter_paths)
@@ -220,9 +271,9 @@ function compute_density_parameter_sensitivities!(
         end
         _has_parameter_paths(density_parameters) || continue
 
-        @parallel (@idx size(adjoint.ρ)) density_parameter_sensitivity_kernel!(
-            centers, density_parameters, material, p, phases.center, args,
-            adjoint.ρ, adjoint.λP, ΔT, melt_fraction, dt, air_phase, ϕ,
+        @parallel (@idx size(adjoint.ρ)) thermal_expansion_parameter_gradient_kernel!(
+            centers, density_parameters, material, p, phases.center,
+            adjoint.λP, ΔT, melt_fraction, dt, ϕ,
         )
     end
     return nothing

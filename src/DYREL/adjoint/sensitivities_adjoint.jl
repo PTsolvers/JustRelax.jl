@@ -55,11 +55,11 @@ function compute_sensitivities!(
         stokes, stokes_ad, phase_ratios, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
-    compute_linear_viscosity_parameter_sensitivities!(
+    compute_viscosity_parameter_gradients!(
         stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients
     )
 
-    finish_density_sensitivities!(stokes_ad, phase_ratios, rheology, args, dt, gradients, periodic)
+    finish_density_sensitivities!(stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic)
 
     return stokes_ad
 end
@@ -81,7 +81,7 @@ function compute_stress_sensitivities!(
     )
     names = keys(gradients)
     parameters = map(material -> _resolve_parameter_paths(material, names, _stress_parameter_paths), rheology)
-    enzyme_stress_sensitivities!(
+    enzyme_pointwise_material_gradients!(
         compute_stress_DRYEL_vertex!,
         size(phases.vertex),
         map(entry -> entry.vertex, gradients),
@@ -104,7 +104,7 @@ function compute_stress_sensitivities!(
             periodic => nothing,
         ),
     )
-    enzyme_stress_sensitivities!(
+    enzyme_pointwise_material_gradients!(
         compute_stress_DRYEL_center!,
         size(phases.center),
         map(entry -> entry.center, gradients),

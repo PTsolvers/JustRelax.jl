@@ -53,7 +53,7 @@ end
 struct PassthroughDensity <: AbstractDensity{Float64} end
 @inline GeoParams.compute_density(::PassthroughDensity, args) = args.ρ_target
 
-function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax, variational)
+function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax, variational, global_penalty = true)
     ni = size(phase_ratios.center)
     stokes = StokesArrays(backend_JR, ni)
     ρg = @zeros(ni...), @zeros(ni...)
@@ -72,10 +72,10 @@ function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, i
     if variational
         ϕ = RockRatio(backend_JR, ni)
         update_rock_ratio!(ϕ, phase_ratios, 0)
-        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ, γfact)
+        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ, γfact, global_penalty)
         iters = solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg; kwargs)
     else
-        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ, γfact)
+        dyrel = DYREL(backend_JR, stokes, rheology, phase_ratios, grid.di, dt; ϵ, γfact, global_penalty)
         iters = solve_DYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs)
     end
     return stokes, iters
@@ -106,7 +106,7 @@ function solcx_density(xci, ni)
     return ρ
 end
 
-function run_solcx(igg, nx, ny; variational, Δη = 1.0e6, γfact = 20, ϵ = 1.0e-6)
+function run_solcx(igg, nx, ny; variational, Δη = 1.0e6, γfact = 20, ϵ = 1.0e-6, global_penalty = false)
     ni = nx, ny
     li = 1.0, 1.0
     grid = Geometry(ni, li; origin = (0.0, 0.0))
@@ -127,7 +127,9 @@ function run_solcx(igg, nx, ny; variational, Δη = 1.0e6, γfact = 20, ϵ = 1.0
     args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, ρ_target = ρ)
     flow_bcs = VelocityBoundaryConditions(; free_slip = (left = true, right = true, top = true, bot = true))
 
-    return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational)
+    # Local penalty: with a 1e6 viscosity step, a penalty scaled by the mean viscosity is
+    # ~5e6 times the weak-side viscosity and the momentum solve exceeds `iterMax`.
+    return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational, global_penalty)
 end
 
 # ------------------------------------------------------------------------------------ #
@@ -275,12 +277,12 @@ end
             @test iters.err_evo_tot[end] < 1.0e-5
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.0013938636779610848 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031580833163039165 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.P)) ≈ 0.25701096604509777 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016306775444691899 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.0035636067234839051 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341866240639133 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.001393999576558936 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031585683659086468 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.P)) ≈ 0.25700842902418103 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016306775444691914 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.003563606723483924 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341866240639105 rtol = 1.0e-6
         end
 
         @testset "SolKz" begin
@@ -293,9 +295,9 @@ end
             @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010315674748001426  rtol = 1.0e-6
             @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045868650922067e-5 rtol = 1.0e-6
             @test maximum(abs, Array(stokes.P)) ≈ 0.10001155920216592  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.00010116331952357103  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.200123342537124e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.10244250706914182  rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.000105434676741088 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.162915680233704e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1029917627786186 rtol = 1.0e-6
         end
 
         @testset "SolVi" begin

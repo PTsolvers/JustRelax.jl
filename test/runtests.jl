@@ -23,6 +23,7 @@ end
 
 args = copy(ARGS)
 _, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
+skip_mpi, _ = parse_flags!(args, "--no-mpi")
 
 @static if backend_name == "AMDGPU"
     Pkg.add("AMDGPU")
@@ -73,6 +74,10 @@ function runtests(args)
     for k in mpi_keys
         delete!(testsuite, k)
     end
+    if skip_mpi
+        printstyled("\nSkipping $(length(mpi_keys)) MPI tests (--no-mpi)\n"; bold = true, color = :yellow)
+        empty!(mpi_keys)
+    end
 
     # Parse args for ParallelTestRunner and apply exclusions
     pt_args = ParallelTestRunner.parse_args(args)
@@ -92,7 +97,7 @@ function runtests(args)
     end
 
     # MPI tests
-    printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
+    isempty(mpi_keys) || printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
     for k in sort(mpi_keys)
         f = mpi_files[k]
         isfile(f) || continue

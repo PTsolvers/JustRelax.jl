@@ -20,6 +20,18 @@ by this one
 dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
 ```
 
+The `global_penalty` constructor keyword selects how DYREL scales its numerical
+pressure penalty. It defaults to `true`, using mean finite viscosity across the
+domain (and MPI ranks when MPI is initialized). Set `global_penalty = false` to
+scale the penalty with local viscosity:
+
+```julia
+dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; global_penalty = false)
+```
+
+This switch applies to standard and variational DYREL. In the variational solver,
+the rock-fraction correction remains applied to the penalty in both modes.
+
 > [!NOTE]
 > Note that the `DYREL` arrays need the effective viscosity of the model, so
 > `DYREL` must be instantiated *after* an effective-viscosity guess is available.

@@ -260,19 +260,13 @@ function variational_adjoint_residual!(
         stokes, stokes_ad, ρg, ϕ, _di, ni, rheology, phase_ratios, args;
         free_surface_dt = dt * free_surface, air_phase,
     )
-    if isnothing(constitutive_scratch)
-        fill!(stokes_ad.viscosity.η, 0)
-        enzyme_compute_stress_DRYEL!(
-            stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
-        )
-    else
-        enzyme_compute_variational_stress_DRYEL!(
-            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
-            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
-        )
-    end
+    enzyme_compute_stress_DRYEL!(
+        stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+        viscosity_cutoff, constitutive_scratch; air_phase,
+    )
     enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
+    # Keep the pressure adjoint zero in cells eliminated from the variational system.
     stokes_ad.P .*= maskP
     return nothing
 end

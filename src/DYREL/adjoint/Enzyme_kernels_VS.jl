@@ -166,6 +166,26 @@ function enzyme_compute_stress_DRYEL!(
     return nothing
 end
 
+# Select the same linear or implicit nonlinear constitutive pullback as the forward solve.
+# Nonlinear solves allocate `constitutive_scratch`; linear solves pass `nothing`.
+function enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt,
+        args, viscosity_cutoff, constitutive_scratch; air_phase::Integer = 0,
+    )
+    fill!(adjoint.viscosity.η, 0)
+    if isnothing(constitutive_scratch)
+        enzyme_compute_stress_DRYEL!(
+            stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+        )
+    else
+        enzyme_compute_variational_stress_DRYEL!(
+            constitutive_scratch, stokes, adjoint, rheology, phase_ratios, ϕ,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+        )
+    end
+    return nothing
+end
+
 function enzyme_reverse_stress_DRYEL!(
         stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, args;
         τ_bar = nothing, τv_bar = nothing, τII_bar = nothing, ε_bar = nothing,

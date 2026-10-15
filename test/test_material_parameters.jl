@@ -39,12 +39,29 @@ end
     @test JustRelax2D.material_parameter_is_used(material, :ρ0)
     @test JustRelax2D.material_parameter_is_used(material, :η)
     @test JustRelax2D._density_parameter_paths(material, :α) == [(:Density, 1, :α)]
-    @test JustRelax2D._linear_viscosity_parameter_paths(material, :η) ==
+    @test JustRelax2D._composite_parameter_paths(material, :η) ==
         [(:CompositeRheology, 1, :elements, 1, :η)]
     @test JustRelax2D.material_parameter_is_used(material, :G)
     # ConstantDensity has no thermal expansivity, so :α is absent for that phase.
     constant = SetMaterialParams(; Phase = 1, Density = ConstantDensity(; ρ = 1.0))
     @test !JustRelax2D.material_parameter_is_used(constant, :α)
+
+    powerlaw = SetMaterialParams(;
+        Phase = 1,
+        CompositeRheology = CompositeRheology(
+            (
+                PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),
+            )
+        ),
+    )
+    @test JustRelax2D._composite_parameter_paths(powerlaw, :η0) ==
+        [(:CompositeRheology, 1, :elements, 1, :η0)]
+    @test JustRelax2D._composite_parameter_paths(powerlaw, :n) ==
+        [(:CompositeRheology, 1, :elements, 1, :n)]
+    @test JustRelax2D._viscosity_parameter_paths(powerlaw, :ε0) ==
+        [(:CompositeRheology, 1, :elements, 1, :ε0)]
+    @test JustRelax2D.material_parameter_is_used(powerlaw, :ε0)
+    @test !JustRelax2D.material_parameter_is_used(material, :sinϕ)
 end
 
 @testset "material_controls allocation" begin

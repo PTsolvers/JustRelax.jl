@@ -22,18 +22,18 @@ function prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
 
     igg.me == 0 && @printf("\n######## Calculate Sensitivities ########\n")
     # zero out adjoint arrays
-    stokes_ad.P            .= 0.0
-    stokes_ad.θ            .= 0.0
-    stokes_ad.τ.xx         .= 0.0
-    stokes_ad.τ.yy         .= 0.0
-    stokes_ad.τ.xy_c       .= 0.0
-    stokes_ad.τ.xx_v       .= 0.0
-    stokes_ad.τ.yy_v       .= 0.0
-    stokes_ad.τ.xy         .= 0.0
-    stokes_ad.viscosity.η  .= 0.0
+    stokes_ad.P .= 0.0
+    stokes_ad.θ .= 0.0
+    stokes_ad.τ.xx .= 0.0
+    stokes_ad.τ.yy .= 0.0
+    stokes_ad.τ.xy_c .= 0.0
+    stokes_ad.τ.xx_v .= 0.0
+    stokes_ad.τ.yy_v .= 0.0
+    stokes_ad.τ.xy .= 0.0
+    stokes_ad.viscosity.η .= 0.0
     stokes_ad.viscosity.ηv .= 0.0
-    stokes_ad.ρ            .= 0.0
-    stokes_ad.dρgx         .= 0.0
+    stokes_ad.ρ .= 0.0
+    stokes_ad.dρgx .= 0.0
 
     @views stokes_ad.R.Rx .= -stokes_ad.λV.Vx[2:(size(stokes_ad.R.Rx, 1) + 1), 2:(size(stokes_ad.R.Rx, 2) + 1)]
     @views stokes_ad.R.Ry .= -stokes_ad.λV.Vy[2:(size(stokes_ad.R.Ry, 1) + 1), 2:(size(stokes_ad.R.Ry, 2) + 1)]
@@ -69,64 +69,88 @@ function finish_density_sensitivities!(
     return stokes_ad
 end
 
-function _density_parameter_paths(material, name::Symbol)
-    paths = Tuple[]
-    for (model_index, model) in pairs(material.Density)
-        hasproperty(model, name) && push!(paths, (:Density, model_index, name))
+const _derived_material_parameter_names = (:sinϕ, :cosϕ, :sinΨ, :cosΨ)
+
+@inline _is_material_parameter(value::GeoParams.GeoUnit) = value.val isa AbstractFloat
+@inline _is_material_parameter(value) = value isa AbstractFloat
+
+@inline _is_parameter_container(value) = !(
+    value isa GeoParams.GeoUnit || value isa Number || value isa AbstractArray ||
+        value isa AbstractString || value isa Symbol || value isa Function ||
+        value isa Type || isnothing(value)
+)
+
+function _collect_material_parameter_paths!(paths, object, name::Symbol, prefix::Tuple)
+    name in _derived_material_parameter_names && return paths
+    if object isa NamedTuple
+        components = pairs(object)
+    elseif object isa Tuple
+        components = pairs(object)
+    else
+        components = ((field, getfield(object, field)) for field in fieldnames(typeof(object)))
+    end
+
+    for (component, value) in components
+        path = (prefix..., component)
+        component === name && _is_material_parameter(value) && push!(paths, path)
+        _is_parameter_container(value) &&
+            _collect_material_parameter_paths!(paths, value, name, path)
     end
     return paths
 end
 
-function _composite_parameter_paths(material, name::Symbol, model_type)
+function _material_parameter_paths(object, name::Symbol, prefix::Tuple)
+    return _collect_material_parameter_paths!(Tuple[], object, name, prefix)
+end
+
+@inline _density_parameter_paths(material, name::Symbol) =
+    _material_parameter_paths(material.Density, name, (:Density,))
+
+@inline _composite_parameter_paths(material, name::Symbol) =
+    _material_parameter_paths(material.CompositeRheology, name, (:CompositeRheology,))
+
+function _composite_parameter_paths(material, name::Symbol, predicate)
     paths = Tuple[]
     for (rheology_index, composite) in pairs(material.CompositeRheology)
         for (element_index, element) in pairs(composite.elements)
-            element isa model_type && hasproperty(element, name) && push!(
-                paths,
-                (:CompositeRheology, rheology_index, :elements, element_index, name),
-            )
+            predicate(element) || continue
+            prefix = (:CompositeRheology, rheology_index, :elements, element_index)
+            append!(paths, _material_parameter_paths(element, name, prefix))
         end
     end
     return paths
 end
 
-@inline _linear_viscosity_parameter_paths(material, name::Symbol) =
-    _composite_parameter_paths(material, name, GeoParams.LinearViscous)
-
-@inline _plastic_parameter_paths(material, name::Symbol) =
-    _composite_parameter_paths(material, name, GeoParams.AbstractPlasticity)
-
-function _elastic_parameter_paths(material, name::Symbol)
-    paths = Tuple[]
-    for (rheology_index, composite) in pairs(material.CompositeRheology)
-        for (element_index, element) in pairs(composite.elements)
-            element isa GeoParams.AbstractElasticity && hasproperty(element, name) || continue
-            value = _material_parameter_value(getproperty(element, name))
-            isfinite(value) && !iszero(value) && push!(
-                paths,
-                (:CompositeRheology, rheology_index, :elements, element_index, name),
-            )
-        end
-    end
-    return paths
-end
+@inline _viscosity_parameter_paths(material, name::Symbol) =
+    _composite_parameter_paths(material, name, element -> element isa GeoParams.AbstractCreepLaw)
 
 function _stress_parameter_paths(material, name::Symbol)
-    return (_elastic_parameter_paths(material, name)..., _plastic_parameter_paths(material, name)...)
+    paths = _composite_parameter_paths(
+        material, name,
+        element -> element isa GeoParams.AbstractElasticity || element isa GeoParams.AbstractPlasticity,
+    )
+    filter!(paths) do path
+        element = material.CompositeRheology[path[2]].elements[path[4]]
+        element isa GeoParams.AbstractElasticity || return true
+        value = _material_parameter_value(_material_parameter(material, Val(path)))
+        return isfinite(value) && !iszero(value)
+    end
+    return paths
 end
 
 function _resolve_parameter_paths(material, names, path_function)
-    return NamedTuple{names}(map(names) do name
-        Tuple(Val(path) for path in path_function(material, name))
-    end)
+    return NamedTuple{names}(
+        map(names) do name
+            Tuple(Val(path) for path in path_function(material, name))
+        end
+    )
 end
 
 @inline _has_parameter_paths(parameters) = any(paths -> !isempty(paths), parameters)
 
 function material_parameter_is_used(material, parameter)
     return !isempty(_density_parameter_paths(material, parameter)) ||
-        !isempty(_linear_viscosity_parameter_paths(material, parameter)) ||
-        !isempty(_stress_parameter_paths(material, parameter))
+        !isempty(_composite_parameter_paths(material, parameter))
 end
 
 function compute_linear_viscosity_parameter_sensitivities!(
@@ -139,7 +163,7 @@ function compute_linear_viscosity_parameter_sensitivities!(
     vertices = map(entry -> entry.vertex, gradients)
     for (p, material) in enumerate(rheology)
         parameters = _resolve_parameter_paths(
-            material, names, _linear_viscosity_parameter_paths
+            material, names, _viscosity_parameter_paths
         )
         _has_parameter_paths(parameters) || continue
 
@@ -190,8 +214,8 @@ function compute_density_parameter_sensitivities!(
         for (name, paths) in pairs(density_parameters)
             for path in paths
                 value = _material_parameter(material, path)
-                value isa GeoParams.GeoUnit && value.val isa AbstractFloat ||
-                    throw(ArgumentError("$name must be a scalar floating-point GeoUnit"))
+                _is_material_parameter(value) ||
+                    throw(ArgumentError("$name must be a scalar floating-point material parameter"))
             end
         end
         _has_parameter_paths(density_parameters) || continue

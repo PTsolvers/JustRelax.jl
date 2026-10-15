@@ -6,9 +6,9 @@ using Enzyme
         do_strain_rate=true,
     )
 
-`adjoint.ε` and `adjoint.R.RP` are the reverse seeds for the strain-rate and
-pressure-residual outputs. The resulting contributions to the velocity and pressure
-adjoint equations accumulate in `adjoint.V` and `adjoint.P`; all remaining inputs are constant.
+`adjoint.ε` and `adjoint.R.RP` seed the strain-rate and pressure-residual outputs. The
+resulting reverse-mode derivatives accumulate in `adjoint.V` and `adjoint.P`; all remaining
+inputs are constant.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
         stokes,
@@ -56,9 +56,14 @@ end
 """
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
 
-Differentiate the two-dimensional Powell–Hestenes momentum-residual kernel.
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Contributions to the velocity,
-pressure, stress, and buoyancy adjoint equations accumulate in their corresponding fields.
+Differentiate the two-dimensional momentum-residual kernel.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the outputs. The resulting
+reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
+`adjoint.dρgx`, and `adjoint.ρ`.
+
+Only this momentum-residual function is differentiated with Enzyme. The transpose of the
+Schur-complement correction is applied separately by `update_adjoint_V_damping_DR!`.
+enzyme_compute_PH_residual_V! is also used in the gradient calculation after the adjoint solve.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni; free_surface_dt = 0
@@ -91,15 +96,18 @@ end
         stokes, adjoint, ρg, _di, ni, rheology, phases, args
     )
 
-Reverse the momentum residual and propagate its buoyancy sensitivity through density
-to the coupled Stokes pressure. The adjoint solver requires `args.P === stokes.P`.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the momentum-residual outputs. The resulting
+reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
+`adjoint.dρgx`, and `adjoint.ρ`; the buoyancy derivative is additionally propagated through
+the pressure-dependent density into `adjoint.P`. The adjoint solver requires
+`args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0
     )
     zero_buoyancy_adjoint!(adjoint)
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni; free_surface_dt)
-    buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni)
+    enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni)
     return nothing
 end
 
@@ -107,46 +115,30 @@ end
 zero_buoyancy_adjoint!(adjoint) = foreach(A -> fill!(A, 0.0), (adjoint.dρgx, adjoint.ρ))
 
 """
-    buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni; air_phase=0)
+    enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni; air_phase=0)
 
-Propagate the buoyancy adjoints `adjoint.dρgx`/`adjoint.ρ` through the pressure dependence
-of density into `adjoint.P`. `air_phase` must match the forward buoyancy update, which drops
-that phase from the density average; `0` keeps every phase.
+Differentiate the same pointwise buoyancy function used by the forward solver.
+`adjoint.dρgx` and `adjoint.ρ` seed the horizontal and vertical buoyancy outputs through
+`DuplicatedNoNeed`. The resulting pressure derivative accumulates in `adjoint.P`.
 """
-function buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni; air_phase::Integer = 0)
-    @parallel (@idx ni) buoyancy_pressure_adjoint_kernel!(
-        adjoint.P, (adjoint.dρgx, adjoint.ρ), phases.center, rheology, args, air_phase
+function enzyme_compute_ρg!(
+        ρg, adjoint, phases, rheology, args, ni; air_phase::Integer = 0
     )
-    return nothing
-end
-
-@inline function density_at_pressure(P, rheology, ratio, args)
-    return fn_ratio(compute_density, rheology, ratio, merge(args, (; P)))
-end
-
-# The phase ratio is corrected for `air_phase` exactly as in `compute_ρg_kernel!`; an all-air
-# cell ends up with an all-zero ratio and contributes nothing.
-@parallel_indices (I...) function buoyancy_pressure_adjoint_kernel!(
-        dP, dρg, phases, rheology, args, air_phase::Integer
+    args_without_P, P = split_pressure_arg(args)
+    isnothing(P) && return nothing
+    enzyme_reverse_pointwise!(
+        compute_ρg_kernel_point!,
+        ni,
+        (
+            ρg => (adjoint.dρgx, adjoint.ρ),
+            phases.center => nothing,
+            rheology => nothing,
+            args_without_P => nothing,
+            P => adjoint.P,
+            air_phase => nothing,
+            ni => nothing,
+        ),
     )
-    local_args = getindex_NamedTuple(args, I...)
-    ratio = correct_phase_ratio(air_phase, @cell phases[I...])
-    dρdP = Enzyme.autodiff_deferred(
-        Enzyme.Reverse,
-        Enzyme.Const(density_at_pressure),
-        Enzyme.Active,
-        Enzyme.Active(local_args.P),
-        Enzyme.Const(rheology),
-        Enzyme.Const(ratio),
-        Enzyme.Const(local_args),
-    )[1][1]
-    gravity = compute_gravity(first(rheology))
-    gx, gy = gravity isa Number ? (zero(gravity), gravity) : (gravity[1], gravity[3])
-    # Momentum -> buoyancy -> density -> pressure. Add to the direct pressure
-    # gradient and any objective seed already present in dP.
-    # dJ/dP += dJ/dρ * dρ/dP
-    #        = (gx * dJ/d(ρgx) + gy * dJ/d(ρgy)) * dρ/dP
-    dP[I...] += (gx * dρg[1][I...] + gy * dρg[2][I...]) * dρdP
     return nothing
 end
 
@@ -165,9 +157,12 @@ for the converged constitutive equations
 η = viscosity(τII(τ)).
 ```
 
-The correction uses the unrelaxed stress-based viscosity function. The corrected
-seed is then pulled back through `compute_stress_DRYEL_point!`; neither the
-forward viscosity relaxation nor its iteration history is differentiated.
+The correction uses the unrelaxed stress-based viscosity function. The corrected stress seeds
+in `adjoint.τ`, together with the plastic-pressure-correction seed in `adjoint.θ`, are then
+pulled back through `compute_stress_DRYEL_point!`. The resulting reverse-mode derivatives
+accumulate in `adjoint.ε`, `adjoint.P`, `adjoint.viscosity.η`, and
+`adjoint.viscosity.ηv`; neither the forward viscosity relaxation nor its iteration history is
+differentiated.
 """
 function enzyme_compute_stress_DRYEL!(
         stokes,

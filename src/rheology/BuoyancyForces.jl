@@ -46,13 +46,21 @@ function compute_ρg!(
     _size(x::NTuple) = size(x[1])
 
     ni = _size(ρg)
+    args_without_P, P = split_pressure_arg(args)
     @parallel (@idx ni) compute_ρg_kernel!(
-        ρg, phase_ratios.center, rheology, args, air_phase
+        ρg, phase_ratios.center, rheology, args_without_P, P, air_phase, ni
     )
     return nothing
 end
 
-# Evaluate the complete local phase-weighted buoyancy relation in one differentiable function.
+# Separate pressure on the host so Enzyme can pair only `P` with its adjoint array while the
+# remaining arguments stay constant during the adjoint solve.
+@inline function split_pressure_arg(args)
+    haskey(args, :P) || return args, nothing
+    return Base.structdiff(args, NamedTuple{(:P,)}), args.P
+end
+
+# Evaluate air correction, phase-weighted density and gravity in one differentiable function.
 @inline function compute_buoyancy_point(
         rheology, ratio, args, air_phase::Integer, dimension::Val{N}
     ) where {N}
@@ -61,10 +69,22 @@ end
     return compute_buoyancies(rheology, corrected_ratio, args, gravity, dimension)
 end
 
-@parallel_indices (I...) function compute_ρg_kernel!(
-        ρg, phase_ratios, rheology, args, air_phase::Integer
+# Use the original cell-grid size when sampling the remaining arguments so ghosted fields keep
+# the same offsets after the cell-sized pressure array has been separated.
+@inline function local_buoyancy_args(args, ::Nothing, ni, I...)
+    return getindex_NamedTuple(args, ni, I...)
+end
+
+# Reinsert the local pressure value to reconstruct the NamedTuple seen by the density model.
+@inline function local_buoyancy_args(args, P, ni, I...)
+    return merge(getindex_NamedTuple(args, ni, I...), (; P = P[I...]))
+end
+
+# Shared forward/adjoint point operation for a scalar buoyancy field.
+@inline function compute_ρg_kernel_point!(
+        ρg, phase_ratios, rheology, args, P, air_phase::Integer, ni, I...
     )
-    args_ijk = getindex_NamedTuple(args, I...)
+    args_ijk = local_buoyancy_args(args, P, ni, I...)
     ratio_ijk = @cell phase_ratios[I...]
     ρg[I...] = compute_buoyancy_point(
         rheology, ratio_ijk, args_ijk, air_phase, Val(1)
@@ -72,13 +92,30 @@ end
     return nothing
 end
 
-@parallel_indices (I...) function compute_ρg_kernel!(
-        ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args, air_phase::Integer
+# Tuple counterpart storing one buoyancy array per spatial component.
+@inline function compute_ρg_kernel_point!(
+        ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args, P,
+        air_phase::Integer, ni, I...,
     ) where {N}
-    args_ijk = getindex_NamedTuple(args, I...)
+    args_ijk = local_buoyancy_args(args, P, ni, I...)
     ratio_ijk = @cell phase_ratios[I...]
     ρgᵢ = compute_buoyancy_point(rheology, ratio_ijk, args_ijk, air_phase, Val(N))
     fill_density!(ρg, ρgᵢ, I...)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_ρg_kernel!(
+        ρg, phase_ratios, rheology, args, P, air_phase::Integer, ni
+    )
+    compute_ρg_kernel_point!(ρg, phase_ratios, rheology, args, P, air_phase, ni, I...)
+    return nothing
+end
+
+@parallel_indices (I...) function compute_ρg_kernel!(
+        ρg::NTuple{N, AbstractArray}, phase_ratios, rheology, args, P,
+        air_phase::Integer, ni,
+    ) where {N}
+    compute_ρg_kernel_point!(ρg, phase_ratios, rheology, args, P, air_phase, ni, I...)
     return nothing
 end
 

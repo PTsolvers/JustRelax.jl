@@ -3,8 +3,8 @@ using Enzyme
 """
     enzyme_flow_bcs!(stokes, adjoint, bcs)
 
-Reverse the two-dimensional velocity boundary kernels. Velocity sensitivities
-are accumulated in `adjoint.V`.
+Reverse the two-dimensional velocity boundary kernels. The velocity output seeds and the
+resulting reverse-mode derivatives are stored in `adjoint.V`.
 """
 function enzyme_flow_bcs!(stokes, adjoint, bcs)
     Vx, Vy = stokes.V.Vx, stokes.V.Vy
@@ -39,8 +39,9 @@ end
 """
     enzyme_no_slip!(Vx, dVx, Vy, dVy, bc)
 
-Reverse the active two-dimensional no-slip boundary kernels. The four kernels
-are called in the reverse order of `no_slip!`.
+Reverse the active two-dimensional no-slip boundary kernels. `dVx` and `dVy` provide the
+velocity output seeds and receive the resulting reverse-mode derivatives. The four kernels are
+called in the reverse order of `no_slip!`.
 """
 function enzyme_no_slip!(Vx, dVx, Vy, dVy, bc)
     n1 = max(size(Vx, 2), size(Vy, 2))

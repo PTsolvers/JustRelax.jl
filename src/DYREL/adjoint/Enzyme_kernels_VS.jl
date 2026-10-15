@@ -15,8 +15,8 @@
     )
 
 Masked counterpart of the non-variational wrapper. `adjoint.ε` and `adjoint.R.RP` seed the
-strain-rate and pressure-residual outputs; contributions to the velocity and pressure adjoint
-equations accumulate in `adjoint.V` and `adjoint.P`. The rock-fraction scaling of the continuity residual is
+strain-rate and pressure-residual outputs. The resulting reverse-mode derivatives accumulate
+in `adjoint.V` and `adjoint.P`. The rock-fraction scaling of the continuity residual is
 differentiated along with it.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
@@ -69,8 +69,13 @@ end
 
 Differentiate the masked Powell–Hestenes momentum residual, including the ϕ-weighted
 free-surface stabilization term (`free_surface_dt = dt * free_surface`; `0` disables it).
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. Contributions to the velocity,
-pressure, stress, and buoyancy adjoint equations accumulate in their corresponding fields.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. The resulting reverse-mode
+derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`, `adjoint.dρgx`, and
+`adjoint.ρ`.
+
+Only this momentum-residual function is differentiated with Enzyme. The transpose of the
+Schur-complement correction is applied separately by `update_adjoint_V_damping_DR!`.
+enzyme_compute_PH_residual_V! is also used in the gradient calculation after the adjoint solve.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, ϕ::JustRelax.RockRatio, _di, ni; free_surface_dt = 0
@@ -105,9 +110,12 @@ end
         free_surface_dt=0, air_phase=0,
     )
 
-Reverse the masked momentum residual and propagate its buoyancy sensitivity through density
-to the coupled Stokes pressure. `air_phase` must match the forward `update_ρg!` call, which
-drops that phase from the density average. The adjoint solver requires `args.P === stokes.P`.
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the masked momentum-residual outputs. The resulting
+reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
+`adjoint.dρgx`, and `adjoint.ρ`; the buoyancy derivative is additionally propagated through
+the pressure-dependent density into `adjoint.P`. `air_phase` must match the forward
+`update_ρg!` call, which drops that phase from the density average. The adjoint solver requires
+`args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
         stokes, adjoint, ρg, ϕ::JustRelax.RockRatio, _di, ni, rheology, phases, args;
@@ -115,7 +123,7 @@ function enzyme_compute_PH_residual_V!(
     )
     zero_buoyancy_adjoint!(adjoint)
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ, _di, ni; free_surface_dt)
-    buoyancy_pressure_adjoint!(adjoint, phases, rheology, args, ni; air_phase)
+    enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni; air_phase)
     return nothing
 end
 
@@ -124,9 +132,9 @@ end
         stokes, adjoint, rheology, phase_ratios, ϕ::RockRatio, λ_relaxation, dt, args,
     )
 
-Differentiate the masked DYREL constitutive kernel. Stress adjoints in `adjoint.τ` are
-propagated to strain rate, pressure and the plastic pressure correction (`adjoint.ε`,
-`adjoint.P`, `adjoint.θ`).
+Differentiate the masked DYREL constitutive kernel. `adjoint.τ` and `adjoint.θ` seed the stress
+and plastic-pressure-correction outputs. The resulting reverse-mode derivatives accumulate in
+`adjoint.ε`, `adjoint.P`, and `adjoint.viscosity.η`.
 
 The variational kernel has no vertex viscosity of its own: it evaluates `harm_clamped(η)` of
 the surrounding centers. With `η` active, the vertex contributions are therefore folded into

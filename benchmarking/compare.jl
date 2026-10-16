@@ -21,11 +21,12 @@ mktempdir() do dir
         harness = joinpath(worktree, "benchmarking")
         rm(harness; force = true, recursive = true)
         cp(joinpath(ROOT, "benchmarking"), harness)
-        run(`$JULIA --project=$harness $harness/setup.jl`)
+        run(pipeline(`$JULIA --project=$harness $harness/setup.jl`; stdout = stderr))
 
         function run_suite(project, name)
             output = joinpath(dir, "$name.json")
-            run(`$JULIA --project=$project $project/run_benchmarks.jl $RUN_ARGS --output=$output`)
+            # Solver output goes to stderr so stdout carries only the comparison table.
+            run(pipeline(`$JULIA --project=$project $project/run_benchmarks.jl $RUN_ARGS --output=$output`; stdout = stderr))
             return JSON.parsefile(output)
         end
         baseline = run_suite(harness, "baseline")

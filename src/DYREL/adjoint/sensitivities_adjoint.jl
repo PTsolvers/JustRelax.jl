@@ -1,7 +1,7 @@
 """
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation, dt, igg,
-        gradients = (;), args = (;); viscosity_cutoff = (-Inf, Inf),
+        gradients = (;), args = (;); viscosity_cutoff = (-Inf, Inf), dyrel = nothing,
     )
 
 Accumulate the sensitivities of the objective functional with respect to the material
@@ -19,6 +19,11 @@ Fills
 `gradients` comes from [`material_controls`](@ref) and is keyed directly by parameter name.
 Each name is resolved in every supported material-function path before the sensitivity
 kernels launch.
+
+Pass the forward `dyrel` state when `args` contains `ΔT` and thermal-expansion parameters are
+requested. Its bulk-viscosity field is needed to differentiate the same pointwise continuity
+residual used by the forward solve. Calls without thermal-expansion gradients may leave
+`dyrel = nothing`.
 
 The adjoint working arrays (`P`, `θ`, the stress tensor and the viscosity fields) are zeroed
 on entry, so this has to be called *after* the adjoint iterations have converged and not in
@@ -41,6 +46,7 @@ function compute_sensitivities!(
         viscosity_cutoff = (-Inf, Inf),
         free_surface = false,
         constitutive_scratch = nothing,
+        dyrel = nothing,
     )
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
@@ -77,7 +83,10 @@ function compute_sensitivities!(
 
     # 5. Differentiate buoyancy and thermal expansion, form the density derivative, and fold
     #    vertex material gradients into the center fields.
-    finish_density_sensitivities!(stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic)
+    finish_density_sensitivities!(
+        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
+        _di,
+    )
 
     return stokes_ad
 end

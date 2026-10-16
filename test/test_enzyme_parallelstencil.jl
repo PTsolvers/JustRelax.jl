@@ -716,7 +716,7 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), gradients, args,
+            (; me = 0), gradients, args; dyrel,
         )
         density_gradient = copy(adjoint.ρ)
         for p in eachindex(models), name in Base.front(names), I in CartesianIndices(stokes.P)
@@ -747,10 +747,27 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), gradients, args,
+            (; me = 0), gradients, args; dyrel,
         )
         @test all(name -> gradients[name].center ≈ saved[name].center, names)
     end
+
+    thermal_args = (; T = temperature, P = stokes.P, ΔT = fill(0.8, ni .+ 2))
+    normal_thermal = material_controls(CPUBackend, ni, (:α,); nphases = 3)
+    variational_thermal = material_controls(CPUBackend, ni, (:α,); nphases = 3)
+    JustRelax2D.compute_thermal_expansion_parameter_gradients!(
+        stokes, adjoint, dyrel, phases, rheology, thermal_args, dt, normal_thermal,
+        grid._di,
+    )
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phases, 0)
+    ϕ.center .= reshape([0.0, 0.25, 0.5, 0.75, 1.0, 0.4], ni)
+    JustRelax2D.compute_thermal_expansion_parameter_gradients!(
+        stokes, adjoint, dyrel, phases, rheology, thermal_args, dt, variational_thermal,
+        grid._di, ϕ,
+    )
+    @test variational_thermal.α.center ≈
+        normal_thermal.α.center .* reshape(ϕ.center, 1, ni...)
 end
 
 # Minimal working example for reverse-mode differentiation of

@@ -55,45 +55,6 @@ user-facing angles in degrees.
     end
 end
 
-# Pick the thermal-expansion accessor the density model actually provides: the
-# melt-dependent models take the melt fraction, while the plain ones (PT_Density and
-# friends) only define the single-argument method.
-@inline material_thermal_expansion(material, ::NamedTuple{()}) =
-    get_thermal_expansion(material)
-@inline material_thermal_expansion(material, thermal_args::NamedTuple) =
-    get_thermal_expansion(material, thermal_args)
-
-"""
-    differentiate_scalar_material_objective(objective, material, args...)
-
-Differentiate a scalar local `objective(material, args...)` with respect to the complete
-GeoParams material object. All arguments after `material` are held constant. The returned
-object has the same nested structure as `material` and contains the local reverse-mode
-derivatives.
-
-This helper is used for the scalar thermal-expansion contribution. The pointwise stress,
-viscosity, and buoyancy kernels use `differentiate_pointwise_material_kernel!` instead.
-"""
-@generated function differentiate_scalar_material_objective(
-        objective, material, args::Vararg{Any, N}
-    ) where {N}
-    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
-    return quote
-        Enzyme.autodiff_deferred(
-            Enzyme.Reverse,
-            Enzyme.Const(objective),
-            Enzyme.Active,
-            Enzyme.Active(material),
-            $(constant_args...),
-        )[1][1]
-    end
-end
-
-# Differentiate the original GeoParams evaluations with local reverse seeds.
-# Phase weighting is applied to the seeds by the caller, exactly once.
-@inline thermal_expansion_parameter_objective(material, thermal_args, seed) =
-    seed * material_thermal_expansion(material, thermal_args)
-
 """
     differentiate_pointwise_material_kernel!(
         update!, n, gradient_fields, parameter_paths_by_phase, args,
@@ -215,28 +176,6 @@ end
             total += weight * vertex[p, iv, jv]
         end
         center[p, i, j] += total / 4
-    end
-    return nothing
-end
-
-# rock fraction weighting the continuity residual; `1` without a rock ratio
-Base.@propagate_inbounds @inline _continuity_weight(::Nothing, I...) = 1.0
-Base.@propagate_inbounds @inline _continuity_weight(ϕ::JustRelax.RockRatio, I...) = ϕ.center[I...]
-
-# Thermal expansion enters through the continuity residual rather than `compute_ρg!`. The
-# variational solver additionally weights that residual by the rock fraction `ϕ`.
-@parallel_indices (I...) function thermal_expansion_parameter_gradient_kernel!(
-        centers, parameters, material, p, phase_ratios, λP, ΔT, melt_fraction, dt, ϕ,
-    )
-    raw_ratio = @cell phase_ratios[I...]
-    ratio_α = raw_ratio[p] * _continuity_weight(ϕ, I...)
-    if !iszero(ratio_α)
-        thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
-        α_seed = -ratio_α * λP[I...] * ΔT[(I .+ 1)...] / dt
-        derivative = differentiate_scalar_material_objective(
-            thermal_expansion_parameter_objective, material, thermal_args, α_seed
-        )
-        store_parameter_gradients!(centers, parameters, material, derivative, p, I)
     end
     return nothing
 end

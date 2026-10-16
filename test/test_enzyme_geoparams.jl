@@ -3,47 +3,6 @@ using GeoParams
 using Enzyme
 using JustRelax, JustRelax.JustRelax2D
 
-function _local_material_objective(material, args)
-    density = compute_density(material, args)
-    return density + JustRelax2D.get_shear_modulus(material)
-end
-
-@testset "General local material-object gradient" begin
-    args = (; T = 3.0, P = 2.0)
-    density = PT_Density(; ρ0 = 2.0, α = 0.1, β = 0.2, T0 = 1.0, P0 = 0.5)
-    elasticity = ConstantElasticity(; G = 2.0, Kb = 10.0)
-    material = SetMaterialParams(;
-        Phase = 1,
-        Density = density,
-        Elasticity = elasticity,
-        CompositeRheology = CompositeRheology((LinearViscous(; η = 3.0), elasticity)),
-    )
-    baseline = _local_material_objective(material, args)
-
-    derivative = JustRelax2D.differentiate_scalar_material_objective(
-        _local_material_objective, material, args
-    )
-
-    @test JustRelax2D.material_parameter_gradient(
-        material, derivative, Val((:Density, 1, :α))
-    ) ≈ -4.0
-    @test JustRelax2D.material_parameter_gradient(
-        material, derivative, Val((:Density, 1, :ρ0))
-    ) ≈ 1.1
-    @test JustRelax2D.material_parameter_gradient(
-        material, derivative, Val((:CompositeRheology, 1, :elements, 2, :G))
-    ) ≈ 1.0
-    # GeoParams also stores the supplied elasticity separately, but this particular
-    # objective reads G through CompositeRheology. The path therefore identifies the
-    # actual forward input instead of merging same-named fields implicitly.
-    @test iszero(
-        JustRelax2D.material_parameter_gradient(
-            material, derivative, Val((:Elasticity, 1, :G))
-        )
-    )
-    @test _local_material_objective(material, args) == baseline
-end
-
 # Run with: julia --project=. --startup-file=no test/test_enzyme_geoparams.jl
 # Differentiate the unchanged GeoParams function with respect to the immutable model.
 # The returned model-shaped derivative stores numeric derivatives in each field's .val;

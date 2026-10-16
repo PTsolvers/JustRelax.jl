@@ -42,21 +42,25 @@ end
 
 """
     finish_density_sensitivities!(
-        stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic;
+        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic, _di;
         air_phase=0, ϕ=nothing,
     )
 
-Differentiate the forward buoyancy function with respect to its material parameters, add the
-thermal-expansion contribution from continuity, form the diagnostic density adjoint
-`stokes_ad.ρ`, and fold every vertex gradient into the centers. `air_phase` and `ϕ` must match
-the forward buoyancy update and continuity residual.
+Differentiate the forward buoyancy and thermal-expansion functions with respect to their
+material parameters, form the diagnostic density adjoint `stokes_ad.ρ`, and fold every vertex
+gradient into the centers. `air_phase` and `ϕ` must match the forward buoyancy update and
+continuity residual.
 """
 function finish_density_sensitivities!(
-        stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic;
+        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
+        _di;
         air_phase::Integer = 0, ϕ = nothing,
     )
     compute_buoyancy_parameter_gradients!(
-        ρg, stokes_ad, phase_ratios, rheology, args, dt, gradients; air_phase, ϕ
+        ρg, stokes_ad, phase_ratios, rheology, args, gradients; air_phase
+    )
+    compute_thermal_expansion_parameter_gradients!(
+        stokes, stokes_ad, dyrel, phase_ratios, rheology, args, dt, gradients, _di, ϕ
     )
 
     gravity = compute_gravity(first(rheology))
@@ -258,8 +262,7 @@ function combine_center_vertex_gradient!(
 end
 
 function compute_buoyancy_parameter_gradients!(
-        ρg, adjoint, phases, rheology, args, dt, gradients;
-        air_phase::Integer = 0, ϕ = nothing,
+        ρg, adjoint, phases, rheology, args, gradients; air_phase::Integer = 0,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -282,25 +285,77 @@ function compute_buoyancy_parameter_gradients!(
             size(adjoint.ρ) => nothing,
         ),
     )
+    return nothing
+end
 
+"""
+    compute_thermal_expansion_parameter_gradients!(
+        stokes, adjoint, dyrel, phases, rheology, args, dt, gradients, _di, ϕ=nothing,
+    )
+
+Accumulate the material-parameter contribution from thermal expansion in the continuity
+residual by differentiating the matching pointwise forward pressure-residual function. Passing
+`ϕ` selects the variational overload, including its rock-fraction weighting and masked cells.
+"""
+function compute_thermal_expansion_parameter_gradients!(
+        stokes, adjoint, dyrel, phases, rheology, args, dt, gradients, _di, ϕ = nothing,
+    )
+    isempty(gradients) && return nothing
+    names = keys(gradients)
+    centers = map(entry -> entry.center, gradients)
+    parameters = map(
+        material -> _resolve_parameter_paths(material, names, _density_parameter_paths),
+        rheology,
+    )
+    any(_has_parameter_paths, parameters) || return nothing
     ΔT = get(args, :ΔT, nothing)
     isnothing(ΔT) && return nothing
     melt_fraction = get(args, :melt_fraction, nothing)
+    # Material sensitivities use the negative Lagrangian multiplier as the seed of the forward
+    # pressure residual. Keep a separate array because reverse mode consumes output seeds.
+    RP_seed = -copy(adjoint.λP)
+    isnothing(dyrel) && throw(
+        ArgumentError(
+            "dyrel is required to differentiate thermal expansion through the pressure residual"
+        ),
+    )
     for (p, material) in enumerate(rheology)
-        density_parameters = _resolve_parameter_paths(material, names, _density_parameter_paths)
-        for (name, paths) in pairs(density_parameters)
-            for path in paths
-                value = _material_parameter(material, path)
-                _is_material_parameter(value) ||
-                    throw(ArgumentError("$name must be a scalar floating-point material parameter"))
-            end
+        for (name, paths) in pairs(parameters[p]), path in paths
+            value = _material_parameter(material, path)
+            _is_material_parameter(value) || throw(
+                ArgumentError("$name must be a scalar floating-point material parameter")
+            )
         end
-        _has_parameter_paths(density_parameters) || continue
-
-        @parallel (@idx size(adjoint.ρ)) thermal_expansion_parameter_gradient_kernel!(
-            centers, density_parameters, material, p, phases.center,
-            adjoint.λP, ΔT, melt_fraction, dt, ϕ,
-        )
     end
+    point_args = (
+        stokes.ε.xx => nothing,
+        stokes.ε.yy => nothing,
+        stokes.ε.xy => nothing,
+        stokes.V.Vx => nothing,
+        stokes.V.Vy => nothing,
+        copy(stokes.R.RP) => RP_seed,
+        stokes.P => nothing,
+        stokes.P0 => nothing,
+        stokes.Q => nothing,
+        dyrel.ηb => nothing,
+    )
+    if !isnothing(ϕ)
+        point_args = (point_args..., ϕ => nothing)
+    end
+    differentiate_pointwise_material_kernel!(
+        compute_∇V_strain_rate_RP_point!, size(stokes.P), centers, parameters,
+        (
+            point_args...,
+            _di.vertex => nothing,
+            _di.velocity[1] => nothing,
+            _di.velocity[2] => nothing,
+            rheology => Enzyme.Active,
+            phases.center => nothing,
+            ΔT => nothing,
+            melt_fraction => nothing,
+            dt => nothing,
+            false => nothing,
+        ),
+    )
     return nothing
 end

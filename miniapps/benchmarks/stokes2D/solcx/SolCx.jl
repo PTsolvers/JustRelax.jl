@@ -130,8 +130,8 @@ function solCx(
             grid,
             flow_bcs,
             ρg,
-            G,
             K,
+            G,
             0.1,
             igg;
             kwargs = (

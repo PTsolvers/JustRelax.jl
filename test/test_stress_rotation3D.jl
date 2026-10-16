@@ -27,6 +27,14 @@ else
     JustPIC.CPU
 end
 
+const JR3K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax3D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax3D
+else
+    JustRelax.JustRelax3D
+end
+
 # host copy of the values held by the active particles
 active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
 
@@ -130,5 +138,42 @@ active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
         @test all(isfinite, Array(stokes.τ_o.xy)[2:(end - 1), 2:(end - 1), :])
         @test all(isfinite, Array(stokes.τ_o.yz)[:, 2:(end - 1), 2:(end - 1)])
         @test all(isfinite, Array(stokes.τ_o.xz)[2:(end - 1), :, 2:(end - 1)])
+    end
+end
+
+@testset "Vorticity 3D" begin
+    ni = 5, 4, 3
+    grid = Geometry(ni, ni .* (0.3, 0.2, 0.25); origin = (0.0, 0.0, 0.0))
+    xc = collect.(grid.xci)
+    xv = collect.(grid.xvi)
+
+    @testset "rigid rotation" begin
+        Ω = (0.3, -0.5, 0.8)
+        stokes = StokesArrays(backend, ni)
+        # V = Ω × r on the staggered velocity coordinates
+        V(x, y, z) = (Ω[2] * z - Ω[3] * y, Ω[3] * x - Ω[1] * z, Ω[1] * y - Ω[2] * x)
+        for (d, A) in enumerate((stokes.V.Vx, stokes.V.Vy, stokes.V.Vz))
+            copyto!(A, [V(x, y, z)[d] for x in grid.xi_vel[d][1], y in grid.xi_vel[d][2], z in grid.xi_vel[d][3]])
+        end
+        JR3K.compute_vorticity!(stokes, grid._di, ni, Val(3))
+        for (d, (edge, center)) in enumerate(((stokes.ω.yz, stokes.ω.yz_c), (stokes.ω.xz, stokes.ω.xz_c), (stokes.ω.xy, stokes.ω.xy_c)))
+            @test all(Array(edge) .≈ Ω[d])
+            @test all(Array(center) .≈ Ω[d])
+        end
+    end
+
+    @testset "evaluated on its own edges" begin
+        # Vy = x z²: ω_xy = ∂Vy/∂x / 2 = z² / 2 on the xy edges (z at cell centers),
+        # ω_yz = -∂Vy/∂z / 2 = -x z on the yz edges (x at cell centers, z at vertices);
+        # centered differences are exact for both
+        stokes = StokesArrays(backend, ni)
+        copyto!(stokes.V.Vy, [x * z^2 for x in grid.xi_vel[2][1], _ in grid.xi_vel[2][2], z in grid.xi_vel[2][3]])
+        ωxy_exact = [0.5 * z^2 for _ in xv[1], _ in xv[2], z in xc[3]]
+        ωyz_exact = [-x * z for x in xc[1], _ in xv[2], z in xv[3]]
+
+        JR3K.compute_vorticity!(stokes, grid._di, ni, Val(3))
+        @test Array(stokes.ω.xy) ≈ ωxy_exact
+        @test Array(stokes.ω.yz) ≈ ωyz_exact
+        @test all(iszero, Array(stokes.ω.xz))
     end
 end

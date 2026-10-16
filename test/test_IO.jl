@@ -192,7 +192,7 @@ using WriteVTK, JLD2
         vtk = VTKDataSeries(joinpath(dst, "vtk_series"), xci)
         @test vtk isa VTKDataSeries
 
-        DataIO.append!(vtk, (Vy = stokes.V.Vy, η = stokes.viscosity.η), dt, time)
+        append!(vtk, (Vy = stokes.V.Vy, η = stokes.viscosity.η), dt, time)
         @test isfile(joinpath(dst, "vtk_series.pvd"))
 
         ## Test save_marker_chain

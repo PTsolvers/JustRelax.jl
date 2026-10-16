@@ -177,8 +177,7 @@ function hydro(igg, n, y_s)
     setmask!(ϕ.Vy, layer, xc, yv)
     solve!(m, igg)
     jp = argmin(abs.(yc .- (-0.5)))
-    P = Array(m.stokes.P)
-    err = (mean(P[:, jp]) - RHO * GRAV * (y_s - yc[jp])) / (RHO * GRAV * dy)
+    err = (mean(view(m.stokes.P, :, jp)) - RHO * GRAV * (y_s - yc[jp])) / (RHO * GRAV * dy)
     Vmax = max(maximum(abs, m.stokes.V.Vx), maximum(abs, m.stokes.V.Vy))
     return err, Vmax
 end

@@ -101,8 +101,8 @@ function solKz(;
             grid,
             flow_bcs,
             ρg,
-            G,
             Kb,
+            G,
             dt,
             igg;
             kwargs = (

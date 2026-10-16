@@ -188,6 +188,7 @@ function compute_viscosity_parameter_gradients!(
         stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients;
         air_phase::Integer = 0,
         viscosity_seed = (adjoint.viscosity.η, adjoint.viscosity.ηv),
+        include_vertex::Bool = true,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -216,24 +217,26 @@ function compute_viscosity_parameter_gradients!(
             local_viscosity_args => nothing,
         ),
     )
-    differentiate_pointwise_material_kernel!(
-        compute_viscosity_kernel_point!, size(phases.vertex),
-        map(entry -> entry.vertex, gradients), parameters,
-        (
-            stokes.viscosity.ηv => copy(ηv_bar),
-            1.0 => nothing,
-            phases.vertex => nothing,
-            stokes.τ.xx_v => nothing,
-            stokes.τ.yy_v => nothing,
-            stokes.τ.xy => nothing,
-            args => nothing,
-            rheology => Enzyme.Active,
-            air_phase => nothing,
-            viscosity_cutoff => nothing,
-            compute_viscosity_τII => nothing,
-            local_viscosity_args_vertex => nothing,
-        ),
-    )
+    if include_vertex
+        differentiate_pointwise_material_kernel!(
+            compute_viscosity_kernel_point!, size(phases.vertex),
+            map(entry -> entry.vertex, gradients), parameters,
+            (
+                stokes.viscosity.ηv => copy(ηv_bar),
+                1.0 => nothing,
+                phases.vertex => nothing,
+                stokes.τ.xx_v => nothing,
+                stokes.τ.yy_v => nothing,
+                stokes.τ.xy => nothing,
+                args => nothing,
+                rheology => Enzyme.Active,
+                air_phase => nothing,
+                viscosity_cutoff => nothing,
+                compute_viscosity_τII => nothing,
+                local_viscosity_args_vertex => nothing,
+            ),
+        )
+    end
     return nothing
 end
 
@@ -319,14 +322,6 @@ function compute_thermal_expansion_parameter_gradients!(
             "dyrel is required to differentiate thermal expansion through the pressure residual"
         ),
     )
-    for (p, material) in enumerate(rheology)
-        for (name, paths) in pairs(parameters[p]), path in paths
-            value = _material_parameter(material, path)
-            _is_material_parameter(value) || throw(
-                ArgumentError("$name must be a scalar floating-point material parameter")
-            )
-        end
-    end
     point_args = (
         stokes.ε.xx => nothing,
         stokes.ε.yy => nothing,

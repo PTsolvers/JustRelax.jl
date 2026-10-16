@@ -115,6 +115,23 @@ end
     finite_difference = (objective(make_rheology(2.0 + h)) - objective(make_rheology(2.0 - h))) / (2h)
     predicted = sum(gradients.η0.center) + sum(gradients.η0.vertex)
     @test predicted ≈ finite_difference rtol = 1.0e-5
+
+    center_objective(test_rheology) = begin
+        JustRelax2D.compute_viscosity_τII!(
+            stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 1.0,
+        )
+        return sum(stokes.viscosity.η)
+    end
+    gradients = material_controls(CPUBackend, ni, (:η0,); nphases = 1)
+    JustRelax2D.compute_viscosity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
+        include_vertex = false,
+    )
+    center_fd = (
+        center_objective(make_rheology(2.0 + h)) - center_objective(make_rheology(2.0 - h))
+    ) / (2h)
+    @test sum(gradients.η0.center) ≈ center_fd rtol = 1.0e-5
+    @test all(iszero, gradients.η0.vertex)
 end
 
 @parallel_indices (i, j) function _init_G_gradient_phases!(phase)
@@ -255,6 +272,9 @@ end
         ηv_target = copy(stokes.viscosity.ηv),
         η = similar(stokes.viscosity.η),
         ηv = similar(stokes.viscosity.ηv),
+        feedback = similar(stokes.viscosity.η),
+        feedback_v = similar(stokes.viscosity.ηv),
+        feedback_λ = Ref{Any}(nothing),
         τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
         τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
         τII = similar(stokes.τ.II),
@@ -356,6 +376,8 @@ end
     scratch = (;
         η_target = copy(stokes.viscosity.η),
         η = similar(stokes.viscosity.η),
+        feedback = similar(stokes.viscosity.η),
+        feedback_λ = Ref{Any}(nothing),
         τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
         τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
         τII = similar(stokes.τ.II),
@@ -944,6 +966,9 @@ end
         ηv_target = copy(stokes.viscosity.ηv),
         η = similar(stokes.viscosity.η),
         ηv = similar(stokes.viscosity.ηv),
+        feedback = similar(stokes.viscosity.η),
+        feedback_v = similar(stokes.viscosity.ηv),
+        feedback_λ = Ref{Any}(nothing),
         τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
         τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
         τII = similar(stokes.τ.II),

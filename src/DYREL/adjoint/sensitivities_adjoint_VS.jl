@@ -54,13 +54,13 @@ function compute_sensitivities!(
     # 2. Use the direct viscosity seeds for linear rheology. For nonlinear rheology, calculate it
     # based on the procedure in the adjoint solver; this already includes the harmonic vertex-viscosity contribution.
     viscosity_seed = if isnothing(constitutive_scratch)
-        (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
+        stokes_ad.viscosity.η
     else
         enzyme_prepare_variational_implicit_viscosity_τII!(
             constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
             λ_relaxation, dt, args, viscosity_cutoff; air_phase,
         )
-        (constitutive_scratch.η, stokes_ad.viscosity.ηv)
+        constitutive_scratch.η
     end
 
     # 3. Pull the corrected stress seeds back to strain rate, pressure, center viscosity, and
@@ -73,7 +73,7 @@ function compute_sensitivities!(
     #    viscosity law.
     compute_viscosity_parameter_gradients!(
         stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients;
-        air_phase, viscosity_seed,
+        air_phase, viscosity_seed = (viscosity_seed, nothing), include_vertex = false,
     )
 
     # 5. Differentiate buoyancy and thermal expansion, form the density derivative, and fold

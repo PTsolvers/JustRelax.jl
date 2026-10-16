@@ -328,22 +328,38 @@ function enzyme_compute_viscosity_feedback_τII!(
         τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
         η_bar = scratch.η, ηv_bar = scratch.ηv,
     )
+    copyto!(scratch.feedback, scratch.η)
+    copyto!(scratch.feedback_v, scratch.ηv)
+    scratch.feedback_λ[] = λ_relaxation
+    return nothing
+end
+
+# The forward state is fixed throughout an adjoint solve. Cache the local viscosity feedback
+# for each stress-relaxation value, which avoids two Enzyme sweeps on every DR iteration.
+function ensure_constitutive_viscosity_feedback!(
+        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
+    )
+    if !isequal(scratch.feedback_λ[], λ_relaxation)
+        enzyme_compute_viscosity_feedback_τII!(
+            scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
+        )
+    end
     return nothing
 end
 
 function compute_constitutive_tangent_amplification!(
         scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )
-    enzyme_compute_viscosity_feedback_τII!(
+    ensure_constitutive_viscosity_feedback!(
         scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )
-    feedback_max = max(maximum_mpi(scratch.η), maximum_mpi(scratch.ηv))
+    feedback_max = max(maximum_mpi(scratch.feedback), maximum_mpi(scratch.feedback_v))
     isfinite(feedback_max) && feedback_max < 1 || error(
         "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
     )
     unit_amplification = one(eltype(scratch.η))
-    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.η)))
-    @. scratch.ηv = max(unit_amplification, abs(inv(1 - scratch.ηv)))
+    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.feedback)))
+    @. scratch.ηv = max(unit_amplification, abs(inv(1 - scratch.feedback_v)))
     return nothing
 end
 
@@ -365,13 +381,13 @@ function enzyme_compute_implicit_viscosity_τII!(
         θ_bar = scratch.θ,
     )
 
-    enzyme_compute_viscosity_feedback_τII!(
+    ensure_constitutive_viscosity_feedback!(
         scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )
     # Apply the local scalar implicit-function correction. The feedback is a 1×1 quantity,
     # so it equals its transpose.
-    @. adjoint.viscosity.η /= 1 - scratch.η
-    @. adjoint.viscosity.ηv /= 1 - scratch.ηv
+    @. adjoint.viscosity.η /= 1 - scratch.feedback
+    @. adjoint.viscosity.ηv /= 1 - scratch.feedback_v
 
     # Preserve the implicit viscosity seeds for the later material-parameter pullback, then add
     # `(∂η/∂τ)'η_bar` to the original stress seeds.

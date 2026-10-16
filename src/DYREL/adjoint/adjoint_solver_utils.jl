@@ -178,7 +178,7 @@ end
         if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
             iE = wrap_next(i, size(γ_eff, 1))
             Rx_ij = Rx[i + 1, j + 1] -
-                (γ_eff[i, j] * P[i, j] - γ_eff[iE, j] * P[iE, j]) * _di_center[1]
+                (γ_eff[i, j] * P[i, j] - γ_eff[iE, j] * P[iE, j]) * @dx(_di_center, i)
             Rx[i + 1, j + 1] = Rx_ij
             dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij / Dx[i, j], αVx[i, j], βVx[i, j], dτVx[i, j])
             dVxdτ[i, j] = dVx_new
@@ -187,7 +187,7 @@ end
         if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
             jN = wrap_next(j, size(γ_eff, 2))
             Ry_ij = Ry[i + 1, j + 1] -
-                (γ_eff[i, j] * P[i, j] - γ_eff[i, jN] * P[i, jN]) * _di_center[2]
+                (γ_eff[i, j] * P[i, j] - γ_eff[i, jN] * P[i, jN]) * @dy(_di_center, j)
             Ry[i + 1, j + 1] = Ry_ij
             dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij / Dy[i, j], αVy[i, j], βVy[i, j], dτVy[i, j])
             dVydτ[i, j] = dVy_new

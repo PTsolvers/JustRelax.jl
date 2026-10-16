@@ -267,7 +267,7 @@ end
         @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
 
         # --- fused adjoint Schur correction + preconditioning + update ---
-        adjoint = JustRelax2D.AdjointStokesArrays(backend_JR, ni)
+        adjoint = JustRelax2D.AdjointStokesArrays(backend, ni)
         adjoint.P .= 1.0
         adjoint.V.Vx .= 1.0
         adjoint.V.Vy .= 1.0
@@ -296,7 +296,7 @@ end
 
         adjoint.V.Vx .= 4.0
         adjoint.V.Vy .= 5.0
-        adjoint.P .= PTArray(backend_JR)([i + 2j for i in 1:nx, j in 1:ny])
+        adjoint.P .= PTArray(backend)([i + 2j for i in 1:nx, j in 1:ny])
         adjoint.λV.Vx .= 0.0
         adjoint.λV.Vy .= 0.0
         dyrel.γ_eff .= 2.0
@@ -338,5 +338,38 @@ end
         @test Array(dyrel.dVydτ) ≈ expected_Ry ./ 4
         @test Array(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx ./ 16
         @test Array(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry ./ 32
+
+        # The adjoint penalty uses the local center spacing on a nonuniform grid.
+        _di_nonuniform = (
+            PTArray(backend)([1.0, 2.0, 3.0, 4.0, 5.0]),
+            PTArray(backend)([2.0, 3.0, 4.0, 5.0]),
+        )
+        adjoint.V.Vx .= 4.0
+        adjoint.V.Vy .= 5.0
+        adjoint.λV.Vx .= 0.0
+        adjoint.λV.Vy .= 0.0
+        dyrel.dVxdτ .= 0.0
+        dyrel.dVydτ .= 0.0
+        expected_Rx = @views Rx0[2:(end - 1), 2:(end - 1)] .-
+            (γ[1:(end - 1), :] .* P[1:(end - 1), :] .- γ[2:end, :] .* P[2:end, :]) .*
+            reshape(Array(_di_nonuniform[1]), :, 1)
+        expected_Ry = @views Ry0[2:(end - 1), 2:(end - 1)] .-
+            (γ[:, 1:(end - 1)] .* P[:, 1:(end - 1)] .- γ[:, 2:end] .* P[:, 2:end]) .*
+            reshape(Array(_di_nonuniform[2]), 1, :)
+
+        @parallel (@idx ni) JR2K.update_adjoint_V_damping_DR!(
+            adjoint.λV.Vx, adjoint.λV.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            adjoint.V.Vx, adjoint.V.Vy,
+            adjoint.P, dyrel.γ_eff,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di_nonuniform,
+        )
+
+        @test Array(adjoint.V.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx
+        @test Array(adjoint.V.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry
     end
 end

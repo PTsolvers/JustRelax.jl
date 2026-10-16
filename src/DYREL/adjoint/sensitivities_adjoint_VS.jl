@@ -51,17 +51,11 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, ϕ, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # 2. Use the direct viscosity seeds for linear rheology. For nonlinear rheology, calculate it
-    # based on the procedure in the adjoint solver; this already includes the harmonic vertex-viscosity contribution.
-    viscosity_seed = if isnothing(constitutive_scratch)
-        stokes_ad.viscosity.η
-    else
-        enzyme_prepare_variational_implicit_viscosity_τII!(
-            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
-            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
-        )
-        constitutive_scratch.η
-    end
+    # 2. Retain the direct seed for linear rheology, or form the implicit nonlinear seed.
+    viscosity_seed = prepare_viscosity_parameter_seed!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+    )
 
     # 3. Pull the corrected stress seeds back to strain rate, pressure, center viscosity, and
     #    the material parameters used directly by the variational stress kernel.
@@ -73,7 +67,7 @@ function compute_sensitivities!(
     #    viscosity law.
     compute_viscosity_parameter_gradients!(
         stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients;
-        air_phase, viscosity_seed = (viscosity_seed, nothing), include_vertex = false,
+        air_phase, viscosity_seed, include_vertex = false,
     )
 
     # 5. Differentiate buoyancy and thermal expansion, form the density derivative, and fold
@@ -84,6 +78,21 @@ function compute_sensitivities!(
     )
 
     return stokes_ad
+end
+
+# The variational stress kernel interpolates center viscosity to vertices. Its nonlinear
+# pullback therefore returns one center-viscosity seed, including that interpolation path.
+function prepare_viscosity_parameter_seed!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
+        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, viscosity_cutoff;
+        air_phase::Integer = 0,
+    )
+    isnothing(constitutive_scratch) && return (stokes_ad.viscosity.η, nothing)
+    enzyme_prepare_variational_implicit_viscosity_τII!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+    )
+    return (constitutive_scratch.η, nothing)
 end
 
 # Masked counterpart of `compute_stress_sensitivities!`, through the variational stress kernel.

@@ -44,7 +44,6 @@ function solve_VariationalDYREL_adjoint!(
         observation,
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
-        viscosity_relaxation = 1.0e-2,
         linear_viscosity = false,
         kwargs...,
     ) where {N}
@@ -157,7 +156,10 @@ function solve_VariationalDYREL_adjoint!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        if err < ϵ
+        # A pressure-only objective has no initial momentum residual: its first outer pass
+        # transfers the pressure seed into λP. Do not accept that pre-update state as converged.
+        pending_pressure_seed = isone(itPH) && observation.field === :P
+        if err < ϵ && !pending_pressure_seed
             converged = true
             break
         end

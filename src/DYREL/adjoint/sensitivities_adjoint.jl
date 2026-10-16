@@ -57,17 +57,11 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # 2. Use the direct viscosity seeds for linear rheology. For nonlinear rheology, calculate it
-    # based on the procedure in the adjoint solver
-    viscosity_seed = if isnothing(constitutive_scratch)
-        (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
-    else
-        enzyme_compute_implicit_viscosity_τII!(
-            constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
-            λ_relaxation, dt, args, viscosity_cutoff,
-        )
-        (constitutive_scratch.η, constitutive_scratch.ηv)
-    end
+    # 2. Retain the direct seed for linear rheology, or form the implicit nonlinear seed.
+    viscosity_seed = prepare_viscosity_parameter_seed!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
+        λ_relaxation, dt, args, viscosity_cutoff,
+    )
 
     # 3. Pull the corrected stress seeds back to strain rate, pressure, viscosity, and the
     #    material parameters used directly by the stress kernel.
@@ -89,6 +83,21 @@ function compute_sensitivities!(
     )
 
     return stokes_ad
+end
+
+# The nonlinear seed follows the same local implicit constitutive pullback used during the
+# adjoint iteration. Linear rheology has no feedback, so its direct viscosity seed is final.
+function prepare_viscosity_parameter_seed!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
+        λ_relaxation, dt, args, viscosity_cutoff,
+    )
+    isnothing(constitutive_scratch) &&
+        return (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
+    enzyme_compute_implicit_viscosity_τII!(
+        constitutive_scratch, stokes, stokes_ad, rheology, phase_ratios,
+        λ_relaxation, dt, args, viscosity_cutoff,
+    )
+    return (constitutive_scratch.η, constitutive_scratch.ηv)
 end
 
 """

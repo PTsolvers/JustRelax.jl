@@ -13,6 +13,107 @@ function initialize_adjoint_iteration!(adjoint, ni)
     return nothing
 end
 
+@inline function set_adjoint_dyrel_parameters!(
+        dτV, βV, αV, cV, λmaxV, amplification, CFL, i, j,
+    )
+    dτV_ij = dτV[i, j] = 2 / sqrt(λmaxV[i, j] * amplification) * CFL
+    cdt = cV[i, j] * dτV_ij
+    inv_den = inv(2 + cdt)
+    βV[i, j] = 2 * dτV_ij * inv_den
+    αV[i, j] = (2 - cdt) * inv_den
+    return nothing
+end
+
+# Build the adjoint acceleration parameters from the local implicit constitutive tangent. Each
+# velocity row uses the largest amplification among the same center and vertex stress locations
+# sampled by its forward Gershgorin row.
+function update_adjoint_dτV_α_β!(dyrel, amplification_center, amplification_vertex)
+    @parallel (@idx size(amplification_center)) _update_adjoint_dτV_α_β!(
+        dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy,
+        dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy,
+        amplification_center, amplification_vertex, dyrel.CFL,
+    )
+    return nothing
+end
+
+@parallel_indices (i, j) function _update_adjoint_dτV_α_β!(
+        dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy,
+        amplification_center, amplification_vertex, CFL,
+    )
+    @inbounds begin
+        if i ≤ size(dτVx, 1) && j ≤ size(dτVx, 2)
+            iE = wrap_next(i, size(amplification_center, 1))
+            amplification = max(
+                amplification_center[i, j], amplification_center[iE, j],
+                amplification_vertex[i + 1, j], amplification_vertex[i + 1, j + 1],
+            )
+            set_adjoint_dyrel_parameters!(
+                dτVx, βVx, αVx, cVx, λmaxVx, amplification, CFL, i, j,
+            )
+        end
+        if i ≤ size(dτVy, 1) && j ≤ size(dτVy, 2)
+            jN = wrap_next(j, size(amplification_center, 2))
+            amplification = max(
+                amplification_center[i, j], amplification_center[i, jN],
+                amplification_vertex[i, j + 1], amplification_vertex[i + 1, j + 1],
+            )
+            set_adjoint_dyrel_parameters!(
+                dτVy, βVy, αVy, cVy, λmaxVy, amplification, CFL, i, j,
+            )
+        end
+    end
+    return nothing
+end
+
+# The variational stress kernel obtains vertex viscosity by harmonic interpolation from centers.
+# Use every center contributing to the two vertex stresses in a momentum row when choosing its
+# local tangent amplification.
+function update_variational_adjoint_dτV_α_β!(dyrel, amplification_center)
+    @parallel (@idx size(amplification_center)) _update_variational_adjoint_dτV_α_β!(
+        dyrel.dτVx, dyrel.dτVy, dyrel.βVx, dyrel.βVy, dyrel.αVx, dyrel.αVy,
+        dyrel.cVx, dyrel.cVy, dyrel.λmaxVx, dyrel.λmaxVy,
+        amplification_center, dyrel.CFL,
+    )
+    return nothing
+end
+
+@parallel_indices (i, j) function _update_variational_adjoint_dτV_α_β!(
+        dτVx, dτVy, βVx, βVy, αVx, αVy, cVx, cVy, λmaxVx, λmaxVy,
+        amplification_center, CFL,
+    )
+    @inbounds begin
+        nx, ny = size(amplification_center)
+        periodic_x = size(dτVx, 1) == nx
+        periodic_y = size(dτVy, 2) == ny
+        iW = i == 1 ? (periodic_x ? nx : 1) : i - 1
+        iE = i == nx ? (periodic_x ? 1 : nx) : i + 1
+        jS = j == 1 ? (periodic_y ? ny : 1) : j - 1
+        jN = j == ny ? (periodic_y ? 1 : ny) : j + 1
+
+        if i ≤ size(dτVx, 1) && j ≤ size(dτVx, 2)
+            amplification = max(
+                amplification_center[i, jS], amplification_center[iE, jS],
+                amplification_center[i, j], amplification_center[iE, j],
+                amplification_center[i, jN], amplification_center[iE, jN],
+            )
+            set_adjoint_dyrel_parameters!(
+                dτVx, βVx, αVx, cVx, λmaxVx, amplification, CFL, i, j,
+            )
+        end
+        if i ≤ size(dτVy, 1) && j ≤ size(dτVy, 2)
+            amplification = max(
+                amplification_center[iW, j], amplification_center[i, j],
+                amplification_center[iE, j], amplification_center[iW, jN],
+                amplification_center[i, jN], amplification_center[iE, jN],
+            )
+            set_adjoint_dyrel_parameters!(
+                dτVy, βVy, αVy, cVy, λmaxVy, amplification, CFL, i, j,
+            )
+        end
+    end
+    return nothing
+end
+
 @parallel_indices (i, j) function _initialize_adjoint_iteration!(
         P, V, ε, τ_center, τ_vertex, R, λV, λP
     )

@@ -106,7 +106,7 @@ function sinking_block2D_VE_powerlaw_viscosity_sensitivity(
         solver_ϵ = 1.0e-6,
         verbose = true,
         # run the same problem through the variational solver, with rock everywhere (ϕ = 1)
-        variational = true,
+        variational = false,
     )
 
     # Nondimensional domain ------------------------------

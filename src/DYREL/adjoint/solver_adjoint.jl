@@ -74,6 +74,15 @@ function solve_DYREL_adjoint!(
             τII = similar(stokes.τ.II),
             θ = similar(stokes.ΔPψ),
         )
+    if !isnothing(constitutive_scratch)
+        compute_constitutive_tangent_amplification!(
+            constitutive_scratch, stokes, rheology, phase_ratios,
+            λ_relaxation_DR, dt, args, viscosity_cutoff,
+        )
+        update_adjoint_dτV_α_β!(
+            dyrel, constitutive_scratch.η, constitutive_scratch.ηv,
+        )
+    end
 
     # Iteration loop
     err_min = Inf
@@ -211,6 +220,7 @@ function solve_DYREL_adjoint!(
     # Do not carry adjoint iteration history into the next forward solve.
     dyrel.dVxdτ .= 0
     dyrel.dVydτ .= 0
+    !isnothing(constitutive_scratch) && update_dτV_α_β!(dyrel)
 
     return stokes_ad
 end

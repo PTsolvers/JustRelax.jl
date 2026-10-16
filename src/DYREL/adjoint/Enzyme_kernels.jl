@@ -309,6 +309,44 @@ zero_constitutive_stress_seed!(scratch) = foreach(
     A -> fill!(A, 0), (scratch.τ..., scratch.τ_v..., scratch.τII, scratch.θ)
 )
 
+function enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
+    )
+    # Differentiate η(τ(η)) with unit viscosity seeds. These local scalar feedback fields are
+    # used by both the implicit constitutive pullback and the adjoint DYREL parameter estimate.
+    zero_constitutive_stress_seed!(scratch)
+    fill!(scratch.η, 1)
+    fill!(scratch.ηv, 1)
+    enzyme_compute_viscosity_τII!(
+        (scratch.η_target, scratch.ηv_target), (scratch.η, scratch.ηv),
+        (scratch.τ, scratch.τ_v), stokes, phase_ratios, args, rheology, cutoff,
+    )
+    fill!(scratch.η, 0)
+    fill!(scratch.ηv, 0)
+    enzyme_reverse_stress_DRYEL!(
+        stokes, rheology, phase_ratios, λ_relaxation, dt, args;
+        τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
+        η_bar = scratch.η, ηv_bar = scratch.ηv,
+    )
+    return nothing
+end
+
+function compute_constitutive_tangent_amplification!(
+        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
+    )
+    enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
+    )
+    feedback_max = max(maximum_mpi(scratch.η), maximum_mpi(scratch.ηv))
+    isfinite(feedback_max) && feedback_max < 1 || error(
+        "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
+    )
+    unit_amplification = one(eltype(scratch.η))
+    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.η)))
+    @. scratch.ηv = max(unit_amplification, abs(inv(1 - scratch.ηv)))
+    return nothing
+end
+
 function enzyme_compute_implicit_viscosity_τII!(
         scratch, stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )
@@ -327,22 +365,8 @@ function enzyme_compute_implicit_viscosity_τII!(
         θ_bar = scratch.θ,
     )
 
-    # Feedback path: reverse viscosity with unit seeds, then reverse stress with the resulting
-    # stress seeds. This gives `[(∂η/∂τ)(∂τ/∂η)]ᵀ`, which is (∂η/∂τ)(∂τ/∂η) as the viscosity
-    # is a scalar function.
-    zero_constitutive_stress_seed!(scratch)
-    fill!(scratch.η, 1)
-    fill!(scratch.ηv, 1)
-    enzyme_compute_viscosity_τII!(
-        (scratch.η_target, scratch.ηv_target), (scratch.η, scratch.ηv),
-        (scratch.τ, scratch.τ_v), stokes, phase_ratios, args, rheology, cutoff,
-    )
-    fill!(scratch.η, 0)
-    fill!(scratch.ηv, 0)
-    enzyme_reverse_stress_DRYEL!(
-        stokes, rheology, phase_ratios, λ_relaxation, dt, args;
-        τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
-        η_bar = scratch.η, ηv_bar = scratch.ηv,
+    enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )
     # Apply the local scalar implicit-function correction. The feedback is a 1×1 quantity,
     # so it equals its transpose.

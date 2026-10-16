@@ -92,6 +92,13 @@ function solve_VariationalDYREL_adjoint!(
             τII = similar(stokes.τ.II),
             θ = similar(stokes.ΔPψ),
         )
+    if !isnothing(constitutive_scratch)
+        compute_constitutive_tangent_amplification!(
+            constitutive_scratch, stokes, rheology, phase_ratios, ϕ,
+            λ_relaxation_DR, dt, args, viscosity_cutoff; air_phase,
+        )
+        update_variational_adjoint_dτV_α_β!(dyrel, constitutive_scratch.η)
+    end
 
     # Iteration loop
     err_min = Inf
@@ -224,6 +231,7 @@ function solve_VariationalDYREL_adjoint!(
         # return sensitivities from an unconverged adjoint state.
         dyrel.dVxdτ .= 0
         dyrel.dVydτ .= 0
+        !isnothing(constitutive_scratch) && update_dτV_α_β!(dyrel)
         error(
             "Variational DYREL adjoint did not converge " *
                 "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
@@ -239,6 +247,7 @@ function solve_VariationalDYREL_adjoint!(
     # Do not carry adjoint iteration history into the next forward solve.
     dyrel.dVxdτ .= 0
     dyrel.dVydτ .= 0
+    !isnothing(constitutive_scratch) && update_dτV_α_β!(dyrel)
 
     return stokes_ad
 end

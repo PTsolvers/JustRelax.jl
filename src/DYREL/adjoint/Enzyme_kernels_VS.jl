@@ -260,22 +260,10 @@ function enzyme_compute_variational_stress_DRYEL!(
     return nothing
 end
 
-# Form the corrected stress seeds and retain the implicit center-viscosity seed needed by the
-# material-gradient pass. The final reverse through the stress kernel is done by the caller.
-function enzyme_prepare_variational_implicit_viscosity_τII!(
-        scratch, stokes, adjoint, rheology, phase_ratios,
-        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
-        air_phase::Integer = 0,
+function enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
     )
-    # Direct path, including the transpose of the harmonic center-to-vertex interpolation.
-    enzyme_compute_variational_viscosity_seed!(
-        scratch, stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
-    )
-    copyto!(adjoint.viscosity.η, scratch.η)
-
-    # Feedback path: reverse viscosity with unit seeds, then reverse stress with the resulting
-    # stress seeds. This gives `[(∂η/∂τ)(∂τ/∂η)]ᵀ`, which is (∂η/∂τ)(∂τ/∂η) as the viscosity
-    # is a scalar function.
     zero_constitutive_stress_seed!(scratch)
     fill!(scratch.η, 1)
     enzyme_compute_viscosity_point!(
@@ -289,6 +277,43 @@ function enzyme_prepare_variational_implicit_viscosity_τII!(
         stokes, rheology, phase_ratios, ϕ, λ_relaxation, dt, args;
         τ_bar = scratch.τ, τv_bar = scratch.τ_v, τII_bar = scratch.τII,
         η_bar = scratch.η,
+    )
+    return nothing
+end
+
+function compute_constitutive_tangent_amplification!(
+        scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
+    )
+    enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
+    )
+    feedback_max = maximum_mpi(scratch.η)
+    isfinite(feedback_max) && feedback_max < 1 || error(
+        "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
+    )
+    unit_amplification = one(eltype(scratch.η))
+    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.η)))
+    return nothing
+end
+
+# Form the corrected stress seeds and retain the implicit center-viscosity seed needed by the
+# material-gradient pass. The final reverse through the stress kernel is done by the caller.
+function enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phase_ratios,
+        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
+        air_phase::Integer = 0,
+    )
+    # Direct path, including the transpose of the harmonic center-to-vertex interpolation.
+    enzyme_compute_variational_viscosity_seed!(
+        scratch, stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+    )
+    copyto!(adjoint.viscosity.η, scratch.η)
+
+    enzyme_compute_viscosity_feedback_τII!(
+        scratch, stokes, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
     )
     # Apply the local scalar implicit-function correction. The feedback is a 1×1 quantity,
     # so it equals its transpose.

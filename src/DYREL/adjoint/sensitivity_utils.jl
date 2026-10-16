@@ -194,7 +194,7 @@ function compute_viscosity_parameter_gradients!(
     any(_has_parameter_paths, parameters) || return nothing
     η_bar, ηv_bar = viscosity_seed
 
-    enzyme_pointwise_material_gradients!(
+    differentiate_pointwise_material_kernel!(
         compute_viscosity_kernel_point!, size(phases.center),
         map(entry -> entry.center, gradients), parameters,
         (
@@ -212,7 +212,7 @@ function compute_viscosity_parameter_gradients!(
             local_viscosity_args => nothing,
         ),
     )
-    enzyme_pointwise_material_gradients!(
+    differentiate_pointwise_material_kernel!(
         compute_viscosity_kernel_point!, size(phases.vertex),
         map(entry -> entry.vertex, gradients), parameters,
         (
@@ -270,7 +270,7 @@ function compute_buoyancy_parameter_gradients!(
     )
     any(_has_parameter_paths, parameters) || return nothing
     args_without_P, P = split_pressure_arg(args)
-    enzyme_pointwise_material_gradients!(
+    differentiate_pointwise_material_kernel!(
         compute_ρg_kernel_point!, size(adjoint.ρ), centers, parameters,
         (
             ρg => (copy(adjoint.dρgx), copy(adjoint.ρ)),

@@ -39,12 +39,15 @@ function compute_sensitivities!(
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
 
-    # differentiates the masked momentum equation w.r.t. stress, pressure, plastic pressure
-    # correction and buoyancy
+    # 1. Pull the masked momentum residual back to stress, pressure, plastic pressure
+    #    correction, and buoyancy.
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, ϕ, _di, ni; free_surface_dt = dt * free_surface
     )
 
+    # 2. Use the direct center-viscosity seed for linear rheology. For nonlinear rheology,
+    #    replace it with the seed obtained after eliminating the local stress-viscosity
+    #    feedback; this already includes the harmonic vertex-viscosity contribution.
     viscosity_seed = if isnothing(constitutive_scratch)
         (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
     else
@@ -55,18 +58,21 @@ function compute_sensitivities!(
         (constitutive_scratch.η, stokes_ad.viscosity.ηv)
     end
 
-    # For nonlinear viscosity the preparation above replaces the direct stress seeds by their
-    # implicit fixed-point correction and saves the center-viscosity seed. The harmonic vertex
-    # contribution is already folded into that center seed.
+    # 3. Pull the corrected stress seeds back to strain rate, pressure, center viscosity, and
+    #    the material parameters used directly by the variational stress kernel.
     compute_stress_sensitivities!(
         stokes, stokes_ad, phase_ratios, ϕ, rheology, λ_relaxation, dt, periodic, gradients, args
     )
 
+    # 4. Pull the saved center-viscosity seed back to the material parameters of the
+    #    viscosity law.
     compute_viscosity_parameter_gradients!(
         stokes, stokes_ad, phase_ratios, rheology, args, viscosity_cutoff, gradients;
         air_phase, viscosity_seed,
     )
 
+    # 5. Differentiate buoyancy and thermal expansion, form the density derivative, and fold
+    #    vertex material gradients into the center fields.
     finish_density_sensitivities!(
         stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic; air_phase, ϕ
     )
@@ -108,11 +114,11 @@ function compute_stress_sensitivities!(
         dt => nothing,
         periodic => nothing,
     )
-    enzyme_pointwise_material_gradients!(
+    differentiate_pointwise_material_kernel!(
         compute_stress_DRYEL_vertex!, size(phases.vertex),
         map(entry -> entry.vertex, gradients), parameters, stress_args,
     )
-    enzyme_pointwise_material_gradients!(
+    differentiate_pointwise_material_kernel!(
         compute_stress_DRYEL_center!, size(phases.center),
         map(entry -> entry.center, gradients), parameters, stress_args,
     )

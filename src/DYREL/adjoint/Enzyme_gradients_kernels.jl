@@ -1,29 +1,5 @@
 using Enzyme
 
-"""
-    enzyme_material_gradient(objective, material, args...)
-
-Differentiate a scalar local `objective(material, args...)` with respect to the complete
-GeoParams material object. All arguments after `material` are held constant. The returned
-object has the same nested structure as `material` and contains the local reverse-mode
-derivatives.
-
-Keeping this operation local is what allows callers to retain one contribution per phase and
-grid point instead of immediately reducing all uses of a phase parameter to one scalar.
-"""
-@generated function enzyme_material_gradient(objective, material, args::Vararg{Any, N}) where {N}
-    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
-    return quote
-        Enzyme.autodiff_deferred(
-            Enzyme.Reverse,
-            Enzyme.Const(objective),
-            Enzyme.Active,
-            Enzyme.Active(material),
-            $(constant_args...),
-        )[1][1]
-    end
-end
-
 @generated function _material_parameter(derivative, ::Val{path}) where {path}
     path isa Tuple || error("a material-parameter path must be a tuple")
     value = :derivative
@@ -45,10 +21,10 @@ end
 """
     material_parameter_gradient(material, derivative, Val(path))
 
-Extract a scalar parameter derivative from the nested object returned by
-`enzyme_material_gradient`. Most paths are direct. GeoParams caches the trigonometric
-forms of `ϕ` and `Ψ`, so those two paths additionally include the chain rule from the
-cached fields back to the user-facing angles in degrees.
+Extract a scalar parameter derivative from a nested material-derivative object returned by
+Enzyme. Most paths are direct. GeoParams caches the trigonometric forms of `ϕ` and `Ψ`, so
+those two paths additionally include the chain rule from the cached fields back to the
+user-facing angles in degrees.
 """
 @generated function material_parameter_gradient(material, derivative, ::Val{path}) where {path}
     path isa Tuple || error("a material-parameter path must be a tuple")
@@ -87,13 +63,41 @@ end
 @inline material_thermal_expansion(material, thermal_args::NamedTuple) =
     get_thermal_expansion(material, thermal_args)
 
+"""
+    differentiate_scalar_material_objective(objective, material, args...)
+
+Differentiate a scalar local `objective(material, args...)` with respect to the complete
+GeoParams material object. All arguments after `material` are held constant. The returned
+object has the same nested structure as `material` and contains the local reverse-mode
+derivatives.
+
+This helper is used for the scalar thermal-expansion contribution. The pointwise stress,
+viscosity, and buoyancy kernels use `differentiate_pointwise_material_kernel!` instead.
+"""
+@generated function differentiate_scalar_material_objective(
+        objective, material, args::Vararg{Any, N}
+    ) where {N}
+    constant_args = ntuple(i -> :(Enzyme.Const(args[$i])), N)
+    return quote
+        Enzyme.autodiff_deferred(
+            Enzyme.Reverse,
+            Enzyme.Const(objective),
+            Enzyme.Active,
+            Enzyme.Active(material),
+            $(constant_args...),
+        )[1][1]
+    end
+end
+
 # Differentiate the original GeoParams evaluations with local reverse seeds.
 # Phase weighting is applied to the seeds by the caller, exactly once.
 @inline thermal_expansion_parameter_objective(material, thermal_args, seed) =
     seed * material_thermal_expansion(material, thermal_args)
 
 """
-    enzyme_pointwise_material_gradients!(update!, n, fields, parameters, args)
+    differentiate_pointwise_material_kernel!(
+        update!, n, gradient_fields, parameter_paths_by_phase, args,
+    )
 
 Reverse-differentiate one local forward update `update!(primals..., i, j)` point by point.
 `args` lists its arguments as pairs, as for [`enzyme_reverse_pointwise!`](@ref), with the
@@ -101,39 +105,79 @@ rheology given as `rheology => Enzyme.Active`.
 
 Output seeds in the shadows are consumed by the reverse pass, while derivatives of duplicated
 inputs accumulate in their shadows. The derivative with respect to `rheology` comes back per
-point and holds every material parameter of every phase; the requested ones (`parameters`, one
-resolved path set per phase) are added to `fields` at `[p, i, j]`. Because the forward function
-itself is differentiated, every input reconstruction, mask, and phase weighting matches the
-forward solve by construction.
+point and holds every material parameter of every phase. The requested paths in
+`parameter_paths_by_phase` are added to `gradient_fields` at `[p, i, j]`. Because the forward
+function itself is differentiated, every input reconstruction, mask, and phase weighting
+matches the forward solve by construction.
 """
-function enzyme_pointwise_material_gradients!(
-        update!::F, n, fields, parameters, args::Tuple,
+function differentiate_pointwise_material_kernel!(
+        update!::F, n, gradient_fields, parameter_paths_by_phase, args::Tuple,
     ) where {F}
     primals, shadows = map(first, args), map(last, args)
-    k = findfirst(==(Enzyme.Active), shadows)
-    isnothing(k) &&
+    rheology_argument = findfirst(==(Enzyme.Active), shadows)
+    isnothing(rheology_argument) &&
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
-    op = PointwiseMaterialGradient{F, k}(update!)
-    context = (; fields, parameters)
+    op = PointwiseMaterialGradient{F, rheology_argument}(update!)
+    context = (; gradient_fields, parameter_paths_by_phase)
     reverse_colored!(op, n, primals, shadows, context)
     return nothing
 end
 
-# Reverse one point update with rheology argument `k` active and store its material derivatives.
-struct PointwiseMaterialGradient{F, k}
+# Reverse one point update with the rheology argument active and store its material derivatives.
+struct PointwiseMaterialGradient{F, rheology_argument}
     update!::F
 end
 
-@inline function apply_point!(op::PointwiseMaterialGradient{F, k}, primals, shadows, context, i, j) where {F, k}
-    (; fields, parameters) = context
-    rheology = primals[k]
+@inline function apply_point!(
+        op::PointwiseMaterialGradient{F, rheology_argument}, primals, shadows, context, i, j,
+    ) where {F, rheology_argument}
+    (; gradient_fields, parameter_paths_by_phase) = context
+    rheology = primals[rheology_argument]
+
+    # Array fields paired with adjoint arrays become `DuplicatedNoNeed` arguments. Enzyme
+    # therefore accumulates their reverse derivatives directly into the supplied adjoint
+    # arrays, for example `adjoint.ε`, `adjoint.P`, and `adjoint.viscosity.η`.
+    # The rheology is different: it is an `Active` argument without a shadow object, so its
+    # complete nested derivative is returned by `autodiff_deferred` instead.
     annotations = map(annotate, primals, shadows)
-    derivative = Enzyme.autodiff_deferred(
+    rheology_derivative = Enzyme.autodiff_deferred(
         Enzyme.Reverse, Enzyme.Const(op.update!), Enzyme.Const, annotations...,
         Enzyme.Const(i), Enzyme.Const(j),
-    )[1][k]
-    store_rheology_gradients!(fields, parameters, rheology, derivative, (i, j))
+    )[1][rheology_argument]
+
+    # Select only the material-parameter paths requested in `gradients` from the returned
+    # rheology derivative and accumulate them in the phase- and point-resolved fields.
+    store_rheology_gradients!(
+        gradient_fields, parameter_paths_by_phase, rheology, rheology_derivative, (i, j)
+    )
     return nothing
+end
+
+# Extract the requested compile-time material paths and accumulate their derivatives in the
+# corresponding phase- and point-resolved gradient fields.
+@generated function store_parameter_gradients!(
+        fields::NamedTuple{names}, parameters::NamedTuple{names, parameter_types},
+        material, derivative, p, I::NTuple,
+    ) where {names, parameter_types}
+    writes = Expr[]
+    for k in eachindex(names)
+        paths_type = parameter_types.parameters[k]
+        for path_index in 1:fieldcount(paths_type)
+            push!(
+                writes, quote
+                    fields[$k][p, I...] += material_parameter_gradient(
+                        material, derivative, parameters[$k][$path_index]
+                    )
+                end
+            )
+        end
+    end
+    return quote
+        @inbounds begin
+            $(writes...)
+        end
+        return nothing
+    end
 end
 
 # `store_parameter_gradients!` for every phase of a whole-rheology derivative; `parameters[p]`
@@ -189,37 +233,10 @@ Base.@propagate_inbounds @inline _continuity_weight(ϕ::JustRelax.RockRatio, I..
     if !iszero(ratio_α)
         thermal_args = isnothing(melt_fraction) ? (;) : (; ϕ = melt_fraction[I...])
         α_seed = -ratio_α * λP[I...] * ΔT[(I .+ 1)...] / dt
-        derivative = enzyme_material_gradient(
+        derivative = differentiate_scalar_material_objective(
             thermal_expansion_parameter_objective, material, thermal_args, α_seed
         )
         store_parameter_gradients!(centers, parameters, material, derivative, p, I)
     end
     return nothing
-end
-
-# These generated helpers unroll the gradient-buffer walk inside the kernels and keep each
-# resolved material path available as a compile-time `Val` at the extraction site.
-@generated function store_parameter_gradients!(
-        fields::NamedTuple{names}, parameters::NamedTuple{names, parameter_types},
-        material, derivative, p, I::NTuple,
-    ) where {names, parameter_types}
-    writes = Expr[]
-    for k in eachindex(names)
-        paths_type = parameter_types.parameters[k]
-        for path_index in 1:fieldcount(paths_type)
-            push!(
-                writes, quote
-                    fields[$k][p, I...] += material_parameter_gradient(
-                        material, derivative, parameters[$k][$path_index]
-                    )
-                end
-            )
-        end
-    end
-    return quote
-        @inbounds begin
-            $(writes...)
-        end
-        return nothing
-    end
 end

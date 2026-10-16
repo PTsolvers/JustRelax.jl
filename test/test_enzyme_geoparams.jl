@@ -20,7 +20,7 @@ end
     )
     baseline = _local_material_objective(material, args)
 
-    derivative = JustRelax2D.enzyme_material_gradient(
+    derivative = JustRelax2D.differentiate_scalar_material_objective(
         _local_material_objective, material, args
     )
 

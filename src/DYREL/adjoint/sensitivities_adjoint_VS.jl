@@ -45,9 +45,8 @@ function compute_sensitivities!(
         stokes, stokes_ad, ρg, ϕ, _di, ni; free_surface_dt = dt * free_surface
     )
 
-    # 2. Use the direct center-viscosity seed for linear rheology. For nonlinear rheology,
-    #    replace it with the seed obtained after eliminating the local stress-viscosity
-    #    feedback; this already includes the harmonic vertex-viscosity contribution.
+    # 2. Use the direct viscosity seeds for linear rheology. For nonlinear rheology, calculate it
+    # based on the procedure in the adjoint solver; this already includes the harmonic vertex-viscosity contribution.
     viscosity_seed = if isnothing(constitutive_scratch)
         (stokes_ad.viscosity.η, stokes_ad.viscosity.ηv)
     else

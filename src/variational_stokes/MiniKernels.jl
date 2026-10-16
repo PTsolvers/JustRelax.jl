@@ -23,6 +23,18 @@ Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, I::Vararg{Integer, 2}) 
 Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, 2}) where {T} =
     (-right(A, ϕ, I...) + next(A, ϕ, I...)) * _dy
 
+# In 3D the forward neighbour of a `_d_xi`/`_d_yi`/`_d_zi` stencil is the diagonal corner
+# `next`, and the near point is offset in the other two directions, as in the unmasked 3D
+# methods in `src/MiniKernels.jl`.
+Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i, j + 1, k + 1) + next(A, ϕ, i, j, k)) * _dx
+
+Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i + 1, j, k + 1) + next(A, ϕ, i, j, k)) * _dy
+
+Base.@propagate_inbounds @inline _d_zi(A::T, ϕ::T, _dz, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i + 1, j + 1, k) + next(A, ϕ, i, j, k)) * _dz
+
 # Masked counterparts of `_d_xa_wrap` / `_av_xa_wrap` and friends: the forward neighbour along a
 # direction that may wrap, with both the field and its volume fraction taken at that neighbour.
 # `A` and `ϕ` are the same shape here (both cell-centred), so they wrap together. They agree with

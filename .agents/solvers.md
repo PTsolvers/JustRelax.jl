@@ -33,14 +33,13 @@ solve!(stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt,
 ```
 
 `kwargs` is a **required** keyword and must be a NamedTuple (see [`api.md`](api.md)).
-Four argument forms dispatch on the sixth positional argument:
+Three argument forms dispatch on the sixth positional argument:
 
 | Sixth argument | Problem |
 |----------------|---------|
 | `phase_ratios::JustPIC.PhaseRatios`, then `rheology`, `args` | multi-phase visco-elasto-plastic (the general form) |
 | `rheology::MaterialParams`, then `args` | single-phase visco-elasto-plastic |
-| `G`, `K` | linear visco-elastic, constant moduli |
-| `K` | linear, bulk modulus only |
+| `G`, `K` in 2D; `K`, `G` in 3D | linear visco-elastic, constant moduli |
 
 `grid` may be replaced by the spacing `di` alone (an `NTuple` or NamedTuple); this routes
 through `JustRelax.legacy_uniform_grid`, which rebuilds a uniform `Geometry` — under MPI it

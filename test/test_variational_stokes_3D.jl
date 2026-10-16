@@ -49,7 +49,7 @@ end
     return nothing
 end
 
-function sinking_sphere(solver; n = 16, zsurf = Inf, no_slip_top = false, free_surface = false)
+function sinking_sphere(solver; n = 16, zsurf = Inf, no_slip_top = false, free_surface = false, phase_ratios = nothing)
     ni = n, n, n
     li = 1.0, 1.0, 1.0
     igg = IGG(init_global_grid(n, n, n; init_MPI = !JustRelax.MPI.Initialized(), quiet = true)...)
@@ -65,11 +65,13 @@ function sinking_sphere(solver; n = 16, zsurf = Inf, no_slip_top = false, free_s
         )
         rheology = (material(1, 1.0, 1.0), material(2, 2.0, 0.1), material(3, 0.0, 1.0e-2))
 
-        particles = init_particles(backend_JP, 20, 40, 10, grid.xi_vel...)
-        pPhases, = init_cell_arrays(particles, Val(1))
-        @parallel (@idx size(pPhases)) sphere_phases!(pPhases, particles.coords..., particles.index, zsurf)
-        phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-        update_phase_ratios!(phase_ratios, particles, pPhases)
+        if isnothing(phase_ratios)
+            particles = init_particles(backend_JP, 20, 40, 10, grid.xi_vel...)
+            pPhases, = init_cell_arrays(particles, Val(1))
+            @parallel (@idx size(pPhases)) sphere_phases!(pPhases, particles.coords..., particles.index, zsurf)
+            phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+            update_phase_ratios!(phase_ratios, particles, pPhases)
+        end
 
         stokes = StokesArrays(backend, ni)
         pt_stokes = PTStokesCoeffs(li, minimum.(grid.di.vertex); ϵ_abs = 1.0e-8, ϵ_rel = 1.0e-6, CFL = 0.9 / √3.1)
@@ -100,7 +102,7 @@ function sinking_sphere(solver; n = 16, zsurf = Inf, no_slip_top = false, free_s
                 iterMax = 10.0e3, nout = 100, verbose = false, air_phase = isinf(zsurf) ? 0 : 3, free_surface,
             )
         end
-        return out, Array(stokes.V.Vz), stokes
+        return out, Array(stokes.V.Vz), stokes, phase_ratios
     finally
         finalize_global_grid(; finalize_MPI = false)
     end
@@ -108,14 +110,14 @@ end
 
 @testset "Variational Stokes 3D" begin
     @testset "matches standard solver when all rock fractions are one" begin
-        out_std, Vz_std, _ = sinking_sphere(:standard)
-        out_vs, Vz_vs, _ = sinking_sphere(:variational)
+        # Particles are placed at random (unseedable on AMDGPU), so both solvers must
+        # share one set of phase ratios to be comparable.
+        out_std, Vz_std, _, phase_ratios = sinking_sphere(:standard)
+        out_vs, Vz_vs, _ = sinking_sphere(:variational; phase_ratios)
         @test out_std.iter < 10.0e3
         @test out_vs.iter < 10.0e3
         @test minimum(Vz_vs) < 0
-        # The two stress kernels average viscosity onto the shear edges differently;
-        # the gap is a discretization difference (4% at n = 16, 1.6% at n = 24).
-        @test isapprox(Vz_vs, Vz_std; rtol = 5.0e-2)
+        @test isapprox(Vz_vs, Vz_std; rtol = 1.0e-6)
     end
 
     @testset "converges with a flat free surface" begin

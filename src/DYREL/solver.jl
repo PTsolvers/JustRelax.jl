@@ -308,7 +308,7 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]), dim)
+                errV = ntuple(d -> norm_mpi(fields.D[d], residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
                     errV_scale = maximum(errV) + eps()
@@ -515,8 +515,8 @@ velocity_dofs(::Val{N}) where {N} = velocity_dofs(Val(N), ntuple(_ -> false, Val
 function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
 
-    numerator = sum(ntuple(d -> sum_mpi(fields.dV[d] .* (residuals[d] .- residuals0[d])), Val(N)))
-    denominator = sum(ntuple(d -> sum_mpi(fields.dV[d] .^ 2), Val(N)))
+    numerator = sum(ntuple(d -> sum_mpi((dv, r, r0) -> dv * (r - r0), fields.dV[d], residuals[d], residuals0[d]), Val(N)))
+    denominator = sum(ntuple(d -> sum_mpi(abs2, fields.dV[d]), Val(N)))
     return rayleigh_quotient(numerator, denominator)
 end
 

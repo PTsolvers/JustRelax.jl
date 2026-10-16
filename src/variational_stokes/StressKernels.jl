@@ -143,6 +143,10 @@
             ε_vol_pl[I...] = zero(eltype(T))
             Base.@nexprs 3 i -> begin
                 τ[i][I...] = zero(eltype(T))
+            end
+            # ε_pl[3] (xy) is vertex-located and shared with the vertex block above, which
+            # indexes it at the same `I`; only the center components (xx, yy) belong here.
+            Base.@nexprs 2 i -> begin
                 ε_pl[i][I...] = zero(eltype(T))
             end
         end
@@ -445,6 +449,11 @@ end
             ε_vol_pl[I...] = zero(eltype(T))
             Base.@nexprs 6 i -> begin
                 τ[i][I...] = zero(eltype(T))
+            end
+            # ε_pl[4:6] (yz, xz, xy) are edge-located and shared with the yz/xz/xy blocks
+            # above, which index them at the same `I`; only the center components (xx, yy,
+            # zz) belong to this branch.
+            Base.@nexprs 3 i -> begin
                 ε_pl[i][I...] = zero(eltype(T))
             end
         end
@@ -572,7 +581,8 @@ end
                 # the strain-increment form carries dt, as the vertex kernel above and
                 # the non-variational counterpart do; without it the correction does not
                 # match the compliance the multiplier was solved with
-                dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
+                c_pl = 2.0 * ηij * dt * dτ_r
+                dτij = @muladd @. dτij - c_pl * εij_pl
                 τij = dτij .+ τij
 
                 # volumetric plastic strain rate (accumulated by accumulate_vol!)

@@ -41,7 +41,7 @@ end
 end
 
 @inline function compute_phase(fn::F, rheology, phase::Int) where {F}
-    return fn(rheology, phase)
+    return fn(rheology[phase])
 end
 
 @inline function compute_phase(fn::F, rheology, phase::SVector, args) where {F}
@@ -58,10 +58,40 @@ end
 @inline Base.@propagate_inbounds function getindex_phase(
         phase::AbstractArray, I::Vararg{Int, N}
     ) where {N}
-    return @cell phase[I...]
+    return phase[I...]
 end
 
 @inline getindex_phase(::Nothing, I::Vararg{Int, N}) where {N} = nothing
+
+"""
+    phase_at_face(phase_ratios, n_cells, dim, i_face, i_L, i_R)
+
+Read the phase ratio(s) to combine with the two states bracketing a conductive
+flux face at `i_face`, which lies between the cell-centered indices `i_L` and
+`i_R` along dimension `dim`.
+
+`phase_ratios` is either sized like the flux array along `dim` (`n_cells + 1`
+entries, one per face — such as `PhaseRatios.Vx/Vy/Vz`) or like the cell-center
+grid along `dim` (`n_cells` entries, shared between the two bracketing cells).
+A face-sized array is read once at `i_face` and that value is reused for both
+states; any other size is read as cell-centered at `i_L` and `i_R`.
+"""
+@inline function phase_at_face(
+        phase_ratios::AbstractArray, n_cells::Int, dim::Int,
+        i_face::NTuple{N, Int}, i_L::NTuple{N, Int}, i_R::NTuple{N, Int}
+    ) where {N}
+    if size(phase_ratios, dim) == n_cells + 1
+        phase_face = getindex_phase(phase_ratios, i_face...)
+        return phase_face, phase_face
+    end
+    return getindex_phase(phase_ratios, i_L...), getindex_phase(phase_ratios, i_R...)
+end
+
+@inline function phase_at_face(
+        ::Nothing, ::Int, ::Int, ::NTuple{N, Int}, ::NTuple{N, Int}, ::NTuple{N, Int}
+    ) where {N}
+    return nothing, nothing
+end
 
 # Diffusivity
 
@@ -141,7 +171,9 @@ function compute_radioactive_heating(rheology, phase::SArray)
     return fn_ratio(compute_radioactive_heat, rheology, phase)
 end
 
-function compute_radioactive_heating(rheology, phase::Union{Int, Nothing})
+compute_radioactive_heating(rheology, phase::Int) = compute_radioactive_heating(rheology[phase], nothing)
+
+function compute_radioactive_heating(rheology, phase::Nothing)
     if isempty(rheology.RadioactiveHeat)
         return 0.0e0
     else

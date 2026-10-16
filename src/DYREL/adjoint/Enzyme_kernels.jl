@@ -381,6 +381,7 @@ function enzyme_compute_implicit_viscosity_τII!(
         θ_bar = scratch.θ,
     )
 
+    # only caclulate feedbck variables if they are not already calculated before
     ensure_constitutive_viscosity_feedback!(
         scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
     )

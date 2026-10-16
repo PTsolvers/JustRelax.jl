@@ -328,6 +328,7 @@ function enzyme_prepare_variational_implicit_viscosity_τII!(
     )
     copyto!(adjoint.viscosity.η, scratch.η)
 
+    # only caclulate feedbck variables if they are not already calculated before
     ensure_constitutive_viscosity_feedback!(
         scratch, stokes, rheology, phase_ratios, ϕ,
         λ_relaxation, dt, args, cutoff; air_phase,

@@ -154,6 +154,9 @@ end
     end
 end
 
+# Apply the transpose of center-to-vertex interpolation: each center receives one quarter of
+# every adjacent vertex gradient. Boundary and periodic vertices use the same center mapping as
+# the forward interpolation. Gathering at each center avoids concurrent scatter additions.
 @parallel_indices (i, j) function combine_center_vertex_gradient_kernel!(
         center, vertex, p, periodic
     )

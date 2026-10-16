@@ -84,36 +84,6 @@ function differentiate_pointwise_material_kernel!(
     return nothing
 end
 
-# Reverse one point update with the rheology argument active and store its material derivatives.
-struct PointwiseMaterialGradient{F, rheology_argument}
-    update!::F
-end
-
-@inline function apply_point!(
-        op::PointwiseMaterialGradient{F, rheology_argument}, primals, shadows, context, i, j,
-    ) where {F, rheology_argument}
-    (; gradient_fields, parameter_paths_by_phase) = context
-    rheology = primals[rheology_argument]
-
-    # Array fields paired with adjoint arrays become `DuplicatedNoNeed` arguments. Enzyme
-    # therefore accumulates their reverse derivatives directly into the supplied adjoint
-    # arrays, for example `adjoint.ε`, `adjoint.P`, and `adjoint.viscosity.η`.
-    # The rheology is different: it is an `Active` argument without a shadow object, so its
-    # complete nested derivative is returned by `autodiff_deferred` instead.
-    annotations = map(annotate, primals, shadows)
-    rheology_derivative = Enzyme.autodiff_deferred(
-        Enzyme.Reverse, Enzyme.Const(op.update!), Enzyme.Const, annotations...,
-        Enzyme.Const(i), Enzyme.Const(j),
-    )[1][rheology_argument]
-
-    # Select only the material-parameter paths requested in `gradients` from the returned
-    # rheology derivative and accumulate them in the phase- and point-resolved fields.
-    store_rheology_gradients!(
-        gradient_fields, parameter_paths_by_phase, rheology, rheology_derivative, (i, j)
-    )
-    return nothing
-end
-
 # Extract the requested compile-time material paths and accumulate their derivatives in the
 # corresponding phase- and point-resolved gradient fields.
 @generated function store_parameter_gradients!(

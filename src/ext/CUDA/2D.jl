@@ -97,6 +97,34 @@ function JR2D.apply_free_surface_diagonal!(
 end
 
 # Types
+# Adjoint buffers must be allocated by this module's ParallelStencil backend.
+function JR2D.AdjointStokesArrays(::Type{CUDABackend}, ni::Vararg{Integer, N}) where {N}
+    return AdjointStokesArrays(tuple(ni...))
+end
+
+function JR2D.AdjointStokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
+    return AdjointStokesArrays(ni)
+end
+
+function JR2D.AdjointStokesArrays(
+        ::Type{CUDABackend}, ni::NTuple{N, Integer}, bcs::AbstractFlowBoundaryConditions
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic_dims(bcs))
+end
+
+function JR2D.AdjointStokesArrays(
+        ::Type{CUDABackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic)
+end
+
+function JR2D.material_controls(
+        ::Type{CUDABackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};
+        nphases = nothing,
+    ) where {N, M}
+    return _material_controls(ni, names; nphases)
+end
+
 function JR2D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end

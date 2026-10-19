@@ -120,3 +120,20 @@ mask construction, and the mathematical reference.
 # Examples
 
 Examples of a set of miniapps using this solver can be found in [this folder](https://github.com/PTsolvers/JustRelax.jl/tree/main/miniapps/DYREL2D).
+
+### Adjoint backends
+
+The 2D standard and variational DYREL adjoints use the same backend as the forward solve.
+Load `CUDA` or `AMDGPU` before `JustRelax`, then allocate both the forward and adjoint
+states on that backend:
+
+```julia
+stokes = StokesArrays(backend, ni, flow_bcs)
+stokes_ad = AdjointStokesArrays(backend, ni, flow_bcs)
+gradients = material_controls(backend, ni, (:ρ0,); nphases = length(rheology))
+```
+
+Here `backend` is `CPUBackend`, `CUDABackend`, or `AMDGPUBackend`. Pass `stokes_ad`
+as the second argument of the forward solver with `adjoint = true` and an `observation`.
+Weighted observations must store their weights on the same backend as the solver arrays.
+The adjoint kernels differentiate pointwise operations with Enzyme on the selected backend.

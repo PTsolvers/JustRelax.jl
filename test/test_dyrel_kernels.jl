@@ -373,3 +373,52 @@ end
         @test Array(adjoint.V.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry
     end
 end
+
+@testset "Adjoint backend allocation and pullback" begin
+    ni = (5, 4)
+    TA = PTArray(backend)
+    stokes = StokesArrays(backend, ni)
+    adjoint = AdjointStokesArrays(backend, ni, (true, false))
+    @test adjoint.P isa TA
+    @test adjoint.λV.Vx isa TA
+    @test size(adjoint.R.Rx) == (ni[1], ni[2])
+    @test AdjointStokesArrays(backend, ni...).ρ isa TA
+    controls = material_controls(backend, ni, (:ρ0,); nphases = 2)
+    @test controls.ρ0.center isa TA
+    @test controls.ρ0.vertex isa TA
+    @test size(controls.ρ0.center) == (2, ni...)
+    @test size(controls.ρ0.vertex) == (2, (ni .+ 1)...)
+    @test_throws ArgumentError material_controls(backend, ni, (:ρ0,))
+
+    adjoint = AdjointStokesArrays(backend, ni)
+    grid = Geometry(ni, (1.0, 1.0))
+    observation = JR2K.observation_mask(
+        adjoint, grid, (; field = :P, center = (0.5, 0.5), half_width = (0.5, 0.5))
+    )
+    JR2K.seed_observation!(observation)
+    @test all(==(-1.0), Array(adjoint.P))
+
+    # Exercise deferred Enzyme differentiation inside the selected device kernel.
+    adjoint.R.Rx .= 1.0
+    adjoint.R.Ry .= 1.0
+    ρg = (TA(zeros(ni)), TA(ones(ni)))
+    JR2K.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
+    @test any(!iszero, Array(adjoint.τ.xy))
+    @test any(!iszero, Array(adjoint.ρ))
+    @test all(isfinite, Array(adjoint.P))
+    expected_density = fill(-1.0, ni)
+    expected_density[:, [1, end]] .= -0.5
+    @test Array(adjoint.ρ) ≈ expected_density
+
+    # With all rows in rock, the variational pullback agrees with the standard one.
+    ϕ = RockRatio(backend, ni)
+    for field in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
+        fill!(field, 1.0)
+    end
+    masked_adjoint = AdjointStokesArrays(backend, ni)
+    masked_adjoint.R.Rx .= 1.0
+    masked_adjoint.R.Ry .= 1.0
+    JR2K.enzyme_compute_PH_residual_V!(stokes, masked_adjoint, ρg, ϕ, grid._di, ni)
+    @test Array(masked_adjoint.ρ) ≈ expected_density
+    @test Array(masked_adjoint.τ.xy) ≈ Array(adjoint.τ.xy)
+end

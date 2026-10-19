@@ -1,32 +1,30 @@
 const isCUDA = false
-# const isCUDA = true
 
 @static if isCUDA
     using CUDA
+    CUDA.allowscalar(false)
 end
 
-using JustRelax, JustRelax.JustRelax2D
-# using Pkg; Pkg.activate("miniapps")
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustPIC
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend
 else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CPUBackend
 end
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
 else
     @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
@@ -296,7 +294,6 @@ function sinking_block2D_VE_powerlaw_viscosity_sensitivity(
         # buoyancy follows the advected phases
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
 
-
         if plot_results && it in (0, nt)
             # Plotting ---------------------
             # adjoint velocities live on the same staggered grid as the forward ones,
@@ -403,7 +400,7 @@ function sinking_block2D_VE_powerlaw_viscosity_sensitivity(
         # ------------------------------
     end
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
-    cost = sum(@view(stokes.V.Vy[mask.i, mask.j]))
+    cost = sum(@view(stokes.V.Vy[first(mask.i):last(mask.i), first(mask.j):last(mask.j)]))
     return return_fields ? (;
             cost,
             viscosity_gradient = Array(stokes_ad.viscosity.η),

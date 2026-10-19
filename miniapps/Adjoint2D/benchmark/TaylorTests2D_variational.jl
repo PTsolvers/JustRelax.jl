@@ -5,7 +5,7 @@
 #
 # As in TaylorTests2D.jl, every perturbation acts on the last time step only, the step the
 # adjoint differentiates.
-using JustRelax, JustRelax.JustRelax2D
+include("helpers.jl")
 
 # helpers and cases of the plain suite: smooth_direction, loglog_slope, viscosity_taylor_test,
 # perturb_material_parameters, plot_taylor_tests, SinkingBlockCase, SinkingBlockVECase,

@@ -422,3 +422,24 @@ end
     @test Array(masked_adjoint.ρ) ≈ expected_density
     @test Array(masked_adjoint.τ.xy) ≈ Array(adjoint.τ.xy)
 end
+
+
+@inline function inactive_singular_branch_point!(a, b, x, i, j)
+    a[i, j] = min(1.0, inv(x[i, j]))
+    b[i, j] = x[i, j]
+    return nothing
+end
+
+@testset "Zero adjoint through an inactive singular branch" begin
+    TA = PTArray(backend)
+    ni = (3, 2)
+    a, da, b, x, dx = ntuple(_ -> TA(zeros(ni)), 5)
+    da .= 1.0
+    db = TA(ones(ni))
+    JR2K.enzyme_reverse_pointwise!(
+        inactive_singular_branch_point!, ni, (a => da, b => db, x => dx)
+    )
+    @test Array(dx) == ones(ni)
+    @test all(iszero, Array(da))
+    @test all(iszero, Array(db))
+end

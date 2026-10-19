@@ -1,16 +1,11 @@
 # One stationary shear-band problem for verifying all non-complex-viscosity material
 # gradients. The forward rheology uses density, linear viscosity, elasticity and
 # Drucker-Prager plasticity. All corresponding material gradients are evaluated and plotted.
-using JustRelax, JustRelax.JustRelax2D
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-using JustPIC
+include("helpers.jl")
 using GeoParams
 using CairoMakie: Axis, Colorbar, DataAspect, Figure, Label, Relative, heatmap!, hidexdecorations!, hideydecorations!, rowsize!, save
 
-@init_parallel_stencil(Threads, Float64, 2)
-
-const backend    = JustRelax.CPUBackend
-const JP_backend = JustPIC.CPU
+const JP_backend = backend_JP
 const SHEARBAND_PHASE_NAMES          = ("Matrix", "Inclusion")
 
 @parallel_indices (i, j) function init_material_shear_band_phases!(
@@ -74,6 +69,7 @@ function material_shear_band_colorrange(A)
 end
 
 function material_shear_band_plot_array(field)
+    field = Array(field)
     scalar(value) = value isa Number ? value : only(value)
     return [scalar(field[i, j]) for i in axes(field, 1), j in axes(field, 2)]
 end
@@ -126,8 +122,9 @@ function plot_material_shear_band_state(figdir, step, grid, stokes, phase_ratios
     Vxv = @zeros(ni .+ 1...)
     Vyv = @zeros(ni .+ 1...)
     velocity2vertex!(Vxv, Vyv, @velocity(stokes)...)
+    center_ratios = adjoint_host_array(phase_ratios.center)
     inclusion = [
-        phase_ratios.center[i, j][2] for
+        center_ratios[i, j][2] for
             i in axes(phase_ratios.center, 1), j in axes(phase_ratios.center, 2)
     ]
     fields = (
@@ -183,6 +180,7 @@ function shear_band2D_adjoint_materials(
         # run the same problem through the variational solver, with rock everywhere (ϕ = 1)
         variational = false,
     )
+    η_multiplier = adjoint_device_multiplier(η_multiplier)
     ni = nx, ny
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
     (; xci, xvi) = grid
@@ -191,10 +189,10 @@ function shear_band2D_adjoint_materials(
     inclusion_center = (0.5, 0.5)
     inclusion_radius = 0.12
     @parallel (@idx ni) init_material_shear_band_phases!(
-        phase_ratios.center, xci..., inclusion_center, inclusion_radius
+        phase_ratios.center, PTArray(backend).(xci)..., inclusion_center, inclusion_radius
     )
     @parallel (@idx ni .+ 1) init_material_shear_band_phases!(
-        phase_ratios.vertex, xvi..., inclusion_center, inclusion_radius
+        phase_ratios.vertex, PTArray(backend).(xvi)..., inclusion_center, inclusion_radius
     )
 
     #### Stokes arrays ####
@@ -307,7 +305,7 @@ function shear_band2D_adjoint_materials(
     end
 
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
-    cost = sum(@view stokes.V.Vy[mask.i, mask.j])
+    cost = sum(@view stokes.V.Vy[first(mask.i):last(mask.i), first(mask.j):last(mask.j)])
     combined_gradients = material_shear_band_gradient_fields(gradients)
     phase_gradients = map(gradient -> Array(gradient.center), gradients)
     material_gradients = (;

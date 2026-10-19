@@ -16,11 +16,10 @@ and a tuple of shadows, plain arrays that ParallelStencil hands to any backend, 
 annotations are built inside the kernel (see `annotate`).
 
 The reverse of point `(i, j)` accumulates into the adjoints of its neighbours, and the point
-functions touch at most two consecutive rows `j + o`, `j + o + 1` of each array (a fixed offset
-`o` per array). Rows two apart therefore never collide: each kernel index reverses one whole row
-in order (contiguous access, and no race across a periodic seam in x), with all even and then
-all odd interior rows in parallel. The first and last row can wrap across a periodic seam in y
-and run in launches of their own.
+functions touch at most two consecutive indices in each dimension (with a fixed offset per
+array). Points two apart in both dimensions therefore never collide. Even-sized dimensions
+use two colors; odd-sized dimensions use a third color for the final index so the first and
+last points cannot collide across a periodic seam.
 """
 function enzyme_reverse_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
     primals, shadows = map(first, args), map(kernel_shadow, map(last, args))
@@ -76,33 +75,35 @@ end
 
 function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, context)
     nx, ny = n
-
-    # Non-adjacent interior rows can run concurrently.
-    for first_row in (2, 3)
-        number_of_rows = length(first_row:2:(ny - 1))
-        iszero(number_of_rows) && continue
-        @parallel (1:number_of_rows) reverse_row_group!(
-            op, primals, shadows, context, nx, first_row
-        )
+    for (first_column, column_stride, number_of_columns) in color_groups(nx)
+        iszero(number_of_columns) && continue
+        for (first_row, row_stride, number_of_rows) in color_groups(ny)
+            iszero(number_of_rows) && continue
+            @parallel (1:number_of_columns, 1:number_of_rows) reverse_point_group!(
+                op, primals, shadows, context,
+                first_column, column_stride, first_row, row_stride,
+            )
+        end
     end
-
-    # Boundary rows run separately because periodic stencils can connect them.
-    for row in (1, ny)
-        @parallel (1:1) reverse_row_group!(op, primals, shadows, context, nx, row)
-    end
-
     return nothing
 end
 
-@parallel_indices (row_in_group) function reverse_row_group!(
-        op, primals, shadows, context, nx, first_row
+function color_groups(n::Integer)
+    alternating = n - isodd(n)
+    groups = (
+        (1, 2, cld(alternating, 2)),
+        (2, 2, fld(alternating, 2)),
     )
-    row = first_row + 2 * (row_in_group - 1)
+    return isodd(n) ? (groups..., (n, 0, 1)) : groups
+end
 
-    # Adjacent columns can share shadow entries, so process one row sequentially.
-    for column in 1:nx
-        apply_point!(op, primals, shadows, context, column, row)
-    end
+@parallel_indices (column_in_group, row_in_group) function reverse_point_group!(
+        op, primals, shadows, context,
+        first_column, column_stride, first_row, row_stride,
+    )
+    column = first_column + column_stride * (column_in_group - 1)
+    row = first_row + row_stride * (row_in_group - 1)
+    apply_point!(op, primals, shadows, context, column, row)
 
     return nothing
 end

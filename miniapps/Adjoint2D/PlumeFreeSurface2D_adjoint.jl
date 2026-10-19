@@ -375,7 +375,7 @@ function plume_free_surface_adjoint(
                 gradients = gradients,
                 η_multiplier = last_step ? η_multiplier : nothing,
                 verbose_PH = verbose,
-                verbose_DR = true,
+                verbose_DR = false,
             ),
         )
         result.converged || error("Variational DYREL did not converge (err=$(result.err))")

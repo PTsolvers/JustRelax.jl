@@ -471,3 +471,25 @@ end
     @test Array(fields.a) == fill(4.0, 1, ni...)
     @test all(iszero, Array(seed))
 end
+
+@inline function periodic_neighbor_sum_point!(out, input, i, j)
+    ip = i == size(out, 1) ? 1 : i + 1
+    jp = j == size(out, 2) ? 1 : j + 1
+    out[i, j] = input[i, j] + input[ip, j] + input[i, jp]
+    return nothing
+end
+
+@testset "Race-free point coloring on the selected backend" begin
+    TA = PTArray(backend)
+    for ni in ((6, 4), (5, 3))
+        input = TA(zeros(ni))
+        input_ad = TA(zeros(ni))
+        out = TA(zeros(ni))
+        out_ad = TA(ones(ni))
+        JR2K.enzyme_reverse_pointwise!(
+            periodic_neighbor_sum_point!, ni, (out => out_ad, input => input_ad)
+        )
+        @test Array(input_ad) == fill(3.0, ni)
+        @test all(iszero, Array(out_ad))
+    end
+end

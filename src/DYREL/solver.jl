@@ -450,9 +450,14 @@ end
 @inline nonzero_span(s) = abs(s) ≤ sqrt(eps(typeof(s))) ? one(s) : s
 @inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
 
+# Global over all MPI ranks, so that every rank derives the same residual scales.
 @inline function masked_extrema(mask, A)
     lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
     hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    if MPI.Initialized()
+        lo = MPI.Allreduce(lo, MPI.MIN, MPI.COMM_WORLD)
+        hi = MPI.Allreduce(hi, MPI.MAX, MPI.COMM_WORLD)
+    end
     return lo, hi
 end
 

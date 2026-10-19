@@ -58,7 +58,7 @@ end
 
 # Grid constructor given 1D vertex coordinates arrays
 """
-    Geometry(TA, xvi::Vararg{<:AbstractVector, nDim})
+    Geometry(TA, xvi::Vararg{<:AbstractVector, nDim}; distributed = ImplicitGlobalGrid.grid_is_initialized())
     Geometry(xvi::NTuple{nDim, <:AbstractVector})
 
 Build a staggered grid from explicit vertex coordinates along each dimension.
@@ -67,12 +67,31 @@ This constructor is useful for refined or otherwise nonuniform meshes. Cell-cent
 coordinates, local spacings, and staggered velocity grids are derived from the supplied
 vertex coordinates. `TA` can be used to move the generated arrays to a target array type.
 
+When `distributed` is `true` (the default once `ImplicitGlobalGrid` has been initialized),
+`xvi` are the vertex coordinates of the global grid and the returned grid is the subdomain
+of the local MPI rank, including its overlap cells. As for the uniform constructor, `li`,
+`max_li` and `origin` describe the global domain. The ghost nodes of the staggered velocity
+grids, and the spacings derived from them, lie at the coordinates of the neighboring cells,
+so a refined grid is continuous across ranks. Pass `distributed = false` to build the
+global grid on every rank.
+
 # Arguments
 - `TA`: Array constructor used to materialize the coordinate arrays, for example `Array`
   or a backend-specific array type.
-- `xvi`: One vertex-coordinate vector per dimension.
+- `xvi`: One vertex-coordinate vector per dimension; of the global grid when distributed.
+
+# Keyword Arguments
+- `distributed`: Return the local subdomain of the MPI rank. Default:
+  `ImplicitGlobalGrid.grid_is_initialized()`.
 """
-function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractArray, T <: AbstractVector}
+function Geometry(
+        TA::Type{A}, xvi::Vararg{T, nDim}; distributed::Bool = ImplicitGlobalGrid.grid_is_initialized()
+    ) where {nDim, A <: AbstractArray, T <: AbstractVector}
+    grid = _geometry_from_vertices(TA, xvi...)
+    return distributed ? local_subdomain(grid) : grid
+end
+
+function _geometry_from_vertices(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractArray, T <: AbstractVector}
     ni = length.(xvi) .- 1
     xci = ntuple(Val(nDim)) do i
         @views @. (xvi[i][1:(end - 1)] + xvi[i][2:end]) / 2
@@ -96,3 +115,40 @@ function Geometry(TA::Type{A}, xvi::Vararg{T, nDim}) where {nDim, A <: AbstractA
 end
 
 Geometry(xvi::NTuple{nDim, T}) where {nDim, T <: AbstractVector} = Geometry(Array, xvi...)
+
+# Subdomain of the local MPI rank, sliced out of the global grid `grid`. ImplicitGlobalGrid
+# places local index `i` of the rank at Cartesian coordinate `c` on global index
+# `c * (n - overlap) + i`, where `n` is the local number of cells. Every coordinate and
+# spacing array along a dimension holds the number of cells plus a fixed number of entries,
+# so the same offset slices all of them.
+function local_subdomain(grid::Geometry{nDim}) where {nDim}
+    ImplicitGlobalGrid.grid_is_initialized() ||
+        throw(ArgumentError("a distributed `Geometry` requires an ImplicitGlobalGrid; call `init_global_grid` first"))
+    gg = ImplicitGlobalGrid.global_grid()
+    ni_g = ntuple(d -> gg.nxyz_g[d], Val(nDim))
+    grid.ni == ni_g || throw(
+        DimensionMismatch(
+            "the vertex coordinates describe $(grid.ni) cells, but the global grid has $ni_g cells; pass the coordinates of the global grid"
+        )
+    )
+    any(d -> !iszero(gg.periods[d]), 1:nDim) &&
+        throw(ArgumentError("a nonuniform `Geometry` does not support periodic MPI directions"))
+    ni = ntuple(d -> gg.nxyz[d], Val(nDim))
+    offset = ntuple(d -> gg.coords[d] * (gg.nxyz[d] - gg.overlaps[d]), Val(nDim))
+    slice(v, d) = v[offset[d] .+ (1:(length(v) - ni_g[d] + ni[d]))]
+    slice_dims(t) = ntuple(d -> slice(t[d], d), Val(nDim))
+    di = (;
+        center = slice_dims(grid.di.center),
+        vertex = slice_dims(grid.di.vertex),
+        velocity = map(slice_dims, grid.di.velocity),
+    )
+    _di = (;
+        center = slice_dims(grid._di.center),
+        vertex = slice_dims(grid._di.vertex),
+        velocity = map(slice_dims, grid._di.velocity),
+    )
+    return typeof(grid)(
+        ni, grid.li, grid.origin, grid.max_li, di, _di,
+        slice_dims(grid.xci), slice_dims(grid.xvi), map(slice_dims, grid.xi_vel),
+    )
+end

@@ -23,14 +23,17 @@ all odd interior rows in parallel. The first and last row can wrap across a peri
 and run in launches of their own.
 """
 function enzyme_reverse_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
-    primals, shadows = map(first, args), map(last, args)
+    primals, shadows = map(first, args), map(kernel_shadow, map(last, args))
     reverse_colored!(f, n, primals, shadows, nothing)
     return nothing
 end
 
+# A type object cannot be passed as GPU kernel data. Construct Active on the device.
+@inline kernel_shadow(dx) = dx === Enzyme.Active ? Val(:active) : dx
+
 @inline annotate(x, dx) = Enzyme.DuplicatedNoNeed(x, dx)
 @inline annotate(x, ::Nothing) = Enzyme.Const(x)
-@inline annotate(x, ::typeof(Enzyme.Active)) = Enzyme.Active(x)
+@inline annotate(x, ::Val{:active}) = Enzyme.Active(x)
 
 @inline function apply_point!(f, primals, shadows, context, i, j)
     Enzyme.autodiff_deferred(

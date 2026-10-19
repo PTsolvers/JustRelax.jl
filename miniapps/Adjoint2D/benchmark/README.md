@@ -90,11 +90,3 @@ finalize_global_grid(; finalize_MPI = false)
 
 Use the same pattern with `TaylorTests2D_variational.jl` in a fresh session to customize the
 variational suite. Initialize the global grid with the same `n` passed to `main`.
-
-## Check backend helpers
-
-The backend-allocation and device-transfer checks can be run without a full benchmark:
-
-```sh
-julia --project=. --startup-file=no test/test_adjoint_miniapp_helpers.jl
-```

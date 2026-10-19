@@ -424,22 +424,50 @@ end
 end
 
 
-@inline function inactive_singular_branch_point!(a, b, x, i, j)
-    a[i, j] = min(1.0, inv(x[i, j]))
-    b[i, j] = x[i, j]
+@testset "Continuity pressure pullback with infinite bulk viscosity" begin
+    ni = (3, 2)
+    stokes = StokesArrays(backend, ni)
+    stokes.P .= 2.0
+    phases = PhaseRatios(backend_JP, 1, ni)
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    grid = Geometry(ni, (1.0, 1.0))
+    ηb = similar(stokes.P)
+    for bulk in (5.0, Inf), seed in (1.0, 1.0e15), variational in (false, true)
+        fill!(ηb, bulk)
+        adjoint = AdjointStokesArrays(backend, ni)
+        adjoint.R.RP .= seed
+        if variational
+            JR2K.enzyme_compute_∇V_strain_rate_RP!(
+                stokes, adjoint, (; ηb), (), phases, ϕ, grid._di, ni, 3.0e11, (;)
+            )
+        else
+            JR2K.enzyme_compute_∇V_strain_rate_RP!(
+                stokes, adjoint, (; ηb), (), phases, grid._di, ni, 3.0e11, (;)
+            )
+        end
+        @test Array(adjoint.P) ≈ fill(-seed / bulk, ni)
+        @test all(isfinite, Array(adjoint.V.Vx))
+        @test all(isfinite, Array(adjoint.V.Vy))
+    end
+end
+
+@inline function material_gradient_test_point!(out, rheology, i, j)
+    out[i, j] = rheology[1].a^2
     return nothing
 end
 
-@testset "Zero adjoint through an inactive singular branch" begin
-    TA = PTArray(backend)
+@testset "Material-gradient annotations on the selected backend" begin
     ni = (3, 2)
-    a, da, b, x, dx = ntuple(_ -> TA(zeros(ni)), 5)
-    da .= 1.0
-    db = TA(ones(ni))
-    JR2K.enzyme_reverse_pointwise!(
-        inactive_singular_branch_point!, ni, (a => da, b => db, x => dx)
+    TA = PTArray(backend)
+    out = TA(zeros(ni))
+    seed = TA(ones(ni))
+    fields = (; a = TA(zeros(1, ni...)))
+    paths = ((; a = (Val((:a,)),)),)
+    JR2K.differentiate_pointwise_material_kernel!(
+        material_gradient_test_point!, ni, fields, paths,
+        (out => seed, ((; a = 2.0),) => JR2K.Enzyme.Active),
     )
-    @test Array(dx) == ones(ni)
-    @test all(iszero, Array(da))
-    @test all(iszero, Array(db))
+    @test Array(fields.a) == fill(4.0, 1, ni...)
+    @test all(iszero, Array(seed))
 end

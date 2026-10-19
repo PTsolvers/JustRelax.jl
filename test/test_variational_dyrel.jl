@@ -19,18 +19,21 @@ end
     return nothing
 end
 
-function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false, friction = 0.0, Pf = nothing)
+function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false, friction = 0.0, Pf = nothing, dipping_gravity = false)
     ni = (8, 8)
     grid = Geometry(ni, (1.0, 1.0))
     creep = LinearViscous(; η = 1.0)
     composite = plastic ?
         CompositeRheology((creep, DruckerPrager_regularised(; C = 0.5, ϕ = friction, η_vp = 0.1, Ψ = 0.0))) :
         CompositeRheology((creep,))
+    gravity = dipping_gravity ?
+              DippingGravity(; g = 1.0, gx = inv(sqrt(2)), gy = 0.0, gz = inv(sqrt(2))) :
+              ConstantGravity(; g = hydrostatic ? 1.0 : 0.0)
     rheology = (
         SetMaterialParams(;
             Phase = 1,
             Density = ConstantDensity(; ρ = hydrostatic ? 1.0 : 0.0),
-            Gravity = ConstantGravity(; g = hydrostatic ? 1.0 : 0.0),
+            Gravity = gravity,
             CompositeRheology = composite,
         ),
     )
@@ -137,6 +140,17 @@ end
     @test all(isfinite, stokes_variational.P)
     @test diff(stokes_variational.P; dims = 2) ≈ diff(stokes.P; dims = 2) rtol = 1.0e-4 atol = 1.0e-6
 
+end
+
+@testset "Variational DYREL directional gravity" begin
+    stokes, result, _ = _full_volume_dyrel(
+        TEST_IGG; variational = true, hydrostatic = true, dipping_gravity = true
+    )
+
+    @test result.converged
+    @test all(isfinite, stokes.P)
+    @test all(isfinite, stokes.V.Vx)
+    @test all(isfinite, stokes.V.Vy)
 end
 
 @testset "Variational DYREL partial-volume rows" begin

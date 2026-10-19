@@ -150,7 +150,10 @@ function _solve_VariationalDYREL!(
         stokes.viscosity.η .*= η_multiplier.center
         stokes.viscosity.ηv .*= η_multiplier.vertex
     end
-    compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
+    # `ρg` has one field per spatial component for directional gravity.  Recompute the
+    # complete tuple here; using only `ρg[end]` discards the horizontal component and
+    # fails when GeoParams returns a vector buoyancy.
+    compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
     # Powell-Hestenes iterations

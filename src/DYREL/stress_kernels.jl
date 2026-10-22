@@ -793,9 +793,11 @@ end
                 empty_stress_solution(εij)
 
             else
-                # get rheological properties for this phase
-                G = get_shear_modulus(rheology, phase)
-                Kb = get_bulk_modulus(rheology, phase)
+                # get rheological properties for this phase. Index the tuple directly: the
+                # phase-ID lookup returns Union{Float64, Int} when a phase has no elasticity,
+                # which Enzyme's type analysis rejects on GPUs.
+                G = get_shear_modulus(rheology[phase])
+                Kb = get_bulk_modulus(rheology[phase])
                 ratio_I .* _compute_local_stress(
                     εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, Pf
                 )

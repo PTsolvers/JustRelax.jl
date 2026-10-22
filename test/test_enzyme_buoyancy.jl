@@ -11,6 +11,13 @@ using JustRelax, JustRelax.JustRelax2D
     return nothing
 end
 
+@parallel_indices (i, j) function _three_phase_buoyancy_test_phases!(phase)
+    @index phase[1, i, j] = i == 1 ? 0.2 : 0.5
+    @index phase[2, i, j] = i == 1 ? 0.3 : 0.4
+    @index phase[3, i, j] = i == 1 ? 0.5 : 0.1
+    return nothing
+end
+
 @testset "Free-surface stabilization adjoint" begin
     ni = (3, 2)
     grid = Geometry(ni, (3.0, 2.0))
@@ -106,6 +113,57 @@ end
             @test maximum(abs, adjoint.P .- previous) > 1.0e-3
         else
             @test adjoint.P ≈ previous
+        end
+    end
+end
+
+# Several pressure-dependent density phases in one cell crash Enzyme 0.13.199–0.13.216 when the
+# pressure is annotated `DuplicatedNoNeed` (`Failed to materialize symbols`, then signal 11),
+# so this test fails by crashing if the `ReadOnlyShadow` workaround is removed too early.
+@testset "Multiphase pressure-dependent buoyancy adjoint" begin
+    ni = (3, 2)
+    phases = PhaseRatios(JustPIC.CPU, 3, ni)
+    @parallel (@idx ni) _three_phase_buoyancy_test_phases!(phases.center)
+    P = reshape(collect(1.0:prod(ni)), ni) ./ 10
+    P_initial = copy(P)
+    T = reshape(collect(1.0:20.0), ni .+ 2) ./ 10
+    seedx = reshape(sin.(1:prod(ni)), ni)
+    seedy = reshape(cos.(1:prod(ni)), ni)
+    pt_density(p) = PT_Density(; ρ0 = 2.0 + p, α = 0.1, β = 0.1 * p, T0 = 0.2, P0 = 0.1)
+    cases = (
+        # all phases pressure dependent, as in test/mwe_enzyme_reverse_pt_density.jl
+        (; densities = ntuple(pt_density, 3), gravity = DippingGravity(40.0, 0.0, 1.4), air_phase = 0),
+        # rock phases pressure dependent and a weightless air phase dropped from the average
+        (;
+            densities = (pt_density(1), pt_density(2), ConstantDensity(; ρ = 0.0)),
+            gravity = ConstantGravity(; g = 1.4), air_phase = 3,
+        ),
+    )
+    for (; densities, gravity, air_phase) in cases
+        rheology = ntuple(3) do p
+            SetMaterialParams(; Phase = p, Density = densities[p], Gravity = gravity)
+        end
+        ρg = (@zeros(ni...), @zeros(ni...))
+        args = (; T, P)
+        objective = function ()
+            compute_ρg!(ρg, phases, rheology, args; air_phase)
+            return sum(seedx .* ρg[1]) + sum(seedy .* ρg[2])
+        end
+        objective()
+        adjoint = AdjointStokesArrays(CPUBackend, ni)
+        adjoint.dρgx .= seedx
+        adjoint.ρ .= seedy
+        JustRelax2D.enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni; air_phase)
+        @test P == P_initial
+        @test any(!iszero, adjoint.P)
+        for I in CartesianIndices(P)
+            h = 1.0e-6
+            P[I] = P_initial[I] + h
+            plus = objective()
+            P[I] = P_initial[I] - h
+            minus = objective()
+            P[I] = P_initial[I]
+            @test adjoint.P[I] ≈ (plus - minus) / (2h) rtol = 1.0e-6 atol = 1.0e-8
         end
     end
 end

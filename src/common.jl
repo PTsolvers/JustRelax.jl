@@ -1,6 +1,6 @@
 using Adapt, MuladdMacro
 import ForwardDiff
-import Enzyme: EnzymeRules
+import Enzyme: EnzymeRules, ignore_derivatives
 
 include("types/constructors/stokes.jl")
 export StokesArrays, PTStokesCoeffs

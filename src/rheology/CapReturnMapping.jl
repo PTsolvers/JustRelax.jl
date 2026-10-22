@@ -127,7 +127,11 @@ end
     F <= 0 && return x, true
     # Dilatant cap flow needs a finite elastic volumetric compliance.
     isfinite(Kdt) && Kdt > 0 && η > 0 || return x, false
-    x0, converged, J⁻¹, r0 = cap_newton_solve(rheology, phase, s, p, F, EII, η, Kdt, ηvp, Pf, maxiter)
+    # The solve gets a copy of the rheology without derivatives: an Active rheology passed to
+    # the inactive call is mis-addressed on CUDA (error 717, invalid address space).
+    x0, converged, J⁻¹, r0 = cap_newton_solve(
+        detach(rheology), phase, s, p, F, EII, η, Kdt, ηvp, Pf, maxiter
+    )
     converged || return x0, false
     # Implicit-function step. `r` repeats the residual `r0` at the solution, so the value stays
     # `x0`, while Enzyme differentiates only this step: dx = -J⁻¹ ∂R/∂(inputs), the derivative
@@ -150,6 +154,20 @@ function cap_newton_solve(rheology, phase, s::T, p::T, F, EII, η, Kdt, ηvp, Pf
     return x, converged, J⁻¹, unscaled(x)
 end
 EnzymeRules.inactive(::typeof(cap_newton_solve), args...) = nothing
+
+# Copy of `x` with every floating-point number detached from differentiation. Enzyme's
+# `ignore_derivatives` fails on aggregates such as a GeoParams material, so rebuild the bits
+# value from its detached scalars.
+@inline detach(x::AbstractFloat) = ignore_derivatives(x)
+@inline detach(x::Tuple) = map(detach, x)
+@generated function detach(x::T) where {T}
+    isbitstype(T) && isstructtype(T) && fieldcount(T) > 0 || return :x
+    fields = (:(detach(getfield(x, $i))) for i in 1:fieldcount(T))
+    return quote
+        Base.@_inline_meta
+        $(Expr(:new, T, fields...))
+    end
+end
 
 @inline function _cap_newton_iterations(rheology, phase, s::T, p::T, F, EII, η, Kdt, ηvp, Pf, maxiter) where {T}
     x = SVector(s, p, zero(T))

@@ -472,6 +472,45 @@ end
     @test all(iszero, Array(seed))
 end
 
+@inline cap_test_λ(rheology, s, p) =
+    JR2K.cap_return_mapping(rheology, 1, s, p, 0.0, 0.5, 4.0, 0.1)[1][3]
+
+# Material derivative through the cap return map, whose Newton solve Enzyme skips. With an
+# Active rheology handed to that solve, CUDA failed with an invalid address space (error 717).
+@parallel_indices (i, j) function cap_rheology_gradient!(out, rheology, s, p)
+    Enzyme = JR2K.Enzyme
+    d = Enzyme.autodiff_deferred(
+        Enzyme.Reverse, Enzyme.Const(cap_test_λ), Enzyme.Active,
+        Enzyme.Active(rheology), Enzyme.Active(s), Enzyme.Active(p),
+    )[1]
+    out[1] = d[2]
+    out[2] = d[3]
+    out[3] = d[1][1].CompositeRheology[1].elements[3].C.val
+    return nothing
+end
+
+@testset "Cap return-map material derivative on the selected backend" begin
+    el = ConstantElasticity(; G = 1.0, Kb = 4.0)
+    cap = DruckerPragerCap(; C = 1.0, ϕ = 30.0, Ψ = 0.0, η_vp = 0.1, pT = -0.5)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1, Elasticity = el,
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0), el, cap)),
+        ),
+    )
+    s, p = 1.0, -0.8 # yields on the cap
+    out = PTArray(backend)(zeros(3))
+    @parallel (1:1, 1:1) cap_rheology_gradient!(out, rheology, s, p)
+    Enzyme = JR2K.Enzyme
+    host = Enzyme.autodiff(
+        Enzyme.Reverse, Enzyme.Const(cap_test_λ), Enzyme.Active,
+        Enzyme.Active(rheology), Enzyme.Active(s), Enzyme.Active(p),
+    )[1]
+    expected = [host[2], host[3], host[1][1].CompositeRheology[1].elements[3].C.val]
+    @test !iszero(expected[3])
+    @test Array(out) ≈ expected
+end
+
 @inline function periodic_neighbor_sum_point!(out, input, i, j)
     ip = i == size(out, 1) ? 1 : i + 1
     jp = j == size(out, 2) ? 1 : j + 1

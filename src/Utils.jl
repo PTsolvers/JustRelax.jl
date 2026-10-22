@@ -714,6 +714,13 @@ norm_mpi(A) = sqrt(sum_mpi(abs2, A))
 norm_mpi(A, B) = sqrt(sum_mpi((a, b) -> abs2(a * b), A, B))
 
 """
+    dot_mpi(A, B)
+
+Compute the dot product of arrays `A` and `B` across all MPI processes.
+"""
+dot_mpi(A, B) = MPI.Allreduce(dot(A, B), MPI.SUM, MPI.COMM_WORLD)
+
+"""
     sum_mpi(A)
 
 Compute the sum of array `A` across all MPI processes.

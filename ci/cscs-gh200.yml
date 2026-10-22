@@ -10,16 +10,11 @@ unit_tests:
     - export JULIA_CUDA_USE_COMPAT=false # IGG
     - export JULIA_JUSTRELAX_BACKEND=CUDA
     - export JULIA_CSCS_CI=true
-    # skip auto-precompilation on add: on Julia 1.13.2 it fails with "Unknown package" when the add
-    # changes indirect deps (JuliaLang/Pkg.jl#4866), e.g. CUDA adding cuFFT / downgrading Atomix.
-    # We precompile explicitly once all packages are added.
-    - export JULIA_PKG_PRECOMPILE_AUTO=0
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.instantiate();'
     # - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(["Suppressor", "Test"]);'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="Suppressor");'
-    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="CUDA");'
-    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.precompile();'
+    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'include("test/add_backend_package.jl"); add_backend_package("CUDA");'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'
     - echo "Running MPI tests (multiple ranks)"
     - echo "Running MPI test - test_diffusion2D_multiphase_MPI.jl"

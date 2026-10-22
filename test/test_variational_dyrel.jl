@@ -19,7 +19,7 @@ end
     return nothing
 end
 
-function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false, friction = 0.0, Pf = nothing)
+function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = false, plastic = false, legacy_grid = false, friction = 0.0, Pf = nothing, anderson_PH = 0)
     ni = (8, 8)
     grid = Geometry(ni, (1.0, 1.0))
     creep = LinearViscous(; η = 1.0)
@@ -64,6 +64,7 @@ function _full_volume_dyrel(igg; variational, hydrostatic = false, partial = fal
         rel_drop = 0.5,
         linear_viscosity = !plastic,
         free_surface = partial,
+        anderson_PH,
     )
     ϕ = nothing
     if variational
@@ -395,6 +396,19 @@ end
     @test all(isfinite, stokes.λ)
     @test minimum(stokes.λ) ≥ 0.0
     @test isfinite(result.err)
+end
+
+@testset "DYREL Anderson PH acceleration (variational = $variational)" for variational in (true, false)
+    run(m) = _full_volume_dyrel(TEST_IGG; variational, plastic = true, friction = 30.0, anderson_PH = m)
+    plain, = run(0)
+    accelerated, = run(3)
+
+    # Anderson changes the path, not the fixed point. P is near zero here, so it is compared
+    # against the O(1) stress scale.
+    @test accelerated.P ≈ plain.P atol = 1.0e-5
+    @test accelerated.V.Vx ≈ plain.V.Vx rtol = 1.0e-4
+    @test accelerated.V.Vy ≈ plain.V.Vy rtol = 1.0e-4
+    @test_throws ArgumentError run(-1)
 end
 
 @testset "DYREL fluid pressure (variational = $variational)" for variational in (true, false)

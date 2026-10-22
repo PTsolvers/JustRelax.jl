@@ -119,7 +119,8 @@ zero_buoyancy_adjoint!(adjoint) = foreach(A -> fill!(A, 0.0), (adjoint.dρgx, ad
 
 Differentiate the same pointwise buoyancy function used by the forward solver.
 `adjoint.dρgx` and `adjoint.ρ` seed the horizontal and vertical buoyancy outputs through
-`DuplicatedNoNeed`. The resulting pressure derivative accumulates in `adjoint.P`.
+`DuplicatedNoNeed`. The resulting pressure derivative accumulates in `adjoint.P`, which is
+annotated `Duplicated` as a temporary Enzyme workaround (see `ReadOnlyShadow`).
 """
 function enzyme_compute_ρg!(
         ρg, adjoint, phases, rheology, args, ni; air_phase::Integer = 0
@@ -134,7 +135,8 @@ function enzyme_compute_ρg!(
             phases.center => nothing,
             rheology => nothing,
             args_without_P => nothing,
-            P => adjoint.P,
+            # Temporary: `Duplicated` instead of `DuplicatedNoNeed` (see `ReadOnlyShadow`).
+            P => ReadOnlyShadow(adjoint.P),
             air_phase => nothing,
             ni => nothing,
         ),

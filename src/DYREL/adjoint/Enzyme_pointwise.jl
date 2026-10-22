@@ -30,6 +30,17 @@ end
 
 @inline annotate(x, dx) = Enzyme.DuplicatedNoNeed(x, dx)
 @inline annotate(x, ::Nothing) = Enzyme.Const(x)
+
+# Temporary fix for an Enzyme bug (0.13.199–0.13.216): a read-only input annotated
+# `DuplicatedNoNeed` crashes reverse mode when the kept primal write reads it, e.g. a tuple
+# output such as `ρg`. Wrap the shadow of such inputs to annotate them `Duplicated`; remove
+# once Enzyme is fixed (reproducer: test/mwe_enzyme_reverse_duplicatednoneed.jl).
+struct ReadOnlyShadow{A}
+    dx::A
+end
+Adapt.@adapt_structure ReadOnlyShadow
+
+@inline annotate(x, s::ReadOnlyShadow) = Enzyme.Duplicated(x, s.dx)
 @inline annotate(x, ::typeof(Enzyme.Active)) = Enzyme.Active(x)
 
 @inline function apply_point!(f, primals, shadows, context, i, j)

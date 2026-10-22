@@ -15,6 +15,8 @@ function prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
             throw(DimensionMismatch("$name center field must have size $center_dims"))
         size(gradients[name].vertex) == vertex_dims ||
             throw(DimensionMismatch("$name vertex field must have size $vertex_dims"))
+        size(gradients[name].per_area) == center_dims ||
+            throw(DimensionMismatch("$name per_area field must have size $center_dims"))
         # Sensitivity paths add into these buffers with `+=`.
         fill!(gradients[name].center, 0.0)
         fill!(gradients[name].vertex, 0.0)
@@ -47,8 +49,8 @@ end
     )
 
 Differentiate the forward buoyancy and continuity-residual functions with respect to their
-material parameters, form the diagnostic density adjoint `stokes_ad.ρ`, and fold every vertex
-gradient into the centers. `air_phase` and `ϕ` must match the forward buoyancy update and
+material parameters, form the diagnostic density adjoint `stokes_ad.ρ`, fold every vertex
+gradient into the centers, and divide the result by the cell areas into `per_area`. `air_phase` and `ϕ` must match the forward buoyancy update and
 continuity residual.
 """
 function finish_density_sensitivities!(
@@ -72,8 +74,22 @@ function finish_density_sensitivities!(
     for gradient in values(gradients), p in eachindex(rheology)
         combine_center_vertex_gradient!(gradient.center, gradient.vertex, p, periodic)
     end
+    for gradient in values(gradients)
+        @parallel (@idx size(gradient.center)[2:end]) gradient_per_area!(
+            gradient.per_area, gradient.center, _di.vertex
+        )
+    end
 
     return stokes_ad
+end
+
+# Cell widths are the vertex spacings, so `_di.vertex` holds the reciprocal cell widths.
+@parallel_indices (i, j) function gradient_per_area!(per_area, center, _di_cell)
+    _area = @dx(_di_cell, i) * @dy(_di_cell, j)
+    for p in axes(center, 1)
+        @inbounds per_area[p, i, j] = center[p, i, j] * _area
+    end
+    return nothing
 end
 
 const _derived_material_parameter_names = (:sinϕ, :cosϕ, :sinΨ, :cosΨ)

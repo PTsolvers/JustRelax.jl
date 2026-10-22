@@ -526,8 +526,10 @@ end
 end
 
 @testset "Bulk-modulus sensitivities through the continuity residual" begin
-    ni = (3, 2)
-    grid = Geometry(ni, (3.0, 2.0))
+    # Unequal cells, so the gradient per unit area differs from the per-cell derivative.
+    xv, yv = [0.0, 0.5, 2.0, 3.0], [0.0, 1.5, 2.0]
+    grid = Geometry(Array, xv, yv)
+    ni = grid.ni
     dt = 0.7
     moduli = (2.0, 4.0, Inf)
     bulk_moduli = (7.0, 11.0, 13.0)
@@ -574,6 +576,8 @@ end
         @test !iszero(fd)
         @test sum(@view gradients.Kb.center[p, :, :]) ≈ fd rtol = 1.0e-5 atol = 1.0e-8
     end
+    cell_area = reshape(diff(xv) .* diff(yv)', 1, ni...)
+    @test gradients.Kb.per_area ≈ gradients.Kb.center ./ cell_area
 
     # The variational residual carries the rock fraction, and so does its Kb derivative.
     normal = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
@@ -755,8 +759,9 @@ end
     gradients = material_controls(CPUBackend, ni, requested; nphases = 3)
     @test keys(gradients) == names
     @test all(
-        g -> keys(g) == (:center, :vertex) &&
-            size(g.center) == (3, ni...) && size(g.vertex) == (3, (ni .+ 1)...),
+        g -> keys(g) == (:center, :vertex, :per_area) &&
+            size(g.center) == (3, ni...) && size(g.vertex) == (3, (ni .+ 1)...) &&
+            size(g.per_area) == (3, ni...),
         values(gradients),
     )
     @test_throws ArgumentError material_controls(CPUBackend, ni, (:α,))

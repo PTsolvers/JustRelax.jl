@@ -136,4 +136,9 @@ gradients = material_controls(backend, ni, (:ρ0,); nphases = length(rheology))
 Here `backend` is `CPUBackend`, `CUDABackend`, or `AMDGPUBackend`. Pass `stokes_ad`
 as the second argument of the forward solver with `adjoint = true` and an `observation`.
 Weighted observations must store their weights on the same backend as the solver arrays.
+
+Each entry of `gradients` holds `center`, the discrete derivative of the objective with
+respect to every cell's parameter value, and `per_area`, the same derivative divided by the
+cell area. `center` scales with the cell size, so on a non-uniform grid it is largest where
+the cells are largest; plot or compare `per_area` instead.
 The adjoint kernels differentiate pointwise operations with Enzyme on the selected backend.

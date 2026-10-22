@@ -13,12 +13,18 @@ material functions, all contributions are accumulated into the same gradient.
 Returns a named tuple keyed by the selected parameter names. Every entry has the same
 pointwise, phase-wise layout:
 
-    gradients[name].center[p, I...]  # size (nphases, ni...)
-    gradients[name].vertex[p, I...]  # size (nphases, (ni .+ 1)...)
+    gradients[name].center[p, I...]    # size (nphases, ni...)
+    gradients[name].vertex[p, I...]    # size (nphases, (ni .+ 1)...)
+    gradients[name].per_area[p, I...]  # size (nphases, ni...)
 
 The center and vertex contributions remain separate during sensitivity evaluation. After
 all paths have been accumulated, the transpose of the center-to-vertex interpolation is
 added to `center`; `vertex` retains the uncombined contribution for diagnostics.
+
+`center` is the discrete derivative ∂J/∂p of each cell's parameter value, so it scales with
+the cell area. `per_area` is `center` divided by the cell area Δx·Δy: the sensitivity per
+unit area, which does not depend on the grid spacing and is the field to compare across a
+non-uniform grid.
 """
 function material_controls(
         ::Type{CPUBackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};
@@ -41,6 +47,7 @@ function _material_controls(
         (;
             center = @zeros(nphases, ni...),
             vertex = @zeros(nphases, (ni .+ 1)...),
+            per_area = @zeros(nphases, ni...),
         )
     end
     return NamedTuple{names}(gradient_fields)

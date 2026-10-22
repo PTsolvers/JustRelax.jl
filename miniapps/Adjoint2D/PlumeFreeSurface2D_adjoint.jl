@@ -1,31 +1,30 @@
-const isCUDA = false
-# const isCUDA = true
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
+    CUDA.allowscalar(false)
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustPIC
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend = @static if isCUDA
-    CUDA.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend
 else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CPUBackend
 end
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
 else
     @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 end
 
 # Load script dependencies
@@ -92,14 +91,18 @@ material_parameter(rheology, p, ::Val{:η}) = rheology[p].CompositeRheology[1].e
 # fraction at the Vy nodes normalized to sum to one. Built from the current phase ratios, so the
 # objective follows the plume as it rises.
 function plume_observation(phase_ratios, plume_phase, Vy)
-    weights = zeros(size(Vy))
+    weights = similar(Vy)
+    fill!(weights, 0)
     ratios = phase_ratios.Vy
-    for j in axes(ratios, 2), i in axes(ratios, 1)
-        # the Vy array carries one ghost column on either side
-        weights[i + 1, j] = ratios[i, j][plume_phase]
-    end
+    @parallel (@idx size(ratios)) plume_observation_weights!(weights, ratios, plume_phase)
     weights ./= sum(weights)
     return (; field = :Vy, weights)
+end
+
+@parallel_indices (i, j) function plume_observation_weights!(weights, ratios, plume_phase)
+    # The Vy array carries one ghost column on either side.
+    @inbounds weights[i + 1, j] = @index ratios[plume_phase, i, j]
+    return nothing
 end
 
 kyr(t) = round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)
@@ -208,9 +211,6 @@ marker chain are frozen during the adjoint solve.
 Returns, with `return_fields = true`, `J` of the last step (`cost`), the sensitivities of the
 last adjoint step, and the history `(; step, t, J)` of every adjoint step.
 
-For Taylor tests (`benchmark/TaylorTests2D_variational.jl`): `final_parameters` (see
-`plume_parameters`) and `η_multiplier` perturb only the last step, the one the adjoint
-differentiates, and `adjoint = false` skips every adjoint solve.
 """
 function plume_free_surface_adjoint(
         igg, nx, ny;
@@ -218,7 +218,7 @@ function plume_free_surface_adjoint(
         adjoint_every = 6,
         figdir = "PlumeFreeSurface2D_adjoint",
         solver_ϵ = 1.0e-6,
-        solver_ϵ_vel = 1e-2,
+        solver_ϵ_vel = 1.0e-2,
         CFL = 0.99,
         c_fact = 0.5,
         # the free surface admits a uniform volumetric pressure mode that the Powell-Hestenes
@@ -381,7 +381,7 @@ function plume_free_surface_adjoint(
         result.converged || error("Variational DYREL did not converge (err=$(result.err))")
 
         if run_adjoint || last_step
-            cost = sum(observation.weights .* Array(stokes.V.Vy))
+            cost = sum(observation.weights .* stokes.V.Vy)
         end
         if run_adjoint
             push!(history.step, it + 1); push!(history.t, t); push!(history.J, cost)

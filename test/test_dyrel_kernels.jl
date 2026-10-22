@@ -373,3 +373,123 @@ end
         @test Array(adjoint.V.Vy[2:(end - 1), 2:(end - 1)]) ≈ expected_Ry
     end
 end
+
+@testset "Adjoint backend allocation and pullback" begin
+    ni = (5, 4)
+    TA = PTArray(backend)
+    stokes = StokesArrays(backend, ni)
+    adjoint = AdjointStokesArrays(backend, ni, (true, false))
+    @test adjoint.P isa TA
+    @test adjoint.λV.Vx isa TA
+    @test size(adjoint.R.Rx) == (ni[1], ni[2])
+    @test AdjointStokesArrays(backend, ni...).ρ isa TA
+    controls = material_controls(backend, ni, (:ρ0,); nphases = 2)
+    @test controls.ρ0.center isa TA
+    @test controls.ρ0.vertex isa TA
+    @test size(controls.ρ0.center) == (2, ni...)
+    @test size(controls.ρ0.vertex) == (2, (ni .+ 1)...)
+    @test_throws ArgumentError material_controls(backend, ni, (:ρ0,))
+
+    adjoint = AdjointStokesArrays(backend, ni)
+    grid = Geometry(ni, (1.0, 1.0))
+    observation = JR2K.observation_mask(
+        adjoint, grid, (; field = :P, center = (0.5, 0.5), half_width = (0.5, 0.5))
+    )
+    JR2K.seed_observation!(observation)
+    @test all(==(-1.0), Array(adjoint.P))
+
+    # Exercise deferred Enzyme differentiation inside the selected device kernel.
+    adjoint.R.Rx .= 1.0
+    adjoint.R.Ry .= 1.0
+    ρg = (TA(zeros(ni)), TA(ones(ni)))
+    JR2K.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
+    @test any(!iszero, Array(adjoint.τ.xy))
+    @test any(!iszero, Array(adjoint.ρ))
+    @test all(isfinite, Array(adjoint.P))
+    expected_density = fill(-1.0, ni)
+    expected_density[:, [1, end]] .= -0.5
+    @test Array(adjoint.ρ) ≈ expected_density
+
+    # With all rows in rock, the variational pullback agrees with the standard one.
+    ϕ = RockRatio(backend, ni)
+    for field in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
+        fill!(field, 1.0)
+    end
+    masked_adjoint = AdjointStokesArrays(backend, ni)
+    masked_adjoint.R.Rx .= 1.0
+    masked_adjoint.R.Ry .= 1.0
+    JR2K.enzyme_compute_PH_residual_V!(stokes, masked_adjoint, ρg, ϕ, grid._di, ni)
+    @test Array(masked_adjoint.ρ) ≈ expected_density
+    @test Array(masked_adjoint.τ.xy) ≈ Array(adjoint.τ.xy)
+end
+
+
+@testset "Continuity pressure pullback with infinite bulk viscosity" begin
+    ni = (3, 2)
+    stokes = StokesArrays(backend, ni)
+    stokes.P .= 2.0
+    phases = PhaseRatios(backend_JP, 1, ni)
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    grid = Geometry(ni, (1.0, 1.0))
+    ηb = similar(stokes.P)
+    for bulk in (5.0, Inf), seed in (1.0, 1.0e15), variational in (false, true)
+        fill!(ηb, bulk)
+        adjoint = AdjointStokesArrays(backend, ni)
+        adjoint.R.RP .= seed
+        if variational
+            JR2K.enzyme_compute_∇V_strain_rate_RP!(
+                stokes, adjoint, (; ηb), (), phases, ϕ, grid._di, ni, 3.0e11, (;)
+            )
+        else
+            JR2K.enzyme_compute_∇V_strain_rate_RP!(
+                stokes, adjoint, (; ηb), (), phases, grid._di, ni, 3.0e11, (;)
+            )
+        end
+        @test Array(adjoint.P) ≈ fill(-seed / bulk, ni)
+        @test all(isfinite, Array(adjoint.V.Vx))
+        @test all(isfinite, Array(adjoint.V.Vy))
+    end
+end
+
+@inline function material_gradient_test_point!(out, rheology, i, j)
+    out[i, j] = rheology[1].a^2
+    return nothing
+end
+
+@testset "Material-gradient annotations on the selected backend" begin
+    ni = (3, 2)
+    TA = PTArray(backend)
+    out = TA(zeros(ni))
+    seed = TA(ones(ni))
+    fields = (; a = TA(zeros(1, ni...)))
+    paths = ((; a = (Val((:a,)),)),)
+    JR2K.differentiate_pointwise_material_kernel!(
+        material_gradient_test_point!, ni, fields, paths,
+        (out => seed, ((; a = 2.0),) => JR2K.Enzyme.Active),
+    )
+    @test Array(fields.a) == fill(4.0, 1, ni...)
+    @test all(iszero, Array(seed))
+end
+
+@inline function periodic_neighbor_sum_point!(out, input, i, j)
+    ip = i == size(out, 1) ? 1 : i + 1
+    jp = j == size(out, 2) ? 1 : j + 1
+    out[i, j] = input[i, j] + input[ip, j] + input[i, jp]
+    return nothing
+end
+
+@testset "Race-free point coloring on the selected backend" begin
+    TA = PTArray(backend)
+    for ni in ((6, 4), (5, 3))
+        input = TA(zeros(ni))
+        input_ad = TA(zeros(ni))
+        out = TA(zeros(ni))
+        out_ad = TA(ones(ni))
+        JR2K.enzyme_reverse_pointwise!(
+            periodic_neighbor_sum_point!, ni, (out => out_ad, input => input_ad)
+        )
+        @test Array(input_ad) == fill(3.0, ni)
+        @test all(iszero, Array(out_ad))
+    end
+end

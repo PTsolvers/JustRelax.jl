@@ -1,12 +1,46 @@
-using JustRelax, JustRelax.JustRelax2D
-using JustRelax.JustPIC
+const isCUDA = false
+
+@static if isCUDA
+    using CUDA
+    CUDA.allowscalar(false)
+end
+
+using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustPIC
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
+
+const backend = @static if isCUDA
+    JustRelax.CUDABackend
+else
+    JustRelax.CPUBackend
+end
+
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
+
+@static if isCUDA
+    @init_parallel_stencil(CUDA, Float64, 2)
+else
+    @init_parallel_stencil(Threads, Float64, 2)
+end
+
+function adjoint_circle_observation(grid, Vx, radius)
+    weights = zeros(eltype(Vx), size(Vx))
+    for (i, x) in enumerate(Array(grid.xvi[1])), (j, y) in enumerate(Array(grid.xci[2]))
+        if x^2 + y^2 < radius^2
+            weights[i, j + 1] = sign(x)
+        end
+    end
+    selected = count(!iszero, weights)
+    iszero(selected) && throw(ArgumentError("the grid has no Vx nodes inside the circle"))
+    weights ./= selected
+    return (; field = :Vx, weights = PTArray(backend)(weights))
+end
 using JustRelax.GeoParams
-using ParallelStencil
 using CairoMakie
-
-@init_parallel_stencil(Threads, Float64, 2)
-
-const backend = JustRelax.CPUBackend
 
 @parallel_indices (i, j) function set_normal_dyrel_shear_band_phases!(
         ratios, xc, yc, radius
@@ -42,12 +76,12 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
     (; xci, xvi) = grid
     radius = 0.1
 
-    phase_ratios = PhaseRatios(JustPIC.CPU, 2, ni)
+    phase_ratios = PhaseRatios(backend_JP, 2, ni)
     @parallel (@idx ni) set_normal_dyrel_shear_band_phases!(
-        phase_ratios.center, xci..., radius
+        phase_ratios.center, PTArray(backend).(xci)..., radius
     )
     @parallel (@idx ni .+ 1) set_normal_dyrel_shear_band_phases!(
-        phase_ratios.vertex, xvi..., radius
+        phase_ratios.vertex, PTArray(backend).(xvi)..., radius
     )
 
     rheology = (
@@ -55,17 +89,21 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
             Phase = 1,
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((
-                PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0),
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0),
+                )
+            ),
         ),
         SetMaterialParams(;
             Phase = 2,
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
-            CompositeRheology = CompositeRheology((
-                PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0),
-            )),
+            CompositeRheology = CompositeRheology(
+                (
+                    PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0),
+                )
+            ),
         ),
     )
 
@@ -81,23 +119,14 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= [x for x in xvi[1], _ in 1:(n + 2)]
-    stokes.V.Vy .= [-y for _ in 1:(n + 2), y in xvi[2]]
+    stokes.V.Vx .= PTArray(backend)([x for x in xvi[1], _ in 1:(n + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y for _ in 1:(n + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
     # Observe only velocity nodes inside the inclusion. Opposite signs on the two halves give an
     # objective that is invariant under reflection about x = 0.
-    weights = zeros(size(stokes.V.Vx))
-    for (i, x) in enumerate(xvi[1]), (j, y) in enumerate(xci[2])
-        if x^2 + y^2 < radius^2
-            weights[i, j + 1] = sign(x)
-        end
-    end
-    selected = count(!iszero, weights)
-    iszero(selected) && throw(ArgumentError("the grid has no Vx nodes inside the circle"))
-    weights ./= selected
-    observation = (; field = :Vx, weights)
+    observation = adjoint_circle_observation(grid, stokes.V.Vx, radius)
 
     dyrel = DYREL(
         backend, stokes, rheology, phase_ratios, grid.di, Inf;
@@ -186,6 +215,8 @@ end
 # Run with
 # `julia --project=. --startup-file=no \
 #     miniapps/Adjoint2D/ShearBand2D_PowerLaw_ViscositySensitivity_NormalDYREL.jl [grid_size]`.
-n = isempty(ARGS) ? 64 : parse(Int, ARGS[1])
-igg = IGG(init_global_grid(n, n, 1; init_MPI = true)...)
-shear_band_normal_dyrel_viscosity_sensitivity(igg; n)
+if !@isdefined(NO_AUTORUN)
+    n = isempty(ARGS) ? 64 : parse(Int, ARGS[1])
+    igg = IGG(init_global_grid(n, n, 1; init_MPI = true)...)
+    shear_band_normal_dyrel_viscosity_sensitivity(igg; n)
+end

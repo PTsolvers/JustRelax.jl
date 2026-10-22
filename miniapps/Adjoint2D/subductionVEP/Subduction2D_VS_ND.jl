@@ -5,17 +5,24 @@ const isCUDA = false
 
 @static if isCUDA
     using CUDA
+    CUDA.allowscalar(false)
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustPIC
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend
 else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CPUBackend
 end
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
@@ -23,15 +30,9 @@ else
     @init_parallel_stencil(Threads, Float64, 2)
 end
 
-using JustPIC
-# Threads is the default backend,
-# to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
-# and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend
-else
-    JustPIC.CPU
-end
+using CellArrays
+adjoint_host_array(A) = Array(A)
+adjoint_host_array(A::CellArrays.CellArray) = Array(CellArrays.CPUCellArray(A))
 
 # Load file with all the rheology configurations
 include("Subduction2D_setup.jl")
@@ -45,15 +46,17 @@ end
 
 # Mean horizontal velocity in a fixed box on the Vx grid. Normalizing the weights makes
 # the objective independent of the number of Vx nodes inside the observation region.
-function vx_box_observation(grid, Vx, center, half_width)
-    weights = zeros(size(Vx))
-    i = findall(x -> abs(x - center[1]) <= half_width[1], grid.xvi[1])
-    j = findall(y -> abs(y - center[2]) <= half_width[2], grid.xci[2])
+function vx_box_observation(grid, velocity, center, half_width)
+    field = :Vx
+    x, y, offset = grid.xvi[1], grid.xci[2], (0, 1)
+    i = findall(x -> abs(x - center[1]) <= half_width[1], Array(x))
+    j = findall(y -> abs(y - center[2]) <= half_width[2], Array(y))
     (isempty(i) || isempty(j)) &&
-        throw(ArgumentError("the observation box does not contain any Vx nodes"))
-    weights[i, j .+ 1] .= 1
-    weights ./= sum(weights)
-    return (; field = :Vx, weights = PTArray(backend)(weights))
+        throw(ArgumentError("the observation box does not contain any $field nodes"))
+    weights = similar(velocity)
+    fill!(weights, 0)
+    @views weights[(first(i) + offset[1]):(last(i) + offset[1]), (first(j) + offset[2]):(last(j) + offset[2])] .= inv(length(i) * length(j))
+    return (; field, weights)
 end
 
 function plot_adjoint_sensitivities(
@@ -278,7 +281,7 @@ function main(
     # Assign particles phases anomaly
     phases_device = PTArray(backend)(phases_GMG)
     phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
-    init_phases!(pPhases, phases_device, particles, xvi)
+    init_phases!(pPhases, phases_device, particles, PTArray(backend).(xvi))
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
@@ -494,7 +497,7 @@ function main(
         # ------------------------------
 
         if run_adjoint && result.converged
-            cost = sum(Array(observation.weights) .* Array(stokes.V.Vx))
+            cost = sum(observation.weights .* stokes.V.Vx)
             cost_dim = ustrip(dimensionalize(cost, cm / yr, CharDim))
             ρ = ρg[2] ./ compute_gravity(first(step_rheology))
             t_dim = ustrip(dimensionalize(t, yr, CharDim) / 1.0e6)
@@ -569,7 +572,7 @@ function main(
             xvi_dim = ntuple(i -> ustrip(dimensionalize(xvi[i], km, CharDim)), Val(2))
             xci_dim = ntuple(i -> ustrip(dimensionalize(xci[i], km, CharDim)), Val(2))
 
-            pp = [custom_argmax(p) for p in Array(phase_ratios.center)]
+            pp = [custom_argmax(p) for p in adjoint_host_array(phase_ratios.center)]
 
             (; η_vep, η) = stokes.viscosity
             velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
@@ -582,14 +585,14 @@ function main(
             data_v = (;
                 stress_xy = ustrip(dimensionalize(Array(stokes.τ.xy), Pa, CharDim)),
                 strain_rate_xy = ustrip(dimensionalize(Array(stokes.ε.xy), s^-1, CharDim)),
-                phase_vertices = [argmax(p) for p in Array(phase_ratios.vertex)],
+                phase_vertices = [argmax(p) for p in adjoint_host_array(phase_ratios.vertex)],
             )
             data_c = (;
                 P = ustrip(dimensionalize(Array(stokes.P), Pa, CharDim)),
                 T = ustrip(dimensionalize(Array(thermal.T[2:(end - 1), 2:(end - 1)]), K, CharDim)),
                 viscosity_vep = ustrip(dimensionalize(Array(η_vep), Pa * s, CharDim)),
                 viscosity = ustrip(dimensionalize(Array(η), Pa * s, CharDim)),
-                phases = [argmax(p) for p in Array(phase_ratios.center)],
+                phases = [argmax(p) for p in adjoint_host_array(phase_ratios.center)],
                 EII_pl = Array(stokes.EII_pl),
                 stress_II = ustrip(dimensionalize(Array(stokes.τ.II),Pa, CharDim)),
                 strain_rate_II = ustrip(dimensionalize(Array(stokes.ε.II), s^-1, CharDim)),
@@ -728,17 +731,19 @@ function main(
 end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
-do_vtk = true # set to true to generate VTK files for ParaView
-figdir = "Subduction2D_VS_DYREL_$(today())"
-nx = 128*2
-ny = 64*2
-# Model setup
-li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1; v_spread_cm_yr = 3.0, AgeRidge = 0.0, maxAge = 40.0)
+if !@isdefined(NO_AUTORUN)
+    do_vtk = true # set to true to generate VTK files for ParaView
+    figdir = "Subduction2D_VS_DYREL_$(today())"
+    nx = 128*2
+    ny = 64*2
+    # Model setup
+    li, origin, phases_GMG, T_GMG = GMG_subduction_2D(nx + 1, ny + 1; v_spread_cm_yr = 3.0, AgeRidge = 0.0, maxAge = 40.0)
 
-; igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
+    ; igg = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+        IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+    else
+        igg
+    end
+
+    main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, abstol = 1.0e-6);
 end
-
-main(li, origin, phases_GMG, T_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk, abstol = 1.0e-6);

@@ -36,8 +36,8 @@ function observation_mask(stokes_ad, grid, observation)
     end
 
     (; center, half_width) = observation
-    i = findall(xi -> abs(xi - center[1]) ≤ half_width[1], x) .+ offset[1]
-    j = findall(yj -> abs(yj - center[2]) ≤ half_width[2], y) .+ offset[2]
+    i = findall(xi -> abs(xi - center[1]) ≤ half_width[1], Array(x)) .+ offset[1]
+    j = findall(yj -> abs(yj - center[2]) ≤ half_width[2], Array(y)) .+ offset[2]
     (isempty(i) || isempty(j)) && throw(ArgumentError("the observation region does not contain any $field nodes"))
     return (; field, target, i, j, weights = nothing)
 end
@@ -47,7 +47,9 @@ end
 function seed_observation!(observation)
     (; target, i, j, weights) = observation
     if isnothing(weights)
-        target[i, j] .= -1.0
+        # Use a broadcast over ranges so device arrays need no host index vectors.
+        # Box selections on ordered grid coordinates are contiguous.
+        @views target[first(i):last(i), first(j):last(j)] .= -1.0
     else
         target .= .-weights
     end

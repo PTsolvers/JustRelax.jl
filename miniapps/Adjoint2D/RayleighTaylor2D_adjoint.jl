@@ -1,30 +1,30 @@
-const isCUDA = false
+const isCUDA = true
 
 @static if isCUDA
     using CUDA
+    CUDA.allowscalar(false)
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+using JustPIC
+using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
 const backend = @static if isCUDA
-    CUDA.CUDABackend
+    JustRelax.CUDABackend
 else
     JustRelax.CPUBackend
 end
 
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
+const backend_JP = @static if isCUDA
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
 
 @static if isCUDA
     @init_parallel_stencil(CUDA, Float64, 2)
 else
     @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend
-else
-    JustPIC.CPU
 end
 
 using GeoParams
@@ -77,15 +77,17 @@ material_parameter(rheology, phase, ::Val{:η}) =
     rheology[phase].CompositeRheology[1].elements[1].η.val
 
 # Mean vertical velocity in a fixed box on the Vy grid.
-function box_observation(grid, Vy, center, half_width)
-    weights = zeros(size(Vy))
-    i = findall(x -> abs(x - center[1]) <= half_width[1], grid.xci[1])
-    j = findall(y -> abs(y - center[2]) <= half_width[2], grid.xvi[2])
+function box_observation(grid, velocity, center, half_width)
+    field = :Vy
+    x, y, offset = grid.xci[1], grid.xvi[2], (1, 0)
+    i = findall(x -> abs(x - center[1]) <= half_width[1], Array(x))
+    j = findall(y -> abs(y - center[2]) <= half_width[2], Array(y))
     (isempty(i) || isempty(j)) &&
-        throw(ArgumentError("the observation box does not contain any Vy nodes"))
-    weights[i .+ 1, j] .= 1
-    weights ./= sum(weights)
-    return (; field = :Vy, weights)
+        throw(ArgumentError("the observation box does not contain any $field nodes"))
+    weights = similar(velocity)
+    fill!(weights, 0)
+    @views weights[(first(i) + offset[1]):(last(i) + offset[1]), (first(j) + offset[2]):(last(j) + offset[2])] .= inv(length(i) * length(j))
+    return (; field, weights)
 end
 
 kyr(t) = round(t / (1.0e3 * 3600 * 24 * 365.25); digits = 3)
@@ -328,7 +330,7 @@ function rayleigh_taylor2D_adjoint(
         result.converged || error("Variational DYREL did not converge (err=$(result.err))")
 
         if run_adjoint || last_step
-            cost = sum(observation.weights .* Array(stokes.V.Vy))
+            cost = sum(observation.weights .* stokes.V.Vy)
         end
         if run_adjoint
             push!(history.step, step + 1)

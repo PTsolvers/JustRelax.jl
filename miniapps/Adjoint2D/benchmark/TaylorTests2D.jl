@@ -1,6 +1,6 @@
 using LinearAlgebra
 using Random
-using JustRelax, JustRelax.JustRelax2D
+include("helpers.jl")
 using CairoMakie: Axis, Figure, Label, axislegend, lines!, save, scatter!
 
 module SinkingBlockCase

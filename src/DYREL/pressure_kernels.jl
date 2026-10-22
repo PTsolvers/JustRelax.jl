@@ -109,8 +109,10 @@ end
     return nothing
 end
 
-@inline _compute_RP!(P, P0, ∇V, Q, ηb, dt) = -∇V - (P - P0) / ηb + (Q / dt)
-@inline _compute_RP!(P, P0, ∇V, Q, ΔT, α, ηb, dt) = -∇V - (P - P0) / ηb + α * (ΔT / dt) + (Q / dt)
+# Keep the compliance constant in the pullback: differentiating GPU division by
+# ηb == Inf can produce NaNs even though the pressure derivative is exactly zero.
+@inline _compute_RP!(P, P0, ∇V, Q, ηb, dt) = -∇V - (P - P0) * inv(ηb) + (Q / dt)
+@inline _compute_RP!(P, P0, ∇V, Q, ΔT, α, ηb, dt) = -∇V - (P - P0) * inv(ηb) + α * (ΔT / dt) + (Q / dt)
 
 # Per-cell pressure residual, dispatching on the presence of ΔT / melt_fraction exactly as
 # `compute_RP_kernel!` does. Used to fold the RP computation into the strain-rate kernel while

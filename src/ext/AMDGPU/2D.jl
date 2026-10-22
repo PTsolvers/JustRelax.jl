@@ -51,6 +51,19 @@ include("../../variational_stokes/Stokes2D.jl")
 include("../../DYREL/solver.jl")
 include("../../DYREL/solver_VS.jl")
 
+include("../../DYREL/adjoint/adjoint_solver_utils.jl")
+include("../../DYREL/adjoint/Enzyme_pointwise.jl")
+include("../../DYREL/adjoint/Enzyme_kernels.jl")
+include("../../DYREL/adjoint/Enzyme_boundary_kernel.jl")
+include("../../DYREL/adjoint/Enzyme_kernels_VS.jl")
+include("../../DYREL/adjoint/Enzyme_gradients_kernels.jl")
+include("../../DYREL/adjoint/sensitivity_utils.jl")
+include("../../DYREL/adjoint/sensitivities_adjoint.jl")
+include("../../DYREL/adjoint/sensitivities_adjoint_VS.jl")
+include("../../DYREL/adjoint/objective_function.jl")
+include("../../DYREL/adjoint/solver_adjoint.jl")
+include("../../DYREL/adjoint/solver_adjoint_VS.jl")
+
 @parallel_indices (i, j) function _apply_free_surface_diagonal_AMDGPU!(
         Dy, λmaxVy, ρgy, di_center, dt
     )
@@ -77,6 +90,34 @@ function JR2D.apply_free_surface_diagonal!(
 end
 
 # Types
+# Adjoint buffers must be allocated by this module's ParallelStencil backend.
+function JR2D.AdjointStokesArrays(::Type{AMDGPUBackend}, ni::Vararg{Integer, N}) where {N}
+    return AdjointStokesArrays(tuple(ni...))
+end
+
+function JR2D.AdjointStokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
+    return AdjointStokesArrays(ni)
+end
+
+function JR2D.AdjointStokesArrays(
+        ::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, bcs::AbstractFlowBoundaryConditions
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic_dims(bcs))
+end
+
+function JR2D.AdjointStokesArrays(
+        ::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool}
+    ) where {N}
+    return AdjointStokesArrays(ni, periodic)
+end
+
+function JR2D.material_controls(
+        ::Type{AMDGPUBackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};
+        nphases = nothing,
+    ) where {N, M}
+    return _material_controls(ni, names; nphases)
+end
+
 function JR2D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end

@@ -80,7 +80,7 @@ function differentiate_pointwise_material_kernel!(
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
     op = PointwiseMaterialGradient{F, rheology_argument}(update!)
     context = (; gradient_fields, parameter_paths_by_phase)
-    reverse_colored!(op, n, primals, shadows, context)
+    reverse_colored!(op, n, primals, map(kernel_shadow, shadows), context)
     return nothing
 end
 

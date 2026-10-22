@@ -1,32 +1,4 @@
-const isCUDA = false
-# const isCUDA = true
-
-@static if isCUDA
-    using CUDA
-end
-
-using JustRelax, JustRelax.JustRelax2D
-
-const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-else
-    JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
-end
-
-using ParallelStencil, ParallelStencil.FiniteDifferences2D
-
-@static if isCUDA
-    @init_parallel_stencil(CUDA, Float64, 2)
-else
-    @init_parallel_stencil(Threads, Float64, 2)
-end
-
-using JustPIC
-const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-else
-    JustPIC.CPU # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
-end
+include("helpers.jl")
 
 # Load script dependencies
 using GeoParams, CairoMakie
@@ -94,6 +66,7 @@ function sinking_block2D(
     ly = 1.0
     lx = ly * ar
     origin = -lx / 2, -ly                         # origin coordinates
+    η_multiplier = adjoint_device_multiplier(η_multiplier)
     ni = nx, ny                           # number of cells
     li = lx, ly                           # domain length in x- and y-
     di = @. li / (nx_g(), ny_g()) # grid step in x- and -y
@@ -243,7 +216,6 @@ function sinking_block2D(
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-
         if plot_results
             # Plotting ---------------------
             # adjoint velocities live on the same staggered grid as the forward ones,
@@ -303,7 +275,7 @@ function sinking_block2D(
         # ------------------------------
     end
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
-    cost = sum(@view(stokes.V.Vy[mask.i, mask.j]))
+    cost = sum(@view(stokes.V.Vy[first(mask.i):last(mask.i), first(mask.j):last(mask.j)]))
     return return_fields ? (;
             cost,
             viscosity_gradient = Array(stokes_ad.viscosity.η),

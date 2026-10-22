@@ -1,5 +1,5 @@
 """
-    material_controls(CPUBackend, ni, parameters; nphases = nothing)
+    material_controls(backend, ni, parameters; nphases = nothing)
 
 Allocate gradient fields for the requested material parameters.
 
@@ -23,6 +23,12 @@ added to `center`; `vertex` retains the uncombined contribution for diagnostics.
 function material_controls(
         ::Type{CPUBackend}, ni::NTuple{N, Integer}, names::NTuple{M, Symbol};
         nphases = nothing,
+    ) where {N, M}
+    return _material_controls(ni, names; nphases)
+end
+
+function _material_controls(
+        ni::NTuple{N, Integer}, names::NTuple{M, Symbol}; nphases = nothing,
     ) where {N, M}
     if !isempty(names) && !(nphases isa Integer && nphases > 0)
         throw(ArgumentError("a positive nphases is required for material gradients"))

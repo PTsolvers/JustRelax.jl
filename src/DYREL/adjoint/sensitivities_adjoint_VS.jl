@@ -2,7 +2,6 @@
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, ϕ::RockRatio, rheology, _di, ni, λ_relaxation, dt,
         igg, gradients, args; viscosity_cutoff = (-Inf, Inf), free_surface = false, air_phase = 0,
-        dyrel = nothing,
     )
 
 Variational counterpart of the non-variational `compute_sensitivities!`, given a converged
@@ -15,12 +14,8 @@ differences:
     contributions through the harmonic mean, and `stokes_ad.viscosity.ηv` stays zero because
     the variational stress kernel does not read `ηv`;
   - the viscosity and density parameter paths use the same `air_phase` correction as the
-    forward viscosity and buoyancy updates, and the thermal-expansion path carries the rock
-    fraction of the continuity residual.
-
-Pass the forward `dyrel` state when `args` contains `ΔT` and thermal-expansion parameters are
-requested. Its bulk-viscosity field is needed to differentiate the variational pointwise
-continuity residual. Calls without thermal-expansion gradients may leave `dyrel = nothing`.
+    forward viscosity and buoyancy updates, and the continuity-residual paths (bulk modulus and
+    thermal expansion) carry the rock fraction of the continuity residual.
 """
 function compute_sensitivities!(
         stokes,
@@ -40,7 +35,6 @@ function compute_sensitivities!(
         free_surface = false,
         air_phase::Integer = 0,
         constitutive_scratch = nothing,
-        dyrel = nothing,
     )
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
@@ -70,10 +64,10 @@ function compute_sensitivities!(
         air_phase, viscosity_seed, include_vertex = false,
     )
 
-    # 5. Differentiate buoyancy and thermal expansion, form the density derivative, and fold
-    #    vertex material gradients into the center fields.
+    # 5. Differentiate buoyancy and the continuity residual, form the density derivative, and
+    #    fold vertex material gradients into the center fields.
     finish_density_sensitivities!(
-        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
+        stokes, stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
         _di; air_phase, ϕ,
     )
 

@@ -137,7 +137,7 @@ end
                 # do_strain_rate = false before the pressure update so it reflects the final
                 # velocity.
                 RP[i, j] = variational_continuity_residual(
-                    _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], ηb[i, j], dt, rheology, phase_ratio, ΔT, melt_fraction, i, j),
+                    _RP_cell(P[i, j], P0[i, j], div_ij, Q[i, j], bulk_viscosity(ηb, rheology, phase_ratio, dt, i, j), dt, rheology, phase_ratio, ΔT, melt_fraction, i, j),
                     ϕ.center[i, j],
                 )
             else

@@ -165,6 +165,14 @@ function _elastic_residual_objective!(stokes, adjoint, rheology, phases, ρg, gr
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
 end
 
+function _continuity_residual_objective!(stokes, adjoint, dyrel, rheology, phases, grid, dt)
+    JustRelax2D.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phases, 1.0, dt)
+    JustRelax2D.compute_∇V_strain_rate_RP!(
+        stokes, dyrel, rheology, phases, grid._di, size(stokes.P), dt, false
+    )
+    return -sum(stokes.R.RP .* adjoint.λP)
+end
+
 function _elastic_rheology(moduli, bulk_moduli)
     return ntuple(length(moduli)) do p
         elasticity = ConstantElasticity(; G = moduli[p], Kb = bulk_moduli[p])
@@ -517,6 +525,72 @@ end
     end
 end
 
+@testset "Bulk-modulus sensitivities through the continuity residual" begin
+    ni = (3, 2)
+    grid = Geometry(ni, (3.0, 2.0))
+    dt = 0.7
+    moduli = (2.0, 4.0, Inf)
+    bulk_moduli = (7.0, 11.0, 13.0)
+    phases = PhaseRatios(JustPIC.CPU, 3, ni)
+    @parallel (@idx ni) _init_G_gradient_phases!(phases.center)
+    @parallel (@idx ni .+ 1) _init_G_gradient_phases!(phases.vertex)
+    stokes = StokesArrays(CPUBackend, ni)
+    adjoint = AdjointStokesArrays(CPUBackend, ni)
+    dyrel = DYREL(CPUBackend, ni)
+    ρg = (@zeros(ni...), @zeros(ni...))
+    stokes.viscosity.η .= 3.0
+    stokes.viscosity.ηv .= 3.0
+    stokes.ε.xx .= 0.2
+    stokes.ε.yy .= -0.1
+    stokes.ε.xy .= 0.3
+    stokes.V.Vx .= reshape(cos.(1:length(stokes.V.Vx)), size(stokes.V.Vx))
+    stokes.V.Vy .= reshape(sin.(1:length(stokes.V.Vy)), size(stokes.V.Vy))
+    # A pressure change over the step is what makes the residual depend on Kb.
+    stokes.P .= reshape(0.1 .* (1:length(stokes.P)), ni)
+    stokes.P0 .= 0.05
+    adjoint.λV.Vx .= reshape(sin.(1:length(adjoint.λV.Vx)), size(adjoint.λV.Vx))
+    adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
+    adjoint.λP .= reshape(sin.(1:length(adjoint.λP)), ni)
+    objective(Kb) = _elastic_residual_objective!(
+        stokes, adjoint, _elastic_rheology(moduli, Kb), phases, ρg, grid, dt
+    ) + _continuity_residual_objective!(
+        stokes, adjoint, dyrel, _elastic_rheology(moduli, Kb), phases, grid, dt
+    )
+
+    rheology = _elastic_rheology(moduli, bulk_moduli)
+    gradients = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
+    objective(bulk_moduli)
+    JustRelax2D.compute_sensitivities!(
+        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), gradients,
+    )
+    @test all(isfinite, gradients.Kb.center)
+    for p in eachindex(bulk_moduli)
+        h = 1.0e-5
+        fd = (
+            objective(Base.setindex(bulk_moduli, bulk_moduli[p] + h, p)) -
+                objective(Base.setindex(bulk_moduli, bulk_moduli[p] - h, p))
+        ) / (2h)
+        @test !iszero(fd)
+        @test sum(@view gradients.Kb.center[p, :, :]) ≈ fd rtol = 1.0e-5 atol = 1.0e-8
+    end
+
+    # The variational residual carries the rock fraction, and so does its Kb derivative.
+    normal = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
+    variational = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
+    JustRelax2D.compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, (;), dt, normal, grid._di,
+    )
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phases, 0)
+    ϕ.center .= reshape([0.0, 0.25, 0.5, 0.75, 1.0, 0.4], ni)
+    JustRelax2D.compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, (;), dt, variational, grid._di, ϕ,
+    )
+    @test any(!iszero, normal.Kb.center)
+    @test variational.Kb.center ≈ normal.Kb.center .* reshape(ϕ.center, 1, ni...)
+end
+
 @testset "Spatial linear-viscosity sensitivities" begin
     ni = (3, 2)
     grid = Geometry(ni, (3.0, 2.0))
@@ -738,7 +812,7 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), gradients, args; dyrel,
+            (; me = 0), gradients, args,
         )
         density_gradient = copy(adjoint.ρ)
         for p in eachindex(models), name in Base.front(names), I in CartesianIndices(stokes.P)
@@ -769,7 +843,7 @@ end
         objective()
         JustRelax2D.compute_sensitivities!(
             stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), gradients, args; dyrel,
+            (; me = 0), gradients, args,
         )
         @test all(name -> gradients[name].center ≈ saved[name].center, names)
     end
@@ -777,15 +851,15 @@ end
     thermal_args = (; T = temperature, P = stokes.P, ΔT = fill(0.8, ni .+ 2))
     normal_thermal = material_controls(CPUBackend, ni, (:α,); nphases = 3)
     variational_thermal = material_controls(CPUBackend, ni, (:α,); nphases = 3)
-    JustRelax2D.compute_thermal_expansion_parameter_gradients!(
-        stokes, adjoint, dyrel, phases, rheology, thermal_args, dt, normal_thermal,
+    JustRelax2D.compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, thermal_args, dt, normal_thermal,
         grid._di,
     )
     ϕ = RockRatio(CPUBackend, ni)
     update_rock_ratio!(ϕ, phases, 0)
     ϕ.center .= reshape([0.0, 0.25, 0.5, 0.75, 1.0, 0.4], ni)
-    JustRelax2D.compute_thermal_expansion_parameter_gradients!(
-        stokes, adjoint, dyrel, phases, rheology, thermal_args, dt, variational_thermal,
+    JustRelax2D.compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, thermal_args, dt, variational_thermal,
         grid._di, ϕ,
     )
     @test variational_thermal.α.center ≈

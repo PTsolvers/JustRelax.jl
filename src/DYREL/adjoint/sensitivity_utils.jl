@@ -42,25 +42,25 @@ end
 
 """
     finish_density_sensitivities!(
-        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic, _di;
+        stokes, stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic, _di;
         air_phase=0, ϕ=nothing,
     )
 
-Differentiate the forward buoyancy and thermal-expansion functions with respect to their
+Differentiate the forward buoyancy and continuity-residual functions with respect to their
 material parameters, form the diagnostic density adjoint `stokes_ad.ρ`, and fold every vertex
 gradient into the centers. `air_phase` and `ϕ` must match the forward buoyancy update and
 continuity residual.
 """
 function finish_density_sensitivities!(
-        stokes, stokes_ad, dyrel, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
+        stokes, stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
         _di;
         air_phase::Integer = 0, ϕ = nothing,
     )
     compute_buoyancy_parameter_gradients!(
         ρg, stokes_ad, phase_ratios, rheology, args, gradients; air_phase
     )
-    compute_thermal_expansion_parameter_gradients!(
-        stokes, stokes_ad, dyrel, phase_ratios, rheology, args, dt, gradients, _di, ϕ
+    compute_continuity_parameter_gradients!(
+        stokes, stokes_ad, phase_ratios, rheology, args, dt, gradients, _di, ϕ
     )
 
     gravity = compute_gravity(first(rheology))
@@ -291,37 +291,42 @@ function compute_buoyancy_parameter_gradients!(
     return nothing
 end
 
+# The bulk modulus reaches the continuity residual through `ηb = Kb * dt`. Only elastic
+# elements carry it; `Kb = 0` disables elasticity, so it has no derivative.
+_bulk_modulus_parameter_paths(material, name::Symbol) =
+    name === :Kb ? _stress_parameter_paths(material, name) : Tuple[]
+
+@inline _continuity_parameter_paths(material, name::Symbol) =
+    (_density_parameter_paths(material, name)..., _bulk_modulus_parameter_paths(material, name)...)
+
 """
-    compute_thermal_expansion_parameter_gradients!(
-        stokes, adjoint, dyrel, phases, rheology, args, dt, gradients, _di, ϕ=nothing,
+    compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ=nothing,
     )
 
-Accumulate the material-parameter contribution from thermal expansion in the continuity
-residual by differentiating the matching pointwise forward pressure-residual function. Passing
-`ϕ` selects the variational overload, including its rock-fraction weighting and masked cells.
+Accumulate the material-parameter contributions of the continuity residual, the bulk modulus
+through the compressibility term and, when `args` contains `ΔT`, thermal expansion, by
+differentiating the matching pointwise forward pressure-residual function. The bulk viscosity
+is recomputed from `rheology` instead of read from the DYREL state, so that `Kb` is
+differentiated. Passing `ϕ` selects the variational overload, including its rock-fraction
+weighting and masked cells.
 """
-function compute_thermal_expansion_parameter_gradients!(
-        stokes, adjoint, dyrel, phases, rheology, args, dt, gradients, _di, ϕ = nothing,
+function compute_continuity_parameter_gradients!(
+        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ = nothing,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
     centers = map(entry -> entry.center, gradients)
+    ΔT = get(args, :ΔT, nothing)
+    path_function = isnothing(ΔT) ? _bulk_modulus_parameter_paths : _continuity_parameter_paths
     parameters = map(
-        material -> _resolve_parameter_paths(material, names, _density_parameter_paths),
-        rheology,
+        material -> _resolve_parameter_paths(material, names, path_function), rheology,
     )
     any(_has_parameter_paths, parameters) || return nothing
-    ΔT = get(args, :ΔT, nothing)
-    isnothing(ΔT) && return nothing
     melt_fraction = get(args, :melt_fraction, nothing)
     # Material sensitivities use the negative Lagrangian multiplier as the seed of the forward
     # pressure residual. Keep a separate array because reverse mode consumes output seeds.
     RP_seed = -copy(adjoint.λP)
-    isnothing(dyrel) && throw(
-        ArgumentError(
-            "dyrel is required to differentiate thermal expansion through the pressure residual"
-        ),
-    )
     point_args = (
         stokes.ε.xx => nothing,
         stokes.ε.yy => nothing,
@@ -332,7 +337,7 @@ function compute_thermal_expansion_parameter_gradients!(
         stokes.P => nothing,
         stokes.P0 => nothing,
         stokes.Q => nothing,
-        dyrel.ηb => nothing,
+        nothing => nothing,
     )
     if !isnothing(ϕ)
         point_args = (point_args..., ϕ => nothing)

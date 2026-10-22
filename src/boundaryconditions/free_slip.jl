@@ -1,4 +1,11 @@
 @parallel_indices (i) function free_slip!(Ax, Ay, bc)
+    free_slip_point!(Ax, Ay, bc, i)
+    return nothing
+end
+
+# Body of `free_slip!` at boundary index `i`. It is a separate function so the adjoint can
+# differentiate one point at a time (see `enzyme_reverse_pointwise!`).
+@inline function free_slip_point!(Ax, Ay, bc, i)
     @inbounds begin
         if i ≤ size(Ax, 1)
             bc.bot && (Ax[i, 1] = Ax[i, 2])

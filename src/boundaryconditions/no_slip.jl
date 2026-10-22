@@ -1,4 +1,11 @@
 @parallel_indices (i) function _no_slip_left!(Ax, Ay)
+    _no_slip_left_point!(Ax, Ay, i)
+    return nothing
+end
+
+# Bodies of the `_no_slip_*!` kernels at boundary index `i`. They are separate functions so the
+# adjoint can differentiate one point at a time (see `enzyme_reverse_pointwise!`).
+@inline function _no_slip_left_point!(Ax, Ay, i)
     @inbounds begin
         i ≤ size(Ax, 2) && (Ax[1, i] = 0)
         i ≤ size(Ay, 2) && (Ay[1, i] = -Ay[2, i])
@@ -7,6 +14,11 @@
 end
 
 @parallel_indices (i) function _no_slip_right!(Ax, Ay)
+    _no_slip_right_point!(Ax, Ay, i)
+    return nothing
+end
+
+@inline function _no_slip_right_point!(Ax, Ay, i)
     @inbounds begin
         i ≤ size(Ax, 2) && (Ax[end, i] = 0)
         i ≤ size(Ay, 2) && (Ay[end, i] = -Ay[end - 1, i])
@@ -15,6 +27,11 @@ end
 end
 
 @parallel_indices (i) function _no_slip_bot!(Ax, Ay)
+    _no_slip_bot_point!(Ax, Ay, i)
+    return nothing
+end
+
+@inline function _no_slip_bot_point!(Ax, Ay, i)
     @inbounds begin
         i ≤ size(Ax, 1) && (Ax[i, 1] = -Ax[i, 2])
         i ≤ size(Ay, 1) && (Ay[i, 1] = 0)
@@ -23,6 +40,11 @@ end
 end
 
 @parallel_indices (i) function _no_slip_top!(Ax, Ay)
+    _no_slip_top_point!(Ax, Ay, i)
+    return nothing
+end
+
+@inline function _no_slip_top_point!(Ax, Ay, i)
     @inbounds begin
         i ≤ size(Ax, 1) && (Ax[i, end] = -Ax[i, end - 1])
         i ≤ size(Ay, 1) && (Ay[i, end] = 0)

@@ -13,6 +13,13 @@
 end
 
 @parallel_indices (i) function periodic_boundary!(Vx, Vy, bc)
+    periodic_boundary_point!(Vx, Vy, bc, i)
+    return nothing
+end
+
+# Body of `periodic_boundary!` at boundary index `i`. It is a separate function so the adjoint can
+# differentiate one point at a time (see `enzyme_reverse_pointwise!`).
+@inline function periodic_boundary_point!(Vx, Vy, bc, i)
     @inbounds begin
         if i ≤ size(Vx, 2)
             # Normal component: paired faces represent the same physical plane.

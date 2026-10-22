@@ -27,6 +27,28 @@ function enzyme_reverse_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
     return nothing
 end
 
+"""
+    enzyme_reverse_pointwise!(f, n::Integer, args)
+
+One-dimensional variant for the boundary kernels: reverse `f(primals..., i)` over `1:n`. Each
+point must touch only its own boundary index `i`, so all points run concurrently without
+coloring. Differentiating the whole boundary kernel instead fails on the CPU backend, where
+Enzyme cannot reverse its `Threads.@threads` loop.
+"""
+function enzyme_reverse_pointwise!(f, n::Integer, args::Tuple)
+    primals, shadows = map(first, args), map(kernel_shadow, map(last, args))
+    @parallel (1:n) reverse_point!(f, primals, shadows)
+    return nothing
+end
+
+@parallel_indices (i) function reverse_point!(f, primals, shadows)
+    Enzyme.autodiff_deferred(
+        Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const,
+        map(annotate, primals, shadows)..., Enzyme.Const(i),
+    )
+    return nothing
+end
+
 # A type object cannot be passed as GPU kernel data. Construct Active on the device.
 @inline kernel_shadow(dx) = dx === Enzyme.Active ? Val(:active) : dx
 

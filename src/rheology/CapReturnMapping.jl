@@ -121,7 +121,7 @@ end
     return SVector(s - trial[1] + 2 * η * λ * Aτ, p - trial[2] - Kdt * λ * Ap, F - ηvp * λ)
 end
 
-function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; Pf = zero(T), maxiter = 40) where {T}
+@inline function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; Pf = zero(T), maxiter = 40) where {T}
     F, _, _ = cap_invariants(rheology, phase, s, p, EII, Pf)
     x = SVector(s, p, zero(T))
     F <= 0 && return x, true

@@ -3,8 +3,8 @@ using Test, JustRelax, GeoParams, StaticArrays, ForwardDiff
 
 const JRCap = JustRelax.JustRelax2D
 
-function cap_material(; Ψ = 0.0, η_vp = 0.1)
-    pl = DruckerPragerCap(; C = 1.0, ϕ = 30.0, Ψ, η_vp, pT = -0.5)
+function cap_material(; Ψ = 0.0, η_vp = 0.1, C = 1.0, pT = -0.5)
+    pl = DruckerPragerCap(; C, ϕ = 30.0, Ψ, η_vp, pT)
     el = ConstantElasticity(; G = 1.0, Kb = 4.0)
     material = SetMaterialParams(;
         Phase = 1, Elasticity = el,
@@ -71,6 +71,39 @@ end
         @test !ok
         λ, _, _ = JRCap.plastic_correction(rheology, 1, (0.0, 0.0, 1.0), -0.8, 0.0, 0.5, Inf, 0.1, 0.0, 1.0, true)
         @test isnan(λ)
+    end
+    # The reverse derivative of the converged state is the implicit one; it must not depend on
+    # differentiating the Newton iterations, whose ForwardDiff Jacobian does not compile on GPUs.
+    @testset "Implicit reverse derivative" begin
+        Enzyme = JRCap.Enzyme
+        inputs = (1.0, -0.8, 0.5, 4.0, 0.1) # τII trial, P trial, η, K·dt, η_vp: yields on the cap
+        state(rheology, s, p, η, Kdt, ηvp) =
+            JRCap.cap_return_mapping(rheology, 1, s, p, 0.0, η, Kdt, ηvp)[1]
+        @test state(rheology, inputs...)[3] > 0
+        h = 1.0e-6
+        central(f, plus, minus) = (f(plus) - f(minus)) / (2h)
+        for k in 1:3, autodiff in (Enzyme.autodiff, Enzyme.autodiff_deferred)
+            component(rheology, args...) = state(rheology, args...)[k]
+            d = autodiff(
+                Enzyme.Reverse, Enzyme.Const(component), Enzyme.Active,
+                Enzyme.Active(rheology), Enzyme.Active.(inputs)...,
+            )[1]
+            for i in eachindex(inputs)
+                fd = central(
+                    x -> component(rheology, x...),
+                    Base.setindex(inputs, inputs[i] + h, i), Base.setindex(inputs, inputs[i] - h, i),
+                )
+                @test d[i + 1] ≈ fd rtol = 1.0e-6 atol = 1.0e-9
+            end
+            cap = d[1][1].CompositeRheology[1].elements[3]
+            for (name, value) in ((:C, 1.0), (:pT, -0.5))
+                fd = central(
+                    v -> component((first(cap_material(; (name => v,)...)),), inputs...),
+                    value + h, value - h,
+                )
+                @test getfield(cap, name).val ≈ fd rtol = 1.0e-6 atol = 1.0e-9
+            end
+        end
     end
 end
 

@@ -14,7 +14,7 @@ unit_tests:
     # - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(["Suppressor", "Test"]);'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="OpenSSL_jll", version="3.0.16");'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="Suppressor");'
-    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add(name="CUDA");'
+    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'include("test/add_backend_package.jl"); add_backend_package("CUDA");'
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.status(); using CUDA; CUDA.versioninfo();'
     - echo "Running MPI tests (multiple ranks)"
     - echo "Running MPI test - test_diffusion2D_multiphase_MPI.jl"

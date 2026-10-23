@@ -117,6 +117,7 @@ function _solve_VS!(
     # solver loop
     wtime0 = 0.0
     ητ = deepcopy(η)
+    η_ve = similar(η)
     # compute_V! uses enough registers that CUDA caps its blocks at 256 threads, while
     # ParallelStencil's default launch can exceed that (e.g. 17×16 threads for a 17-wide range).
     nthreads_V = (32, 4, 1)
@@ -132,7 +133,7 @@ function _solve_VS!(
     while iter < 2 || (((err / err_it1) > ϵ_rel && err > ϵ_abs) && iter ≤ iterMax)
         wtime0 += @elapsed begin
             # ~preconditioner
-            compute_maxloc!(ητ, η)
+            compute_viscoelastic_maxloc!(ητ, η_ve, η, rheology, phase_ratios, dt)
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)

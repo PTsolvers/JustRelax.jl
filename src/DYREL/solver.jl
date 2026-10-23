@@ -54,7 +54,7 @@ solve_DYREL!(::CPUBackendTrait, stokes, args...; kwargs) = _solve_DYREL!(stokes,
     solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
         rheology, args, grid, dt, igg; kwargs...)
 
-Solve the 2D variational Stokes problem with DYREL relaxation and the
+Solve the 2D or 3D variational Stokes problem with DYREL relaxation and the
 `RockRatio` volume weights. This is a separate entry point from
 `solve_DYREL!`; the latter remains the standard, unweighted DYREL solver.
 
@@ -71,8 +71,9 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `ϕ`: `JustRelax.RockRatio` carrying the cell, vertex and face volume fractions.
 - `rheology`: Material properties and rheological laws.
 - `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
-- `grid`: `Geometry{2}` object carrying grid spacing and staggered-grid coordinates. A legacy
-  2D spacing tuple or named tuple is also accepted and converted to a uniform `Geometry`.
+- `grid`: `Geometry{2}` or `Geometry{3}` carrying grid spacing and staggered-grid coordinates.
+  Legacy spacing tuples are also accepted. The 3D variational solver requires uniform,
+  nonperiodic grids.
 - `dt`: Time step.
 - `igg`: `IGG` object for global grid information (MPI).
 
@@ -456,6 +457,10 @@ end
 @inline function masked_extrema(mask, A)
     lo = mapreduce((m, a) -> m ? a : typemax(a), min, mask, A)
     hi = mapreduce((m, a) -> m ? a : typemin(a), max, mask, A)
+    if MPI.Initialized()
+        lo = MPI.Allreduce(lo, MPI.MIN, MPI.COMM_WORLD)
+        hi = MPI.Allreduce(hi, MPI.MAX, MPI.COMM_WORLD)
+    end
     return lo, hi
 end
 

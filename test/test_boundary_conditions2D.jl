@@ -555,6 +555,12 @@ end
             @test JustRelax.isdirichlet(bc, 1, 1) === false
             @test JustRelax.isdirichlet(bc, 5, 5) === true
 
+            B = JustRelax.apply_dirichlet(A, bc)
+            @test all(B[4:7, 4:7] .== 5)
+            @test B[1, 1] == A[1, 1]
+            JustRelax.apply_dirichlet!(A, bc)
+            @test A == B
+
             bc2 = JustRelax.ConstantDirichletBoundaryCondition()
 
             @test all(JustRelax.apply_dirichlet(A, bc2) == A)

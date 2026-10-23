@@ -547,3 +547,19 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
 
     return nothing
 end
+
+# Visco-elastic viscosity η_ve = 1 / (1/η + 1/(G·dt)) of each cell. The stress update
+# converges to this stiffness, so it sets the pseudo-transient step: the viscous η alone
+# shrinks the step by η/(G·dt) wherever elasticity dominates and stalls the iterations.
+@parallel_indices (I...) function compute_viscoelastic_viscosity!(η_ve, η, rheology, phase_ratios, dt)
+    phase = @inbounds phase_ratios[I...]
+    G = fn_ratio(get_shear_modulus, rheology, phase)
+    @inbounds η_ve[I...] = ϕ_weighted_harmonic(one(eltype(η)), η[I...], G, dt)
+    return nothing
+end
+
+function compute_viscoelastic_maxloc!(ητ, η_ve, η, rheology, phase_ratios, dt; kwargs...)
+    @parallel (@idx size(η)) compute_viscoelastic_viscosity!(η_ve, η, rheology, phase_ratios.center, dt)
+    compute_maxloc!(ητ, η_ve; kwargs...)
+    return nothing
+end

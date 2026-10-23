@@ -279,10 +279,11 @@ function compute_stress_DYREL!(
         λ_relaxation,
         dt;
         Pf = nothing,
+        ϕ = nothing,
     )
 
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) compute_stress_DYREL!(
+    @parallel (@idx ni) cld.(ni, (32, 4, 1)) (32, 4, 1) compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
@@ -309,6 +310,7 @@ function compute_stress_DYREL!(
         λ_relaxation,
         dt,
         periodic_dims(stokes),
+        ϕ,
     )
     return nothing
 end
@@ -340,6 +342,7 @@ end
         λ_relaxation,
         dt,
         periodic,
+        ϕ,
     )
 
     ni = size(P)
@@ -377,7 +380,7 @@ end
         ratio = @inbounds phase_yz[I...]
 
         # compute local stress
-        _, _, _, τyz_I, _, _, _, _, _, εyz_pl, _, _, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
+        _, _, _, τyz_I, _, _, _, _, _, εyz_pl, _, _, _, λ_I, = valid_stress(ϕ, Val(:yz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
 
         # update arrays
         τ_shear[1][I...] = τyz_I
@@ -410,7 +413,7 @@ end
         λvij = λv[2][I...]
         ratio = @inbounds phase_xz[I...]
 
-        _, _, _, _, τxz_I, _, _, _, _, _, εxz_pl, _, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
+        _, _, _, _, τxz_I, _, _, _, _, _, εxz_pl, _, _, λ_I, = valid_stress(ϕ, Val(:xz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
 
         τ_shear[2][I...] = τxz_I
         εij_pl[2][I...] = εxz_pl
@@ -442,7 +445,7 @@ end
         λvij = λv[3][I...]
         ratio = @inbounds phase_xy[I...]
 
-        _, _, _, _, _, τxy_I, _, _, _, _, _, εxy_pl, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
+        _, _, _, _, _, τxy_I, _, _, _, _, _, εxy_pl, _, λ_I, = valid_stress(ϕ, Val(:xy), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
 
         τ_shear[3][I...] = τxy_I
         εij_pl[3][I...] = εxy_pl
@@ -475,7 +478,7 @@ end
         ratio = @inbounds phase_ratios_center[I...]
 
         τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, _, _, _, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-            compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij)
+            valid_stress(ϕ, Val(:center), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij) : empty_stress_solution(ε)
 
         τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
         τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
@@ -821,6 +824,10 @@ end
 ## VARIATIONAL STOKES STRESS KERNELS
 
 function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt; Pf = nothing)
+    if ndims(stokes.P) == 3
+        return compute_stress_DYREL!(Val(3), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, ϕ)
+    end
+
     ni = size(phase_ratios.vertex)
     @parallel (@idx ni) compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),          # centers

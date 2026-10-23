@@ -124,8 +124,9 @@ function _solve_VS!(
 
     # ~preconditioner
     ητ = deepcopy(η)
+    η_ve = similar(η)
     # @hide_communication b_width begin # communication/computation overlap
-    compute_maxloc!(ητ, η; window = (1, 1))
+    compute_viscoelastic_maxloc!(ητ, η_ve, η, rheology, phase_ratios, dt; window = (1, 1))
     update_halo!(ητ)
     # end
 
@@ -168,7 +169,7 @@ function _solve_VS!(
         iterMin < iter && ((err / err_it1) < ϵ_rel || err < ϵ_abs) && break
 
         wtime0 += @elapsed begin
-            compute_maxloc!(ητ, η; window = (1, 1))
+            compute_viscoelastic_maxloc!(ητ, η_ve, η, rheology, phase_ratios, dt; window = (1, 1))
             update_halo!(ητ)
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)

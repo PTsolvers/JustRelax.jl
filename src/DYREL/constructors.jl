@@ -229,9 +229,12 @@ end
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt, ρgy = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+    if ndims(stokes.P) == 3 && ImplicitGlobalGrid.grid_is_initialized()
+        update_halo!(stokes.viscosity.η, dyrel.γ_eff)
+    end
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
+    Gershgorin_variational!(Val(ndims(stokes.P)), dyrel, stokes, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)

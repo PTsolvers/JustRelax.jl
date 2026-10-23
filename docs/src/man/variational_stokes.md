@@ -303,8 +303,8 @@ solve_VariationalStokes!(
 
 The same weighted operator is available with dynamic relaxation. Build `DYREL`
 with the `RockRatio` and call `solve_VariationalDYREL!`; see
-[DYREL](./DYREL.md#2D-variational-DYREL). The variational DYREL path reuses the
-center, vertex, and face weights described here and is 2D-only.
+[DYREL](./DYREL.md#Variational-DYREL). The variational DYREL path reuses the
+center, vertex, and face weights described here in 2D and 3D.
 
 Options may be given either as the plain keywords above or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -316,7 +316,7 @@ not produce the intended air/liquid buoyancy or viscosity weighting.
 ## Prescribed surface pressure
 
 Pass `surface_pressure` to `solve_VariationalStokes!` (2D or 3D) or
-`solve_VariationalDYREL!` (2D) to load the embedded rock–air interface:
+`solve_VariationalDYREL!` (2D/3D) to load the embedded rock–air interface:
 
 ```julia
 solve_VariationalStokes!(

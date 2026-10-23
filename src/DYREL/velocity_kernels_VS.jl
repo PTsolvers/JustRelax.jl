@@ -1,7 +1,7 @@
 ## VARIATIONAL (masked) DYREL VELOCITY KERNELS
 #
 # Masked (RockRatio ϕ) counterparts of the fused DYREL kernels in velocity_kernels.jl, used by the
-# variational `_solve_DYREL!` (solver_VS.jl). 2D only — the variational DYREL path is 2D-only.
+# variational solver (solver_VS.jl). The 3D kernels live in variational3D.jl.
 
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused, masked)
 # Masked analogue of `compute_∇V_strain_rate_RP!`: divergence, deviatoric strain rate and the
@@ -16,6 +16,9 @@ function compute_∇V_strain_rate_RP!(
         stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, do_strain_rate = true;
         ΔT = nothing, melt_fraction = nothing, kwargs...,
     )
+    if ndims(stokes.P) == 3
+        return compute_variational_kinematics3D!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
+    end
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,

@@ -69,6 +69,9 @@ function _compute_viscosity!(
         cutoff,
         fn_viscosity::F
     ) where {F}
+    if ndims(stokes.P) == 3
+        return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
+    end
     ni = size(stokes.viscosity.η)
     # centered viscosity
     @parallel (@idx ni) compute_viscosity_kernel!(

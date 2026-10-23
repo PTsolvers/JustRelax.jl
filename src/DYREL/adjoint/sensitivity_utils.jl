@@ -214,12 +214,13 @@ function compute_viscosity_parameter_gradients!(
     )
     any(_has_parameter_paths, parameters) || return nothing
     η_bar, ηv_bar = viscosity_seed
-
+    # Copies, so that a primal write of the recomputed viscosity cannot replace the forward
+    # viscosity, e.g. one scaled by `η_multiplier`. `DuplicatedNoNeed` does not rule it out.
     differentiate_pointwise_material_kernel!(
         compute_viscosity_kernel_point!, size(phases.center),
         map(entry -> entry.center, gradients), parameters,
         (
-            stokes.viscosity.η => copy(η_bar),
+            copy(stokes.viscosity.η) => copy(η_bar),
             1.0 => nothing,
             phases.center => nothing,
             stokes.τ.xx => nothing,
@@ -238,7 +239,7 @@ function compute_viscosity_parameter_gradients!(
             compute_viscosity_kernel_point!, size(phases.vertex),
             map(entry -> entry.vertex, gradients), parameters,
             (
-                stokes.viscosity.ηv => copy(ηv_bar),
+                copy(stokes.viscosity.ηv) => copy(ηv_bar),
                 1.0 => nothing,
                 phases.vertex => nothing,
                 stokes.τ.xx_v => nothing,

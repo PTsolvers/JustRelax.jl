@@ -48,6 +48,9 @@ function solve_VariationalDYREL_adjoint!(
         kwargs...,
     ) where {N}
     dim = Val(N)
+    # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
+    # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
+    λ_relaxation = one(eltype(stokes.P))
     _di = grid._di
     ni = size(stokes.P)
     periodic = periodic_dims(stokes)
@@ -96,7 +99,7 @@ function solve_VariationalDYREL_adjoint!(
     if !isnothing(constitutive_scratch)
         compute_constitutive_tangent_amplification!(
             constitutive_scratch, stokes, rheology, phase_ratios, ϕ,
-            λ_relaxation_DR, dt, args, viscosity_cutoff; air_phase,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
         )
         update_variational_adjoint_dτV_α_β!(dyrel, constitutive_scratch.η)
     end
@@ -122,7 +125,7 @@ function solve_VariationalDYREL_adjoint!(
 
         variational_adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni,
-            dt, λ_relaxation_PH, free_surface, air_phase, maskP,
+            dt, λ_relaxation, free_surface, air_phase, maskP,
             constitutive_scratch, viscosity_cutoff,
         )
 
@@ -183,7 +186,7 @@ function solve_VariationalDYREL_adjoint!(
 
             variational_adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
-                ni, dt, λ_relaxation_DR, free_surface, air_phase, maskP,
+                ni, dt, λ_relaxation, free_surface, air_phase, maskP,
                 constitutive_scratch, viscosity_cutoff,
             )
 
@@ -243,7 +246,7 @@ function solve_VariationalDYREL_adjoint!(
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, ϕ, rheology, _di, ni, λ_relaxation_PH, dt, igg,
+        stokes, stokes_ad, ρg, phase_ratios, ϕ, rheology, _di, ni, λ_relaxation, dt, igg,
         gradients, args; viscosity_cutoff, free_surface, air_phase, constitutive_scratch,
     )
 

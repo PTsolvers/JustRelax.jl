@@ -34,6 +34,9 @@ function solve_DYREL_adjoint!(
         kwargs...,
     ) where {N}
     dim = Val(N)
+    # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
+    # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
+    λ_relaxation = one(eltype(stokes.P))
     v_dofs = velocity_dofs(dim, periodic_dims(stokes))
     p_dof = pressure_dof(dim)
     _di = grid._di
@@ -80,7 +83,7 @@ function solve_DYREL_adjoint!(
     if !isnothing(constitutive_scratch)
         compute_constitutive_tangent_amplification!(
             constitutive_scratch, stokes, rheology, phase_ratios,
-            λ_relaxation_DR, dt, args, viscosity_cutoff,
+            λ_relaxation, dt, args, viscosity_cutoff,
         )
         update_adjoint_dτV_α_β!(
             dyrel, constitutive_scratch.η, constitutive_scratch.ηv,
@@ -107,7 +110,7 @@ function solve_DYREL_adjoint!(
 
         adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-            λ_relaxation_PH, free_surface, viscosity_cutoff, linear_viscosity,
+            λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
             constitutive_scratch,
         )
 
@@ -164,7 +167,7 @@ function solve_DYREL_adjoint!(
 
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-                λ_relaxation_DR, free_surface, viscosity_cutoff, linear_viscosity,
+                λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
                 constitutive_scratch,
             )
 
@@ -216,7 +219,7 @@ function solve_DYREL_adjoint!(
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation_PH, dt, igg,
+        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation, dt, igg,
         gradients, args; viscosity_cutoff, free_surface, constitutive_scratch,
     )
 

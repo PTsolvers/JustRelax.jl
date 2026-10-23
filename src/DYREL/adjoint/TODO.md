@@ -20,19 +20,21 @@ pressure objective never accepted). Verified against central FD (rel. err ≤ 6e
 Note: a `:P` objective needs a unique pressure (finite `Kb` or an open boundary). On a closed,
 incompressible domain the pressure is defined up to a constant and the adjoint has no solution.
 
-### 2. ⬜ Plastic multiplier relaxation `λ_relaxation < 1` scales the plastic tangent
+### 2. ✅ Plastic multiplier relaxation `λ_relaxation < 1` scaled the plastic tangent
 Drucker–Prager: `λ = (1 - r)·λold + r·F/(η + ηvp + …)` (`plastic_correction`,
-`src/rheology/CapReturnMapping.jl`). The pullback holds `stokes.λ` constant, so the derivative is
-`r ×` the converged tangent. Affects the adjoint operator (`λ_relaxation_PH/DR`) and the sensitivity
-pass. **Fix:** pass `1` in the adjoint, as the viscosity path already does (`1.0 => nothing`); at
-convergence the value is unchanged. Latent: defaults and all miniapps use 1. The cap return map
-already returns the unrelaxed multiplier.
+`src/rheology/CapReturnMapping.jl`). The pullback holds `stokes.λ` constant, so the derivative was
+taken of the relaxed update, in the adjoint operator and in the sensitivity pass (r = 0.5: adjoint
+0.499 vs FD 2.407).
 
-### 3. ⬜ Sensitivity pass can overwrite the forward viscosity
-`compute_viscosity_parameter_gradients!` (`sensitivity_utils.jl`) passes `stokes.viscosity.η` / `ηv`
-as the output of the differentiated viscosity function, which writes η recomputed from the rheology
-(relaxation 1). Breaks `η_multiplier` / `update_material = false` runs and changes η for the next
-step and for output. **Fix:** use a copy, like `η_target` in the adjoint loop.
+**Fix:** both adjoint solvers differentiate with `λ_relaxation = 1`, whatever the forward used; at
+convergence λ equals its trial value, so the state is unchanged. Tested with r = 1 and 0.5 in
+`test/test_adjoint_gradients.jl`.
+
+### 3. ✅ Sensitivity pass could overwrite the forward viscosity (defensive)
+`compute_viscosity_parameter_gradients!` passed `stokes.viscosity.η` / `ηv` as the output of the
+differentiated viscosity function. Not reproduced on CPU (an `η_multiplier`-scaled viscosity
+survives: Enzyme skips the `DuplicatedNoNeed` primal write), but Enzyme does not guarantee that.
+Now passes copies; `test/test_adjoint_gradients.jl` checks the forward viscosity is kept.
 
 ### 4. ⬜ Race in the colored reverse on periodic grids with an odd cell count
 The vertex-extent reverse (`ni + 1` points) wraps periodic vertices onto cells `{nx, 1}`. For odd
@@ -41,10 +43,11 @@ The vertex-extent reverse (`ni + 1` points) wraps periodic vertices onto cells `
 Non-deterministic on GPU / threads. **Fix:** a separate color for the periodic seam.
 
 ### 5. 🟡 End-to-end gradient test
-`test/test_adjoint_gradients.jl` now checks density gradients against FD for both solvers and both
-`:Vy` / `:P`. Still missing: viscosity, plasticity (DP and cap), `Kb`, nonlinear viscosity,
-periodic BCs, masked (air) variational case. The FD/Taylor benchmarks in
-`miniapps/Adjoint2D/benchmark` are not run by CI.
+`test/test_adjoint_gradients.jl` checks against central FD: density (both solvers, `:Vy` and
+`:P`), viscosity (standard), Drucker–Prager cohesion with λ_relaxation 1 and 0.5. Runtime ~4 min on
+CPU, mostly the plastic case (ϵ = 1e-10). Still missing: cap plasticity, `Kb`, nonlinear viscosity,
+periodic BCs, masked (air) variational case, variational viscosity/plasticity. The FD/Taylor
+benchmarks in `miniapps/Adjoint2D/benchmark` are not run by CI.
 
 ## P2 — Consistency and robustness
 

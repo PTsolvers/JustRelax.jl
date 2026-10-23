@@ -87,7 +87,7 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
 - `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update
-  (local update and volumetric-mode relaxation together); `0` takes the plain update. Default: `0`.
+  (local update and volumetric-mode relaxation together); `0` takes the plain update. Default: `3`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -174,6 +174,7 @@ function _solve_DYREL!(
     reset_dyrel_vertex_λ!(dyrel_vertex_λ(stokes, dim))
 
     # Iteration loop
+    converged = false
     err_min = Inf
     err = 1.0
     errV0 = ntuple(_ -> 1.0, dim)
@@ -261,7 +262,10 @@ function _solve_DYREL!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        if err < ϵ
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -384,7 +388,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot, converged)
 
 end
 

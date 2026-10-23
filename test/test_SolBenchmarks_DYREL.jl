@@ -22,6 +22,7 @@ else
 end
 
 using JustPIC
+using ExactFieldSolutions, LinearAlgebra, Statistics
 import JustPIC.GridGeometryUtils as GGU
 const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
@@ -79,6 +80,25 @@ function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, i
         iters = solve_DYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg; kwargs)
     end
     return stokes, iters
+end
+
+# Relative L2 errors of P, Vx and Vy against the analytical solution `sol`, evaluated at the
+# staggered locations; P is compared up to a constant, which free-slip boundaries leave free.
+# `sign = -1` flips the analytical (P, V) pair for a body force of the opposite sign.
+function analytical_error(stokes, ni, sol; sign = 1)
+    grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+    xc, yc = grid.xci
+    xv, yv = grid.xvi
+    P = [sign * sol((x, y)).p for x in xc, y in yc]
+    Vx = [sign * sol((x, y)).V.x for x in xv, y in yc]
+    Vy = [sign * sol((x, y)).V.y for x in xc, y in yv]
+    Pnum = Array(stokes.P)
+    rel(A, B) = norm(A .- B) / norm(B)
+    return (
+        P = rel(Pnum .- mean(Pnum), P .- mean(P)),
+        Vx = rel(Array(stokes.V.Vx)[:, 2:(end - 1)], Vx),
+        Vy = rel(Array(stokes.V.Vy)[2:(end - 1), :], Vy),
+    )
 end
 
 # ------------------------------------------------------------------------------------ #
@@ -274,37 +294,60 @@ end
             stokes, iters = run_solcx(igg, nx, ny; variational = false)
             stokes_vs, iters_vs = run_solcx(igg, nx, ny; variational = true)
 
-            @test iters.err_evo_tot[end] < 1.0e-5
+            @test iters.converged
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.001393999576558936 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.0031585683659086468 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.P)) ≈ 0.25700842902418103 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0016306775444691914 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.003563606723483924 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.25341866240639105 rtol = 1.0e-6
+            # discretization error dominates at this resolution; the bounds catch a failed solve
+            solcx = X -> Stokes2D_SolCx_Zhong1996(X; params = (ηA = 1.0, ηB = 1.0e6))
+            e = analytical_error(stokes, (nx, ny), solcx; sign = -1)
+            @test e.P < 3.0e-2
+            @test e.Vx < 0.2
+            @test e.Vy < 0.2
+            e = analytical_error(stokes_vs, (nx, ny), solcx; sign = -1)
+            @test e.P < 3.0e-3
+            @test e.Vx < 2.5e-2
+            @test e.Vy < 2.0e-2
+            # reference maxima from solves converged to ϵ = 1e-11
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.001393866775260037 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 0.003158124613995957 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes.P)) ≈ 0.2570106654136802 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.001630596298869664 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 0.003563323003137686 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.2534200525150174 rtol = 1.0e-3
         end
 
         @testset "SolKz" begin
             stokes, iters = run_solkz(igg, nx, ny; variational = false)
             stokes_vs, iters_vs = run_solkz(igg, nx, ny; variational = true)
 
-            @test iters.err_evo_tot[end] < 1.0e-6
+            @test iters.converged
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010315674748001426  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045868650922067e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes.P)) ≈ 0.10001155920216592  rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.000105434676741088 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.162915680233704e-5 rtol = 1.0e-6
-            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1029917627786186 rtol = 1.0e-6
+            # a residual of ϵ = 1e-6 still leaves a pressure error of several percent at Δη = 1e6,
+            # so the pressure bounds separate an accurate solve from an early exit
+            solkz = X -> Stokes2D_SolKz_Zhong1996(X; params = (Δη = 1.0e6, B = log(1.0e6) / 2, km = 2, n = 3, σ = 1.0))
+            e = analytical_error(stokes, (nx, ny), solkz)
+            @test e.P < 4.0e-2
+            @test e.Vx < 6.0e-3
+            @test e.Vy < 8.0e-3
+            e = analytical_error(stokes_vs, (nx, ny), solkz)
+            @test e.P < 2.0e-2
+            @test e.Vx < 2.5e-2
+            @test e.Vy < 2.5e-2
+            # reference maxima from solves converged to ϵ = 1e-11
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.0001031561697245344 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045859033010519e-5 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes.P)) ≈ 0.09906051149834855 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.0001054354954748829 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.16294385590732e-5 rtol = 1.0e-3
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1024492179090138 rtol = 1.0e-3
         end
 
         @testset "SolVi" begin
             stokes, iters = run_solvi(igg, nx, ny; variational = false)
             stokes_vs, iters_vs = run_solvi(igg, nx, ny; variational = true)
 
-            @test iters.err_evo_tot[end] < 1.0e-6
+            @test iters.converged
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
             @test maximum(abs, Array(stokes.P)) ≈ 2.517811125543723 rtol = 1.0e-6

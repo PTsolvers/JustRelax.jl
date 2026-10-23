@@ -89,6 +89,15 @@ function solve_DYREL_adjoint!(
             dyrel, constitutive_scratch.η, constitutive_scratch.ηv,
         )
     end
+    damping = AdjointDamping(dyrel)
+    update_steps! = if isnothing(constitutive_scratch)
+        () -> update_dτV_α_β!(dyrel)
+    else
+        # `constitutive_scratch.η` is reused as scratch during the iterations, so keep the
+        # tangent amplification it holds now
+        amplification = (copy(constitutive_scratch.η), copy(constitutive_scratch.ηv))
+        () -> update_adjoint_dτV_α_β!(dyrel, amplification...)
+    end
 
     # Iteration loop
     err_min = Inf
@@ -190,6 +199,9 @@ function solve_DYREL_adjoint!(
                 dyrel.dτVy,
                 _di.center,
             )
+            update_adjoint_damping!(
+                damping, dyrel, adjoint_velocity_residuals, iter, nout, ni, update_steps!
+            )
 
             # Residual check
             if iszero(iter % nout)
@@ -216,9 +228,7 @@ function solve_DYREL_adjoint!(
     if !converged
         # Leave the shared DYREL state ready for a subsequent solve, but do not calculate or
         # return sensitivities from an unconverged adjoint state.
-        dyrel.dVxdτ .= 0
-        dyrel.dVydτ .= 0
-        !isnothing(constitutive_scratch) && update_dτV_α_β!(dyrel)
+        restore_forward_damping!(damping, dyrel)
         error(
             "DYREL adjoint did not converge " *
                 "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
@@ -231,10 +241,8 @@ function solve_DYREL_adjoint!(
         gradients, args; viscosity_cutoff, free_surface, constitutive_scratch,
     )
 
-    # Do not carry adjoint iteration history into the next forward solve.
-    dyrel.dVxdτ .= 0
-    dyrel.dVydτ .= 0
-    !isnothing(constitutive_scratch) && update_dτV_α_β!(dyrel)
+    # Do not carry adjoint damping or iteration history into the next forward solve.
+    restore_forward_damping!(damping, dyrel)
 
     return stokes_ad
 end

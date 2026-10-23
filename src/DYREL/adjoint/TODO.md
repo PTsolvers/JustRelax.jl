@@ -113,11 +113,26 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
 
 ## P3 — Performance
 
-11. ⬜ **Adjoint needs 50–100× the forward iterations** (128²: forward ~300–500 it / 5 s, adjoint
-    23,700–47,600 it / 265–520 s), each ~3.5× a forward iteration. Candidates: step sizes fixed at
-    the start (forward re-estimates every `nout` via Gershgorin); relative-to-first-residual
-    criterion stricter than the forward's scale-free one; `constitutive_scratch` (~12 arrays)
-    reallocated on every call.
+11. 🟡 **Adjoint efficiency.** Profiled 2026-10-23 (CPU, 1 thread). One adjoint iteration at 128²
+    costs 4.8 ms (viscoelastic), 6.7 ms (Drucker–Prager), 12.3 ms (cap); the stress pullback is
+    54–83 % of it, since it recomputes the return mapping (cap Newton solve included) every
+    iteration although the forward state is fixed.
+    - ✅ **Adaptive damping.** The adjoint kept the forward's final damping, which does not fit the
+      softer consistent tangent. Both solvers now re-estimate λmin every `nout` iterations
+      (`AdjointDamping`, `update_adjoint_damping!`) and restore the forward damping afterwards.
+      Drucker–Prager shear 64²: 64,200 → 6,700 adjoint iterations; linear sinking block
+      1,800 → 1,400; variational Drucker–Prager 6,700 → 4,950. Gradient tests: 136 → 59 s and
+      313 → 146 s. The dike example (50–100× forward) still to be re-measured.
+    - ⬜ Precompute the local stress tangent once per adjoint solve and apply it with a stencil
+      kernel (folds in the nonlinear viscosity feedback and ∂ρg/∂P). Estimated 2.5–6× per
+      iteration.
+    - ⬜ Hand-written transposes of the linear momentum and continuity residuals (the momentum
+      pullback costs 5× its forward kernel). ~20–25 % of a viscoelastic iteration.
+    - ⬜ Skip the buoyancy pullback for pressure-independent density (~10 %).
+    - ⬜ Thread/GPU scaling: 4 threads give only 1.5× per iteration (colored launches); mostly
+      solved by the two stencil items.
+    - ⬜ Warm start from the previous step's λ; a separate adjoint tolerance; merge the
+      per-iteration zeroing and avoid per-call allocations.
 
 ## P4 — Cleanup
 

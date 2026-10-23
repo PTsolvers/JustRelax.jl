@@ -13,6 +13,83 @@ function initialize_adjoint_iteration!(adjoint, ni)
     return nothing
 end
 
+# The adjoint iterates on the consistent tangent of the converged forward state, whose smallest
+# eigenvalue can lie far from the one the forward damping was tuned to (a yielding plastic
+# tangent is much softer). Re-estimate the damping every `nout` iterations as the forward
+# solver does: λmin is the Rayleigh quotient of the last velocity step against the change of the
+# preconditioned residual it caused. The residual of a step only exists in the next iteration,
+# so the step and its residual are stored one iteration before each estimate.
+struct AdjointDamping{C, M}
+    cV0::C         # forward damping, restored after the adjoint solve
+    masks::M       # momentum rows entering the estimate
+    stored::Base.RefValue{Int}  # iteration of the stored step, 0 if none
+end
+
+function AdjointDamping(dyrel, masks)
+    return AdjointDamping((copy(dyrel.cVx), copy(dyrel.cVy)), masks, Ref(0))
+end
+
+AdjointDamping(dyrel) = AdjointDamping(
+    dyrel, (fill!(similar(dyrel.Dx, Bool), true), fill!(similar(dyrel.Dy, Bool), true))
+)
+
+@inline preconditioned_residual(R, D) = iszero(D) ? zero(R) : R / D
+
+"""
+    update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, update_steps!)
+
+Store the last velocity step before an iteration that is a multiple of `nout`; at that
+iteration, update the damping `c = 2√λmin·c_fact` from the stored step and call
+`update_steps!()` to recompute the pseudo-time steps. `residuals` are the unpreconditioned
+adjoint momentum residuals of the current iterate.
+"""
+function update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, update_steps!)
+    if iszero((iter + 1) % nout)
+        @parallel (@idx ni) compute_dV!(
+            (dyrel.dVx, dyrel.dVy), (dyrel.dVxdτ, dyrel.dVydτ),
+            (dyrel.βVx, dyrel.βVy), (dyrel.dτVx, dyrel.dτVy),
+        )
+        @. dyrel.Rx0 = preconditioned_residual(residuals[1], dyrel.Dx)
+        @. dyrel.Ry0 = preconditioned_residual(residuals[2], dyrel.Dy)
+        damping.stored[] = iter
+    elseif iszero(iter % nout) && damping.stored[] == iter - 1
+        # a stored step from before a λP update would mix in the pressure change
+        λminV = adjoint_λminV(
+            (dyrel.dVx, dyrel.dVy), residuals, (dyrel.Dx, dyrel.Dy), (dyrel.Rx0, dyrel.Ry0),
+            damping.masks,
+        )
+        @parallel (@idx ni) update_cV!((dyrel.cVx, dyrel.cVy), 2 * √(λminV) * dyrel.c_fact)
+        update_steps!()
+    end
+    return nothing
+end
+
+function adjoint_λminV(dV, residuals, D, residuals0, masks)
+    numerator = sum(
+        ntuple(Val(2)) do d
+            sum_mpi(
+                (m, dv, r, Dd, r0) -> m ? dv * (preconditioned_residual(r, Dd) - r0) : zero(dv),
+                masks[d], dV[d], residuals[d], D[d], residuals0[d],
+            )
+        end
+    )
+    denominator = sum(
+        ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(2))
+    )
+    return rayleigh_quotient(numerator, denominator)
+end
+
+# Hand the shared DYREL state back to the forward solver: its damping, the pseudo-time steps
+# derived from it, and no velocity history.
+function restore_forward_damping!(damping, dyrel)
+    copyto!(dyrel.cVx, damping.cV0[1])
+    copyto!(dyrel.cVy, damping.cV0[2])
+    update_dτV_α_β!(dyrel)
+    dyrel.dVxdτ .= 0
+    dyrel.dVydτ .= 0
+    return nothing
+end
+
 # Reference of the relative momentum residual: the first nonzero one. A pressure objective
 # seeds only the continuity adjoint, so the momentum residual stays zero until λP is nonzero.
 function momentum_residual_reference(errV0, errV)

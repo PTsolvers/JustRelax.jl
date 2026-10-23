@@ -50,12 +50,29 @@ Non-periodic coloring is unchanged. `test_dyrel_kernels.jl` checks that no color
 (the old coloring fails for 3, 5, 7, 9 cells) and runs a periodic vertex-stencil pullback on the
 selected backend. Not yet run on GPU.
 
-### 5. 🟡 End-to-end gradient test
-`test/test_adjoint_gradients.jl` checks against central FD: density (both solvers, `:Vy` and
-`:P`), viscosity (standard), Drucker–Prager cohesion with λ_relaxation 1 and 0.5. Runtime ~4 min on
-CPU, mostly the plastic case (ϵ = 1e-10). Still missing: cap plasticity, `Kb`, nonlinear viscosity,
-periodic BCs, masked (air) variational case, variational viscosity/plasticity. The FD/Taylor
-benchmarks in `miniapps/Adjoint2D/benchmark` are not run by CI.
+### 5. ✅ End-to-end gradient tests
+Two layers, all on the selected backend (CPU-verified only so far):
+
+- **Operator layer**, `test/test_adjoint_dot_product.jl` (~40 s): ⟨J v, w⟩ = ⟨v, Jᵀ w⟩ with
+  pseudo-random v, w for every pullback the adjoint uses — momentum, continuity/strain rate,
+  stress (viscoelastic, Drucker–Prager, cap), pressure-dependent buoyancy, power-law viscosity,
+  velocity BCs — and for the full `adjoint_residual!` / `variational_adjoint_residual!` sweep
+  (sticky air, free-surface term), each with free-slip, no-slip and periodic-x BCs on odd and
+  even grids. 106 checks.
+- **Physics layer**, central FD of whole solves:
+  - `test/test_adjoint_gradients.jl` (~2.5 min): density for `:Vy`/`:P`, both solvers; linear
+    viscosity; forward viscosity kept; Drucker–Prager cohesion at λ_relaxation 0.5 (and 1 with
+    `JULIA_JUSTRELAX_LONG_TESTS=1`).
+  - `test/test_adjoint_gradients_physics.jl` (~5 min, mostly its five adjoint solves; see 11):
+    one central difference per case along a weighted direction through all its parameters
+    (each parameter on its own with `JULIA_JUSTRELAX_LONG_TESTS=1`). Power law + Drucker–Prager (η0, n, G,
+    Kb, C, ϕ, Ψ, thermal α, weighted objective, nonlinear viscosity feedback); cap (C, pT);
+    variational solver with sticky air, free-surface stabilization and periodic x (ρ, η of
+    block and matrix, `:Vy` and `:P`); variational solver with power law or Drucker–Prager,
+    no-slip bottom, background shear (η0, n, C, ϕ, ρ0, β, g).
+
+Not covered: nonlinear viscosity next to sticky air (the forward diverges, see 17), strongly
+non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any of the above.
 
 ## P2 — Consistency and robustness
 
@@ -71,6 +88,21 @@ benchmarks in `miniapps/Adjoint2D/benchmark` are not run by CI.
    `c1c91c6b`) not yet verified on CUDA: rerun diagnostic cases B/E, the cap test in
    `test_dyrel_kernels.jl`, and the dike example. AMDGPU never run.
 10. ⬜ **More than one Julia thread deadlocks the pointwise pullbacks.** Run with `-t 1` for now.
+
+17. ⬜ **Variational forward diverges with a power-law viscosity in two setups** (found while
+    writing the tests). Purely buoyancy-driven flow from rest: the residual reaches ~1e41 within
+    the first 50 iterations, before the first step-size update, whether the initial η is 1, 10
+    or 100. Sticky air plus a power law: NaN or "Kaboom" with or without the free-surface term,
+    also with background shear. A forward-solver issue; the tests avoid both setups.
+18. ⬜ **Adjoint iteration diverges for strongly non-associated plasticity.** Drucker–Prager with
+    ϕ = 20°, Ψ = 0°, η_vp = 1e-2 and ~85 % of cells yielded: the forward converges, the adjoint
+    residual grows ×100 per 50 iterations in both solvers. Associated flow (Ψ = ϕ) or
+    η_vp = 0.1 converges. The operator itself is the exact transpose (dot-product test), so this
+    is the damped iteration on a non-symmetric, possibly indefinite consistent tangent, not a
+    derivative bug. Options: a step-size estimate from the adjoint operator, or an error message
+    that names the cause instead of NaN. Reproducer:
+    `miniapps/Adjoint2D/NonAssociatedPlasticity2D_adjoint.jl` (diverges at Ψ = 0°, converges at
+    Ψ = ϕ and at η_vp = 0.1).
 
 ## P3 — Performance
 

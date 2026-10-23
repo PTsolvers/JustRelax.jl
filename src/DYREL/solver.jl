@@ -28,7 +28,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
 - `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update, which
   mixes the last `m` passes instead of taking the plain step `P += pressure_relaxation * γ_eff * RP`;
-  `0` takes the plain step. Default: `0`.
+  `0` takes the plain step. Default: `3`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Compatibility alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -128,7 +128,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
-        anderson_PH = 0,
+        anderson_PH = 3,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,

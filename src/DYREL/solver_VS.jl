@@ -23,7 +23,7 @@ function _solve_VariationalDYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
-        anderson_PH = 0,
+        anderson_PH = 3,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,

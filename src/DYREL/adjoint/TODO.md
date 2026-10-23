@@ -76,18 +76,25 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
 
 ## P2 — Consistency and robustness
 
-6. ⬜ **Non-convergence handling differs.** Standard solver warns and still computes sensitivities;
-   variational throws. Pick one.
-7. ⬜ **MPI not supported, but looks supported.** No `update_halo!` anywhere in the adjoint; the
-   reverse scatters into neighbour cells across rank boundaries, which needs a reverse (summing)
-   halo exchange that ImplicitGlobalGrid does not provide. Uses `norm_mpi` etc. Throw for
-   `nprocs > 1` until supported. `igg.me == 0 && error(...)` hangs the other ranks.
-8. ⬜ **3D not guarded.** The adjoint files are included only in the 2D modules; `adjoint = true`
-   in 3D fails with `UndefVarError`. Throw an `ArgumentError`.
+6. ✅ **Non-convergence handling unified.** Both adjoint solvers now reset the shared DYREL
+   state and throw `"… adjoint did not converge (err=…, ϵ=…, …)"` instead of the standard solver
+   returning unconverged sensitivities with a warning. Tested in `test_adjoint_gradients.jl`.
+7. ✅ **MPI guarded.** `check_adjoint_support` (`src/DYREL/solver.jl`) throws an `ArgumentError`
+   for `adjoint = true` with `nprocs > 1`: the reverse pass adds into neighbouring cells, which
+   would need a summing halo exchange. The NaN/"Kaboom" errors now fire on every rank (their
+   `err` is a global reduction), not only on rank 0. Real MPI support remains open.
+8. ✅ **3D guarded.** The same check throws an `ArgumentError` for `adjoint = true` in 3D before
+   reaching the 2D-only adjoint code. Both guards are unit-tested in `test_dyrel_kernels.jl`.
 9. 🟡 **GPU.** CUDA error 717 fix (`detach(rheology)` for the inactive cap Newton solve, commit
-   `c1c91c6b`) not yet verified on CUDA: rerun diagnostic cases B/E, the cap test in
-   `test_dyrel_kernels.jl`, and the dike example. AMDGPU never run.
-10. ⬜ **More than one Julia thread deadlocks the pointwise pullbacks.** Run with `-t 1` for now.
+   `c1c91c6b`) not yet verified on CUDA: rerun diagnostic cases B/E and the dike example, and
+   run `test_dyrel_kernels`, `test_adjoint_dot_product`, `test_adjoint_gradients` and
+   `test_adjoint_gradients_physics` with `JULIA_JUSTRELAX_BACKEND=CUDA`. AMDGPU never run.
+10. ✅ **Multi-threaded pullbacks deadlocked.** Cause: `autodiff_deferred` compiles its gradient
+    on the first call, which happened inside the threaded kernel loop; threads compiling the
+    same gradient at once deadlocked. `compile_pullback_serially!` (`Enzyme_pointwise.jl`) now
+    compiles each pullback signature once on the main thread, on copies, before its first
+    launch (CPU Threads/Polyester backends only). Verified with 2 and 4 threads (dot-product
+    test, miniapp); `test_adjoint_dot_product.jl` runs a two-thread pullback in a subprocess.
 
 17. ⬜ **Variational forward diverges with a power-law viscosity in two setups** (found while
     writing the tests). Purely buoyancy-driven flow from rest: the residual reaches ~1e41 within

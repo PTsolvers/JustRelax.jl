@@ -42,15 +42,39 @@ Enzyme cannot reverse its `Threads.@threads` loop.
 """
 function enzyme_reverse_pointwise!(f, n::Integer, args::Tuple)
     primals, shadows = map(first, args), map(kernel_shadow, map(last, args))
+    compile_pullback_serially!(f, primals, shadows, nothing, (1,))
     @parallel (1:n) reverse_point!(f, primals, shadows)
     return nothing
 end
 
 @parallel_indices (i) function reverse_point!(f, primals, shadows)
+    apply_point!(f, primals, shadows, nothing, i)
+    return nothing
+end
+
+@inline function apply_point!(f, primals, shadows, context, i)
     Enzyme.autodiff_deferred(
         Enzyme.Reverse, Enzyme.Const(f), Enzyme.Const,
         map(annotate, primals, shadows)..., Enzyme.Const(i),
     )
+    return nothing
+end
+
+# Enzyme compiles a deferred gradient on its first call. On the CPU backend that call happens
+# inside the threaded kernel loop, and threads compiling the same gradient at once deadlock.
+# Compile each pullback once on the main thread before its first launch, on copies, so the
+# real shadows are not accumulated twice.
+const compiled_pullbacks = Set{Any}()
+
+function compile_pullback_serially!(op, primals, shadows, context, index)
+    Threads.nthreads() > 1 || return nothing
+    package = ParallelStencil.ParallelKernel.get_package(@__MODULE__)
+    package in (ParallelStencil.ParallelKernel.PKG_THREADS, ParallelStencil.ParallelKernel.PKG_POLYESTER) ||
+        return nothing
+    signature = typeof((op, primals, shadows, context))
+    signature in compiled_pullbacks && return nothing
+    apply_point!(op, deepcopy(primals), deepcopy(shadows), deepcopy(context), index...)
+    push!(compiled_pullbacks, signature)
     return nothing
 end
 
@@ -116,6 +140,7 @@ function reverse_colored!(
         op, n::NTuple{2, Integer}, primals, shadows, context, periodic = (false, false)
     )
     nx, ny = n
+    compile_pullback_serially!(op, primals, shadows, context, (1, 1))
     for (first_column, column_stride, number_of_columns) in color_groups(nx, periodic[1])
         iszero(number_of_columns) && continue
         for (first_row, row_stride, number_of_rows) in color_groups(ny, periodic[2])

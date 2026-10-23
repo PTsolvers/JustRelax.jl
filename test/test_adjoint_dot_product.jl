@@ -205,6 +205,28 @@ function setup(ni, bcs, rheology; air = false)
     return (; grid, stokes, adjoint, phase_ratios, ρg, dt, args, ϕ, dyrel, rheology, bcs, ni)
 end
 
+# Threads compiling the same deferred Enzyme gradient at once used to deadlock the pointwise
+# reverse. The test process may run with one thread, so this starts its own with two.
+@testset "Pointwise reverse with two threads" begin
+    if backend === JustRelax.CPUBackend
+        code = """
+        using JustRelax, JustRelax.JustRelax2D, ParallelStencil
+        @init_parallel_stencil(Threads, Float64, 2)
+        square!(y, x, i, j) = (y[i, j] = x[i, j]^2; nothing)
+        ni = (8, 6)
+        x, x̄ = rand(ni...), zeros(ni...)
+        JustRelax2D.enzyme_reverse_pointwise!(square!, ni, (zeros(ni...) => ones(ni...), x => x̄))
+        exit(x̄ ≈ 2 .* x ? 0 : 1)
+        """
+        command = `$(Base.julia_cmd()) -t 2 --startup-file=no --project=$(Base.active_project()) -e $code`
+        process = run(pipeline(command; stdout = devnull, stderr = devnull); wait = false)
+        finished = timedwait(() -> process_exited(process), 600.0) === :ok
+        finished || kill(process)
+        @test finished
+        @test finished && success(process)
+    end
+end
+
 @testset "Adjoint pullbacks are transposes of the forward kernels" begin
     sizes = ((5, 4), (4, 5))
 

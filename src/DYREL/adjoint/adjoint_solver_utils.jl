@@ -13,6 +13,17 @@ function initialize_adjoint_iteration!(adjoint, ni)
     return nothing
 end
 
+# Reference of the relative momentum residual: the first nonzero one. A pressure objective
+# seeds only the continuity adjoint, so the momentum residual stays zero until λP is nonzero.
+function momentum_residual_reference(errV0, errV)
+    iszero(maximum(errV0)) || return errV0
+    errV_max = maximum(errV)
+    return map(_ -> errV_max, errV)
+end
+
+relative_momentum_residual(errV, errV0) =
+    map((e, e0) -> iszero(e0) ? zero(e) : e / e0, errV, errV0)
+
 @inline function set_adjoint_dyrel_parameters!(
         dτV, βV, αV, cV, λmaxV, amplification, CFL, i, j,
     )

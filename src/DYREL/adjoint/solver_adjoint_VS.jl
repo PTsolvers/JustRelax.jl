@@ -103,7 +103,7 @@ function solve_VariationalDYREL_adjoint!(
 
     # Iteration loop
     err_min = Inf
-    errV0 = ntuple(_ -> 1.0, dim)
+    errV0 = ntuple(_ -> 0.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -134,14 +134,12 @@ function solve_VariationalDYREL_adjoint!(
         # like the forward `RP·lx/Vspan`, is measured against the λV scale over the domain length.
         # (Relative to its own initial value instead, it would have to drop by ϵ, which the
         # Powell–Hestenes iteration only reaches after many passes.)
-        if isone(itPH)
-            errV0 = ntuple(_ -> maximum(errV) + eps(), dim)
-        end
+        errV0 = momentum_residual_reference(errV0, errV)
         λVspan = maximum(map(masked_value_scale, maskV, λVi))
         has_λV_scale = !iszero(λVspan)
         errPt = has_λV_scale ?
             masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan : zero(λVspan)
-        errV_relative = ntuple(d -> errV[d] / errV0[d], dim)
+        errV_relative = relative_momentum_residual(errV, errV0)
         # λV is exactly zero before the first adjoint update, so no physically meaningful
         # continuity normalization exists yet. Omit that term until λV provides a scale;
         # the momentum residual remains one for a nontrivial objective on the first pass.
@@ -180,8 +178,8 @@ function solve_VariationalDYREL_adjoint!(
 
             initialize_adjoint_iteration!(stokes_ad, ni)
 
-            # Init observation points
-            observation.field !== :P && seed_observation!(observation)
+            # A pressure seed enters the Schur correction and the λP update below
+            seed_observation!(observation)
 
             variational_adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
@@ -215,7 +213,8 @@ function solve_VariationalDYREL_adjoint!(
                 errV = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
                 # same reference as the outer check: relative to the value after the first `nout`
                 # iterations, a residual already at round-off by then can never drop by `rel_drop`
-                err = maximum(ntuple(d -> errV[d] / errV0[d], dim))
+                errV0 = momentum_residual_reference(errV0, errV)
+                err = maximum(relative_momentum_residual(errV, errV0))
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 if verbose_DR && igg.me == 0

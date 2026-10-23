@@ -89,7 +89,7 @@ function solve_DYREL_adjoint!(
 
     # Iteration loop
     err_min = Inf
-    errV0 = ntuple(_ -> 1.0, dim)
+    errV0 = ntuple(_ -> 0.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -117,14 +117,13 @@ function solve_DYREL_adjoint!(
         # the largest initial one (the objective seeds only some components), the continuity
         # adjoint, the divergence of λV, like the forward `RP·lx/Vspan`. An absolute floor would
         # accept an unconverged pressure, since the adjoint carries the units of the problem.
-        if isone(itPH)
-            errV0 = ntuple(_ -> maximum(errV) + eps(), dim)
-        end
-        # λV is exactly zero only on the first pass
+        errV0 = momentum_residual_reference(errV0, errV)
         λVspan = maximum(λ -> max(maximum_mpi(λ), -minimum_mpi(λ)), λVi)
-        λVspan = iszero(λVspan) ? one(λVspan) : λVspan
-        errPt = norm_mpi(stokes_ad.P) / √(p_dof) * lx / λVspan
-        err = maximum((ntuple(d -> errV[d] / errV0[d], dim)..., errPt))
+        # λV is zero before its first update and gives the continuity check no scale yet
+        has_λV_scale = !iszero(λVspan)
+        errPt = has_λV_scale ? norm_mpi(stokes_ad.P) / √(p_dof) * lx / λVspan : zero(λVspan)
+        errV_relative = relative_momentum_residual(errV, errV0)
+        err = has_λV_scale ? maximum((errV_relative..., errPt)) : maximum(errV_relative)
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -135,7 +134,10 @@ function solve_DYREL_adjoint!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        if err < ϵ
+        # A pressure objective has no initial momentum residual: its first outer pass transfers
+        # the pressure seed into λP. Do not accept that pre-update state as converged.
+        pending_pressure_seed = isone(itPH) && observation.field === :P
+        if err < ϵ && !pending_pressure_seed
             converged = true
             break
         end
@@ -157,8 +159,8 @@ function solve_DYREL_adjoint!(
 
             initialize_adjoint_iteration!(stokes_ad, ni)
 
-            # Init observation points
-            observation.field !== :P && seed_observation!(observation)
+            # A pressure seed enters the Schur correction and the λP update below
+            seed_observation!(observation)
 
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
@@ -186,17 +188,15 @@ function solve_DYREL_adjoint!(
                 _di.center,
             )
 
+            # Residual check
             if iszero(iter % nout)
                 errV = ntuple(
                     d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim
                 )
-            end
-
-            # Residual check
-            if iszero(iter % nout)
                 # same reference as the outer check: relative to the value after the first `nout`
                 # iterations, a residual already at round-off by then can never drop by `rel_drop`
-                err = maximum(ntuple(d -> errV[d] / errV0[d], dim))
+                errV0 = momentum_residual_reference(errV0, errV)
+                err = maximum(relative_momentum_residual(errV, errV0))
                 isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
 
                 if verbose_DR && igg.me == 0

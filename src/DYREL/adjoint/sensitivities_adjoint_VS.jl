@@ -125,7 +125,7 @@ function compute_stress_sensitivities!(
     )
     differentiate_pointwise_material_kernel!(
         compute_stress_DRYEL_vertex!, size(phases.vertex),
-        map(entry -> entry.vertex, gradients), parameters, stress_args,
+        map(entry -> entry.vertex, gradients), parameters, stress_args; periodic,
     )
     differentiate_pointwise_material_kernel!(
         compute_stress_DRYEL_center!, size(phases.center),

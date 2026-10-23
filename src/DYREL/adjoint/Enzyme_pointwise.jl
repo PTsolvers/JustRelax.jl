@@ -1,7 +1,7 @@
 using Enzyme
 
 """
-    enzyme_reverse_pointwise!(f, n, args)
+    enzyme_reverse_pointwise!(f, n, args; periodic = (false, false))
 
 Reverse-mode differentiate the point function `f(primals..., i, j)` over the 2D index range
 `1:n[1] × 1:n[2]`. `args` lists the arguments of `f` as pairs `x => dx`: `dx` is the shadow
@@ -19,11 +19,16 @@ The reverse of point `(i, j)` accumulates into the adjoints of its neighbours, a
 functions touch at most two consecutive indices in each dimension (with a fixed offset per
 array). Points two apart in both dimensions therefore never collide. Even-sized dimensions
 use two colors; odd-sized dimensions use a third color for the final index so the first and
-last points cannot collide across a periodic seam.
+last points cannot collide across a periodic seam. Mark a dimension in `periodic` when `f`
+wraps its stencil there, as the vertex stress does through `clamped_indices`: on `nx` cells,
+vertices `1` and `nx + 1` both read cells `nx` and `1`, so the last two indices get colors of
+their own when the parity colors would otherwise meet across the seam.
 """
-function enzyme_reverse_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
+function enzyme_reverse_pointwise!(
+        f, n::NTuple{2, Integer}, args::Tuple; periodic = (false, false)
+    )
     primals, shadows = map(first, args), map(kernel_shadow, map(last, args))
-    reverse_colored!(f, n, primals, shadows, nothing)
+    reverse_colored!(f, n, primals, shadows, nothing, periodic)
     return nothing
 end
 
@@ -107,11 +112,13 @@ end
     return nothing
 end
 
-function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, context)
+function reverse_colored!(
+        op, n::NTuple{2, Integer}, primals, shadows, context, periodic = (false, false)
+    )
     nx, ny = n
-    for (first_column, column_stride, number_of_columns) in color_groups(nx)
+    for (first_column, column_stride, number_of_columns) in color_groups(nx, periodic[1])
         iszero(number_of_columns) && continue
-        for (first_row, row_stride, number_of_rows) in color_groups(ny)
+        for (first_row, row_stride, number_of_rows) in color_groups(ny, periodic[2])
             iszero(number_of_rows) && continue
             @parallel (1:number_of_columns, 1:number_of_rows) reverse_point_group!(
                 op, primals, shadows, context,
@@ -122,13 +129,16 @@ function reverse_colored!(op, n::NTuple{2, Integer}, primals, shadows, context)
     return nothing
 end
 
-function color_groups(n::Integer)
-    alternating = n - isodd(n)
+# `(first, stride, count)` of each color. Two colors alternate over an even-length prefix and
+# each remaining index is a color of its own. Across a periodic seam the wrapped stencils of
+# the first and last points meet, so the alternating prefix stops short of the last index.
+function color_groups(n::Integer, periodic::Bool = false)
+    alternating = periodic ? (n - 1) - isodd(n - 1) : n - isodd(n)
     groups = (
         (1, 2, cld(alternating, 2)),
         (2, 2, fld(alternating, 2)),
     )
-    return isodd(n) ? (groups..., (n, 0, 1)) : groups
+    return (groups..., ((i, 0, 1) for i in (alternating + 1):n)...)
 end
 
 @parallel_indices (column_in_group, row_in_group) function reverse_point_group!(

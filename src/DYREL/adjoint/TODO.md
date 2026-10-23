@@ -36,11 +36,19 @@ differentiated viscosity function. Not reproduced on CPU (an `η_multiplier`-sca
 survives: Enzyme skips the `DuplicatedNoNeed` primal write), but Enzyme does not guarantee that.
 Now passes copies; `test/test_adjoint_gradients.jl` checks the forward viscosity is kept.
 
-### 4. ⬜ Race in the colored reverse on periodic grids with an odd cell count
-The vertex-extent reverse (`ni + 1` points) wraps periodic vertices onto cells `{nx, 1}`. For odd
-`nx`, `nx + 1` is even → two colors only; vertices 1 and `nx` both write cell `nx`, vertices 2 and
-`nx + 1` both write cell 1, in the same launch (`color_groups`, `Enzyme_pointwise.jl`).
-Non-deterministic on GPU / threads. **Fix:** a separate color for the periodic seam.
+### 4. ✅ Race in the colored reverse on periodic grids with an odd cell count
+The vertex-extent stress reverse (`ni + 1` points) wraps periodic vertices onto cells through
+`clamped_indices`: vertices 1 and `nx + 1` both read cells `nx` and `1`. For odd `nx` the extent is
+even, so the parity colors put vertices 1 and `nx`, and 2 and `nx + 1`, in one launch; on GPU their
+shadow updates raced.
+
+**Fix:** `color_groups(n, periodic)` stops the alternating colors short of the last index in a
+periodic direction and gives the remaining indices colors of their own. `enzyme_reverse_pointwise!`
+and `differentiate_pointwise_material_kernel!` take a `periodic` keyword; the stress pullbacks of
+the adjoint loop and of the material-gradient pass (both solvers) pass `periodic_dims(stokes)`.
+Non-periodic coloring is unchanged. `test_dyrel_kernels.jl` checks that no color reuses a cell
+(the old coloring fails for 3, 5, 7, 9 cells) and runs a periodic vertex-stencil pullback on the
+selected backend. Not yet run on GPU.
 
 ### 5. 🟡 End-to-end gradient test
 `test/test_adjoint_gradients.jl` checks against central FD: density (both solvers, `:Vy` and

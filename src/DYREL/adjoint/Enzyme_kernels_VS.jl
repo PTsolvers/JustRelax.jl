@@ -218,7 +218,8 @@ function enzyme_reverse_stress_DRYEL!(
             λ_relaxation => nothing,
             dt => nothing,
             periodic_dims(stokes) => nothing,
-        ),
+        );
+        periodic = periodic_dims(stokes),
     )
     return nothing
 end

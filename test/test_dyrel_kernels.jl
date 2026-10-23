@@ -518,6 +518,14 @@ end
     return nothing
 end
 
+@inline function periodic_vertex_sum_point!(out, input, i, j)
+    nx, ny = size(input)
+    i0, ic = mod1(i - 1, nx), mod1(i, nx)
+    j0, jc = mod1(j - 1, ny), mod1(j, ny)
+    out[i, j] = input[i0, j0] + input[ic, j0] + input[i0, jc] + input[ic, jc]
+    return nothing
+end
+
 @testset "Race-free point coloring on the selected backend" begin
     TA = PTArray(backend)
     for ni in ((6, 4), (5, 3))
@@ -530,5 +538,36 @@ end
         )
         @test Array(input_ad) == fill(3.0, ni)
         @test all(iszero, Array(out_ad))
+    end
+
+    # Vertex points with the periodic `clamped_indices` stencil of the stress kernel: vertices
+    # 1 and nx + 1 both read cells nx and 1. Odd cell counts used to put two of them in one color.
+    for ni in ((6, 4), (5, 3), (5, 6))
+        input = TA(zeros(ni))
+        input_ad = TA(zeros(ni))
+        out = TA(zeros(ni .+ 1))
+        out_ad = TA(ones(ni .+ 1))
+        JR2K.enzyme_reverse_pointwise!(
+            periodic_vertex_sum_point!, ni .+ 1, (out => out_ad, input => input_ad);
+            periodic = (true, true),
+        )
+        readers(n) = [count(v -> c in mod1.((v - 1, v), n), 1:(n + 1)) for c in 1:n]
+        @test Array(input_ad) == readers(ni[1]) * readers(ni[2])'
+        @test all(iszero, Array(out_ad))
+    end
+
+    # No two points of one color may read the same cell: vertex points read cells i - 1 and i,
+    # cell points i and i + 1, wrapped across a periodic seam.
+    for ncells in 2:9, periodic in (false, true), (extent, offset) in ((ncells + 1, -1), (ncells, 0))
+        cells(i) = unique(
+            periodic ? mod1.((i + offset, i + offset + 1), ncells) :
+                clamp.((i + offset, i + offset + 1), 1, ncells)
+        )
+        groups = JR2K.color_groups(extent, periodic)
+        points = [first + stride * k for (first, stride, count) in groups for k in 0:(count - 1)]
+        @test sort(points) == 1:extent
+        @test all(groups) do (first, stride, count)
+            allunique(reduce(vcat, (cells(first + stride * k) for k in 0:(count - 1)); init = Int[]))
+        end
     end
 end

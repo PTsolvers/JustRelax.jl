@@ -132,7 +132,8 @@ function compute_stress_sensitivities!(
             λ_relaxation => nothing,
             dt => nothing,
             periodic => nothing,
-        ),
+        );
+        periodic,
     )
     differentiate_pointwise_material_kernel!(
         compute_stress_DRYEL_center!,

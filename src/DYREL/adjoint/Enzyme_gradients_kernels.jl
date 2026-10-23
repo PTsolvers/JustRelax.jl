@@ -57,12 +57,13 @@ end
 
 """
     differentiate_pointwise_material_kernel!(
-        update!, n, gradient_fields, parameter_paths_by_phase, args,
+        update!, n, gradient_fields, parameter_paths_by_phase, args; periodic = (false, false),
     )
 
 Reverse-differentiate one local forward update `update!(primals..., i, j)` point by point.
 `args` lists its arguments as pairs, as for [`enzyme_reverse_pointwise!`](@ref), with the
-rheology given as `rheology => Enzyme.Active`.
+rheology given as `rheology => Enzyme.Active`, and `periodic` as for
+[`enzyme_reverse_pointwise!`](@ref).
 
 Output seeds in the shadows are consumed by the reverse pass, while derivatives of duplicated
 inputs accumulate in their shadows. The derivative with respect to `rheology` comes back per
@@ -72,7 +73,8 @@ function itself is differentiated, every input reconstruction, mask, and phase w
 matches the forward solve by construction.
 """
 function differentiate_pointwise_material_kernel!(
-        update!::F, n, gradient_fields, parameter_paths_by_phase, args::Tuple,
+        update!::F, n, gradient_fields, parameter_paths_by_phase, args::Tuple;
+        periodic = (false, false),
     ) where {F}
     primals, shadows = map(first, args), map(last, args)
     rheology_argument = findfirst(==(Enzyme.Active), shadows)
@@ -80,7 +82,7 @@ function differentiate_pointwise_material_kernel!(
         throw(ArgumentError("the rheology must be passed as `rheology => Enzyme.Active`"))
     op = PointwiseMaterialGradient{F, rheology_argument}(update!)
     context = (; gradient_fields, parameter_paths_by_phase)
-    reverse_colored!(op, n, primals, map(kernel_shadow, shadows), context)
+    reverse_colored!(op, n, primals, map(kernel_shadow, shadows), context, periodic)
     return nothing
 end
 

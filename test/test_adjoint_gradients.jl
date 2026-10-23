@@ -114,8 +114,10 @@ end
 
 # One viscoelastic-plastic (Drucker–Prager) step of pure shear around a weak inclusion, with the
 # plastic multiplier relaxed by `λ_relaxation`. Returns J and the adjoint dJ/dC of the matrix.
-function plastic_shear(igg; observation, C_matrix = 0.25, λ_relaxation = 1, adjoint = false)
-    ni = (24, 24)
+function plastic_shear(
+        igg; observation, C_matrix = 0.25, λ_relaxation = 1, adjoint = false, cells = 16,
+    )
+    ni = (cells, cells)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
     xv, yv = Array.(grid.xvi)
     dt = 0.25
@@ -208,17 +210,23 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test adjoint.η == forward.η
     end
 
+    finalize_global_grid(; finalize_MPI = false)
+
     # A relaxed plastic multiplier converges to the same state; its derivative must not depend
-    # on the relaxation.
-    @testset "plasticity, λ_relaxation = $λ_relaxation" for λ_relaxation in (1, 0.5)
+    # on the relaxation. `test_adjoint_gradients_physics.jl` covers Drucker–Prager without
+    # relaxation, so that case runs only with `JULIA_JUSTRELAX_LONG_TESTS=1`.
+    # `Geometry` takes its spacing from the global grid, so the coarser grid needs its own.
+    cells = 16
+    igg = IGG(init_global_grid(cells, cells, 1; init_MPI = false)...)
+    long_tests = get(ENV, "JULIA_JUSTRELAX_LONG_TESTS", "0") == "1"
+    @testset "plasticity, λ_relaxation = $λ_relaxation" for λ_relaxation in (long_tests ? (1, 0.5) : (0.5,))
         observation = (; field = :Vx, center = (0.7, 0.65), half_width = (0.1, 0.1))
-        solution = @suppress plastic_shear(igg; observation, λ_relaxation, adjoint = true)
+        solution = @suppress plastic_shear(igg; observation, λ_relaxation, adjoint = true, cells)
         @test solution.yielded > 0
         fd = central_difference(0.25, 1.0e-5) do C_matrix
-            @suppress plastic_shear(igg; observation, C_matrix, λ_relaxation).J
+            @suppress plastic_shear(igg; observation, C_matrix, λ_relaxation, cells).J
         end
         @test solution.gradient ≈ fd rtol = 1.0e-6
     end
-
     finalize_global_grid(; finalize_MPI = false)
 end

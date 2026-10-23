@@ -93,6 +93,9 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `verbose_DR`: Print Dynamic Relaxation iteration info. Default: `true`.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `surface_pressure`: Prescribed compressive pressure on the embedded rock–air interface;
+  `nothing` (default), a real scalar, or a cell-centered field shaped like `stokes.P`.
+  Extend fields smoothly through the interface stencil. Requires `flow_bcs.free_surface = false`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.

@@ -55,6 +55,9 @@ instability.
 - `nout`: Output frequency for residuals. Default: `500`.
 - `verbose`: Print iteration info. Default: `true`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `surface_pressure`: Prescribed compressive pressure on the embedded rock–air interface;
+  `nothing` (default), a real scalar, or a cell-centered field shaped like `stokes.P`.
+  Extend fields smoothly through the interface stencil. Requires `flow_bcs.free_surface = false`.
 - `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 0)`.
 
 Options may be passed either as plain keywords or bundled as a single
@@ -101,6 +104,7 @@ function _solve_VS!(
         b_width = (4, 4, 0),
         verbose = true,
         free_surface = false,
+        surface_pressure = nothing,
         kwargs...,
     )
 
@@ -112,6 +116,7 @@ function _solve_VS!(
     (; ϵ_rel, ϵ_abs, r, θ_dτ, ηdτ) = pt_stokes
     (; η, η_vep) = stokes.viscosity
     ni = size(stokes.P)
+    momentum_pressure = prepare_surface_pressure(stokes.P, surface_pressure, ϕ, flow_bcs)
 
     nRx = √((nx_g() - 2) * (ny_g() - 1))
     nRy = √((nx_g() - 1) * (ny_g() - 2))
@@ -291,7 +296,7 @@ function _solve_VS!(
                 @velocity(stokes)...,
                 stokes.R.Rx,
                 stokes.R.Ry,
-                stokes.P,
+                momentum_pressure,
                 @stress(stokes)...,
                 ηdτ,
                 ρg...,

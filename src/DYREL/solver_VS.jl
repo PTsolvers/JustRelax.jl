@@ -33,6 +33,7 @@ function _solve_VariationalDYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         free_surface = false,
+        surface_pressure = nothing,
         kwargs...,
     ) where {N}
 
@@ -42,6 +43,7 @@ function _solve_VariationalDYREL!(
     _di = grid._di
     lx = grid.max_li
     ni = size(stokes.P)
+    momentum_pressure = prepare_surface_pressure(stokes.P, surface_pressure, ϕ, flow_bcs)
     periodic = periodic_dims(stokes)
 
     residuals = @residuals(stokes.R)
@@ -160,7 +162,7 @@ function _solve_VariationalDYREL!(
         @parallel (@idx ni) compute_PH_residual_V!(
             residuals...,
             @velocity(stokes)...,
-            stokes.P,
+            momentum_pressure,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
@@ -263,7 +265,7 @@ function _solve_VariationalDYREL!(
                 residuals...,
                 @velocity(stokes)...,
                 fields.dVdτ...,
-                stokes.P,
+                momentum_pressure,
                 θc,
                 @stress(stokes)...,
                 ρg...,

@@ -117,6 +117,15 @@ and takes its options either as the plain keywords above or bundled as a single
 `kwargs = (; ...)` NamedTuple.
 Standard `solve_DYREL!` remains unchanged for unweighted 2D problems.
 
+`solve_VariationalDYREL!` also accepts `surface_pressure = Pload`, either a real
+scalar or a cell-centered real field on the same backend as `stokes.P`.
+Positive pressure compresses the embedded rock–air interface. Both the outer
+PH residual and the inner DR update include the same prescribed load. It is
+independent of the `free_surface` stabilization keyword and requires
+`flow_bcs.free_surface = false`. See
+[Prescribed surface pressure](./variational_stokes.md#Prescribed-surface-pressure)
+for the mask operator, prescribed-field extension, and update lifecycle.
+
 A velocity row whose preconditioner diagonal comes out zero is decoupled from
 its neighbours and is preconditioned with the identity. A diagonal that comes
 out negative or non-finite is not: it means the free-surface term is large

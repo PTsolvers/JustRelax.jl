@@ -123,6 +123,42 @@ end
 relative_momentum_residual(errV, errV0) =
     map((e, e0) -> iszero(e0) ? zero(e) : e / e0, errV, errV0)
 
+# Per-iteration reset. Enzyme zeroes the shadow of every output it propagates, so one reverse
+# sweep consumes the stress, strain-rate and residual seeds; only the accumulated residuals P and
+# V need zeroing. `initialize_adjoint_iteration!` clears everything, once per solve.
+function reset_adjoint_residuals!(adjoint, ni)
+    @parallel (@idx ni .+ 2) _reset_adjoint_residuals!(
+        adjoint.P,
+        (adjoint.V.Vx, adjoint.V.Vy),
+        (adjoint.R.Rx, adjoint.R.Ry, adjoint.R.RP),
+        (adjoint.λV.Vx, adjoint.λV.Vy),
+        adjoint.λP,
+    )
+    return nothing
+end
+
+@parallel_indices (i, j) function _reset_adjoint_residuals!(P, V, R, λV, λP)
+    if i ≤ size(P, 1) && j ≤ size(P, 2)
+        @inbounds begin
+            P[i, j] = 0.0
+            R[3][i, j] = λP[i, j]
+        end
+    end
+    if i ≤ size(V[1], 1) && j ≤ size(V[1], 2)
+        @inbounds V[1][i, j] = 0.0
+    end
+    if i ≤ size(V[2], 1) && j ≤ size(V[2], 2)
+        @inbounds V[2][i, j] = 0.0
+    end
+    if i ≤ size(R[1], 1) && j ≤ size(R[1], 2)
+        @inbounds R[1][i, j] = λV[1][i + 1, j + 1]
+    end
+    if i ≤ size(R[2], 1) && j ≤ size(R[2], 2)
+        @inbounds R[2][i, j] = λV[2][i + 1, j + 1]
+    end
+    return nothing
+end
+
 @inline function set_adjoint_dyrel_parameters!(
         dτV, βV, αV, cV, λmaxV, amplification, CFL, i, j,
     )

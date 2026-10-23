@@ -450,4 +450,35 @@ end
         )
         @test Jv_w ≈ v_JTw rtol = 1.0e-6
     end
+    # The per-iteration reset (`reset_adjoint_residuals!`) zeroes only P and V: one reverse sweep
+    # must consume every stress, strain-rate and residual seed.
+    @testset "sweep consumes its seeds, $(variational ? "variational" : "standard"), $rheology_name, $name" for variational in (false, true),
+            (rheology_name, rheology) in pairs(rheologies), (name, bcs) in pairs(flow_bcs_cases)
+        ni = (5, 4)
+        s = setup(ni, bcs, rheology; air = variational)
+        (; stokes, adjoint, phase_ratios, ρg, dyrel, grid, dt, args, ϕ) = s
+        adjoint.λV.Vx .= TA(pseudo_random(size(adjoint.λV.Vx), 7))
+        adjoint.λV.Vy .= TA(pseudo_random(size(adjoint.λV.Vy), 8))
+        adjoint.λP .= TA(pseudo_random(ni, 9))
+        JR2K.initialize_adjoint_iteration!(adjoint, ni)
+        if variational
+            maskP = similar(ϕ.center, Bool)
+            @parallel (@idx ni) JR2K.update_valid_c_mask!(maskP, ϕ)
+            JR2K.variational_adjoint_residual!(
+                stokes, adjoint, ρg, dyrel, bcs, phase_ratios, ϕ, rheology, args, grid._di, ni,
+                dt, 1.0, true, 2, maskP, nothing, (-Inf, Inf),
+            )
+        else
+            JR2K.adjoint_residual!(
+                stokes, adjoint, ρg, dyrel, bcs, phase_ratios, rheology, args, grid._di, ni,
+                dt, 1.0, true, (-Inf, Inf), true, nothing,
+            )
+        end
+        seeds = (
+            adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy, adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c,
+            adjoint.τ.II, adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy, adjoint.θ,
+            adjoint.R.Rx, adjoint.R.Ry, adjoint.R.RP,
+        )
+        @test all(A -> all(iszero, Array(A)), seeds)
+    end
 end

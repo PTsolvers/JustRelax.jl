@@ -134,7 +134,7 @@ function solve_DYREL_adjoint!(
     converged = false
     for itPH in 1:Int(iterMax_PH)
 
-        initialize_adjoint_iteration!(stokes_ad, ni)
+        reset_adjoint_residuals!(stokes_ad, ni)
 
         # Init observation points
         seed_observation!(observation)
@@ -191,7 +191,7 @@ function solve_DYREL_adjoint!(
             itPT += 1
             iter += 1
 
-            initialize_adjoint_iteration!(stokes_ad, ni)
+            reset_adjoint_residuals!(stokes_ad, ni)
 
             # A pressure seed enters the Schur correction and the λP update below
             seed_observation!(observation)

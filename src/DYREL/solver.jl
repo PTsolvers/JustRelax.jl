@@ -37,7 +37,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
-  history-dependent state. Default: `false`.
+  history-dependent state. 2D on a single MPI rank only; an unconverged adjoint solve throws an
+  error instead of returning sensitivities. Default: `false`.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
@@ -114,7 +115,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
-  history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Default: `false`.
+  history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Single MPI
+  rank only; an unconverged adjoint solve throws an error. Default: `false`.
 - `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law
@@ -173,6 +175,7 @@ function _solve_DYREL!(
 
     adjoint && isnothing(stokes_ad) &&
         throw(ArgumentError("adjoint = true requires AdjointStokesArrays as the second argument"))
+    adjoint && check_adjoint_support(Val(N), igg)
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
@@ -544,6 +547,17 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+# The adjoint differentiates the 2D kernels point by point, and its reverse pass adds into
+# neighbouring cells, which would need a summing halo exchange across ranks.
+function check_adjoint_support(::Val{N}, igg) where {N}
+    N == 2 || throw(ArgumentError("the adjoint DYREL solver is implemented in 2D only"))
+    nprocs = hasproperty(igg, :nprocs) ? igg.nprocs : 1
+    nprocs == 1 || throw(
+        ArgumentError("the adjoint DYREL solver does not support MPI yet (nprocs = $nprocs)")
+    )
+    return nothing
+end
 
 function update_stress_halo!(stokes::JustRelax.StokesArrays, ::Val{2}, linear_viscosity)
     if linear_viscosity

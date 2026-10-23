@@ -53,7 +53,7 @@ observed_sum(field, mask) =
 # viscosity left in `stokes` after the solve.
 function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
-        ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing,
+        ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -84,7 +84,7 @@ function sinking_block(
 
     gradients = material_controls(backend, ni, (parameter,); nphases = length(rheology))
     solver_kwargs = (;
-        verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax = 2.0e5,
+        verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
         nout = 50, linear_viscosity = true, adjoint, observation, gradients,
     )
     if variational
@@ -196,6 +196,14 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             @suppress sinking_block(igg; observation, η_block).J
         end
         @test adjoint_gradient ≈ fd rtol = 1.0e-6
+    end
+
+    # Sensitivities of an unconverged adjoint state are not returned.
+    @testset "unconverged adjoint, $(variational ? "variational" : "standard")" for variational in (false, true)
+        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        @test_throws "adjoint did not converge" @suppress sinking_block(
+            igg; observation, variational, adjoint = true, total_iterMax = 10,
+        )
     end
 
     # The sensitivity pass must not replace the forward viscosity by the one of the rheology.

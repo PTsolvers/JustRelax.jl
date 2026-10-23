@@ -526,6 +526,14 @@ end
     return nothing
 end
 
+@testset "Adjoint support guard" begin
+    single_rank = (; me = 0, nprocs = 1)
+    @test isnothing(JR2K.check_adjoint_support(Val(2), single_rank))
+    @test isnothing(JR2K.check_adjoint_support(Val(2), (; me = 0)))
+    @test_throws "2D only" JR2K.check_adjoint_support(Val(3), single_rank)
+    @test_throws "does not support MPI" JR2K.check_adjoint_support(Val(2), (; me = 0, nprocs = 2))
+end
+
 @testset "Race-free point coloring on the selected backend" begin
     TA = PTArray(backend)
     for ni in ((6, 4), (5, 3))

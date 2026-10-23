@@ -155,8 +155,8 @@ function solve_VariationalDYREL_adjoint!(
             )
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
         end
-        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
+        isnan(err) && error("NaN detected in outer loop")
+        err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
         # A pressure-only objective has no initial momentum residual: its first outer pass
         # transfers the pressure seed into λP. Do not accept that pre-update state as converged.
         pending_pressure_seed = isone(itPH) && observation.field === :P
@@ -218,7 +218,7 @@ function solve_VariationalDYREL_adjoint!(
                 # iterations, a residual already at round-off by then can never drop by `rel_drop`
                 errV0 = momentum_residual_reference(errV0, errV)
                 err = maximum(relative_momentum_residual(errV, errV0))
-                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
+                isnan(err) && error("NaN detected in inner loop")
 
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)

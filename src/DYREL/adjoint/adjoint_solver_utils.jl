@@ -90,6 +90,28 @@ function restore_forward_damping!(damping, dyrel)
     return nothing
 end
 
+# A diverged adjoint solve leaves no usable starting point for the next one.
+function reset_nonfinite_adjoint!(adjoint)
+    λ = (adjoint.λV.Vx, adjoint.λV.Vy, adjoint.λP)
+    all(A -> all(isfinite, A), λ) || foreach(A -> fill!(A, 0), λ)
+    return nothing
+end
+
+# A pressure objective seeds only the continuity adjoint, so its momentum residual at λ = 0 is
+# zero. Measure it instead against the momentum residual a cold start reaches after its first
+# outer pass: λV = 0 and λP from the pressure seed, which `stokes_ad.P` holds on entry.
+# `evaluate_residual!()` returns the momentum residual norms of the current λ.
+function pressure_objective_reference!(evaluate_residual!, stokes_ad, dyrel, pressure_relaxation)
+    λ = (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP)
+    saved = map(copy, λ)
+    fill!(stokes_ad.λV.Vx, 0)
+    fill!(stokes_ad.λV.Vy, 0)
+    @. stokes_ad.λP = pressure_relaxation * dyrel.γ_eff * stokes_ad.P
+    errV = evaluate_residual!()
+    foreach(copyto!, λ, saved)
+    return errV
+end
+
 # Reference of the relative momentum residual: the first nonzero one. A pressure objective
 # seeds only the continuity adjoint, so the momentum residual stays zero until λP is nonzero.
 function momentum_residual_reference(errV0, errV)

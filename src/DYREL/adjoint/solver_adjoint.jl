@@ -101,13 +101,35 @@ function solve_DYREL_adjoint!(
 
     # Iteration loop
     err_min = Inf
-    errV0 = ntuple(_ -> 0.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
 
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
+
+    # λ starts from the previous adjoint solve, e.g. the previous time step, unless that solve
+    # failed. The momentum residual is measured against its value at λ = 0, the objective's
+    # velocity seed, so that a good initial λ shortens the solve instead of tightening its
+    # stopping criterion.
+    reset_nonfinite_adjoint!(stokes_ad)
+    initialize_adjoint_iteration!(stokes_ad, ni)
+    seed_observation!(observation)
+    momentum_norms() = ntuple(d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim)
+    errV_seed = momentum_norms()
+    if observation.field === :P
+        errV_seed = pressure_objective_reference!(stokes_ad, dyrel, pressure_relaxation) do
+            initialize_adjoint_iteration!(stokes_ad, ni)
+            seed_observation!(observation)
+            adjoint_residual!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni,
+                dt, λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
+                constitutive_scratch,
+            )
+            momentum_norms()
+        end
+    end
+    errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
 
     converged = false
     for itPH in 1:Int(iterMax_PH)

@@ -38,7 +38,11 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
   history-dependent state. 2D on a single MPI rank only; an unconverged adjoint solve throws an
-  error instead of returning sensitivities. Default: `false`.
+  error instead of returning sensitivities. The iteration starts from the adjoint state
+  `stokes_ad.λV`, `stokes_ad.λP` left by the previous adjoint solve (zero for new arrays, and
+  reset to zero if the previous solve diverged), which shortens it in a time loop. To start
+  from zero, e.g. for a different objective, zero them or use separate `AdjointStokesArrays`.
+  The stopping criterion does not depend on the start. Default: `false`.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
@@ -116,7 +120,9 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
   history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Single MPI
-  rank only; an unconverged adjoint solve throws an error. Default: `false`.
+  rank only; an unconverged adjoint solve throws an error. Starts from the previous adjoint
+  state as for `solve_DYREL!`; rows and cells eliminated since then start at zero.
+  Default: `false`.
 - `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law

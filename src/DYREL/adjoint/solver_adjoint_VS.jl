@@ -121,7 +121,6 @@ function solve_VariationalDYREL_adjoint!(
 
     # Iteration loop
     err_min = Inf
-    errV0 = ntuple(_ -> 0.0, dim)
     iter = 0
     ϵ = dyrel.ϵ
     err = 2 * ϵ
@@ -129,6 +128,31 @@ function solve_VariationalDYREL_adjoint!(
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
     check_observation_mask(observation, maskV, maskP)
+
+    # λ starts from the previous adjoint solve, e.g. the previous time step, unless that solve
+    # failed; rows and cells eliminated since then start at zero. The momentum residual is
+    # measured against its value at λ = 0, the objective's velocity seed, so that a good initial
+    # λ shortens the solve instead of tightening its stopping criterion.
+    reset_nonfinite_adjoint!(stokes_ad)
+    foreach((λ, mask) -> λ .*= mask, λVi, maskV)
+    stokes_ad.λP .*= maskP
+    initialize_adjoint_iteration!(stokes_ad, ni)
+    seed_observation!(observation)
+    momentum_norms() = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
+    errV_seed = momentum_norms()
+    if observation.field === :P
+        errV_seed = pressure_objective_reference!(stokes_ad, dyrel, pressure_relaxation) do
+            initialize_adjoint_iteration!(stokes_ad, ni)
+            seed_observation!(observation)
+            variational_adjoint_residual!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di,
+                ni, dt, λ_relaxation, free_surface, air_phase, maskP,
+                constitutive_scratch, viscosity_cutoff,
+            )
+            momentum_norms()
+        end
+    end
+    errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
 
     converged = false
     for itPH in 1:Int(iterMax_PH)

@@ -50,10 +50,12 @@ observed_sum(field, mask) =
 
 # Compressible sinking block: a finite bulk modulus makes the pressure unique, so a pressure
 # objective is well posed. Returns J, the adjoint dJ/d`parameter` of the block (phase 2), and the
-# viscosity left in `stokes` after the solve.
+# viscosity left in `stokes` after the solve. `solves` time steps run on the same arrays; before
+# each, λ is kept (`λ_start = :previous`), zeroed (`:zero`) or poisoned with NaN (`:nan`).
 function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
+        solves = 1, λ_start = :previous,
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -91,16 +93,22 @@ function sinking_block(
         ϕ = RockRatio(backend, ni)
         foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
         dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-9)
-        solve_VariationalDYREL!(
-            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,
-            dt, igg; solver_kwargs...,
-        )
+        for _ in 1:solves
+            set_adjoint_start!(stokes_ad, λ_start)
+            solve_VariationalDYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,
+                dt, igg; solver_kwargs...,
+            )
+        end
     else
         dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-9)
-        solve_DYREL!(
-            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid,
-            dt, igg; solver_kwargs..., η_multiplier,
-        )
+        for _ in 1:solves
+            set_adjoint_start!(stokes_ad, λ_start)
+            solve_DYREL!(
+                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid,
+                dt, igg; solver_kwargs..., η_multiplier,
+            )
+        end
     end
 
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
@@ -170,6 +178,10 @@ function plastic_shear(
     )
 end
 
+set_adjoint_start!(adjoint, λ_start) = λ_start === :previous || foreach(
+    A -> fill!(A, λ_start === :zero ? 0.0 : NaN), (adjoint.λV.Vx, adjoint.λV.Vy, adjoint.λP)
+)
+
 central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
 
 @testset "Adjoint gradient vs finite difference" begin
@@ -196,6 +208,19 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             @suppress sinking_block(igg; observation, η_block).J
         end
         @test adjoint_gradient ≈ fd rtol = 1.0e-6
+    end
+
+    # Starting from the previous time step's λ changes the iteration, not the result, and the λ
+    # of a failed solve is replaced by zero.
+    @testset "adjoint start, $(variational ? "variational" : "standard") $field" for variational in (false, true), field in (:Vy, :P)
+        observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        warm, cold, poisoned = map((:previous, :zero, :nan)) do λ_start
+            @suppress sinking_block(
+                igg; observation, variational, adjoint = true, solves = 2, λ_start,
+            ).gradient
+        end
+        @test warm ≈ cold rtol = 1.0e-6
+        @test poisoned ≈ cold rtol = 1.0e-6
     end
 
     # Sensitivities of an unconverged adjoint state are not returned.

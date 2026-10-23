@@ -26,6 +26,9 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
+- `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update, which
+  mixes the last `m` passes instead of taking the plain step `P += pressure_relaxation * γ_eff * RP`;
+  `0` takes the plain step. Default: `3`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Compatibility alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -83,6 +86,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `λ_relaxation_DR`: Relaxation factor for dynamic relaxation. Default: `1`.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
+- `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update
+  (local update and volumetric-mode relaxation together); `0` takes the plain update. Default: `3`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -123,6 +128,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
+        anderson_PH = 3,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -168,6 +174,7 @@ function _solve_DYREL!(
     reset_dyrel_vertex_λ!(dyrel_vertex_λ(stokes, dim))
 
     # Iteration loop
+    converged = false
     err_min = Inf
     err = 1.0
     errV0 = ntuple(_ -> 1.0, dim)
@@ -185,6 +192,8 @@ function _solve_DYREL!(
     # read (alongside the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num
     # scratch — P_num is no longer materialized separately.
     θc = dyrel.P_num
+    anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH)
+    itAA, err_PH_prev = 0, Inf
 
     # recompute all the DYREL variables
     if update_material
@@ -242,6 +251,7 @@ function _solve_DYREL!(
         end
         errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
         err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
+        itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -252,7 +262,10 @@ function _solve_DYREL!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        if err < ϵ
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -342,7 +355,12 @@ function _solve_DYREL!(
 
         # update pressure
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, false; args...)
-        @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
+        if iszero(anderson_PH)
+            @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
+        else
+            @. anderson.f = pressure_relaxation * dyrel.γ_eff * stokes.R.RP
+            anderson_pressure_update!(stokes.P, anderson, itAA)
+        end
 
         iter > total_iterMax && break
     end
@@ -370,7 +388,7 @@ function _solve_DYREL!(
     @parallel (@idx ni) multi_copy!(@tensor_center(stokes.τ_o), @tensor_center(stokes.τ))
     copy_stress_vertices!(stokes, dim)
 
-    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot)
+    return (; iter, err_evo_it, err_evo_V, err_evo_P, err_evo_tot, converged)
 
 end
 
@@ -392,6 +410,57 @@ function _solve_DYREL!(
 end
 
 # Dimension-agnostic helpers for DYREL
+
+# History of the type-II Anderson acceleration of the Powell-Hestenes fixed-point iteration
+# P ← P + f, f = pressure_relaxation·γ_eff·RP: the plain update `f`, the previous pressure and
+# update, ring buffers of depth `m` with their differences ΔX = ΔP and ΔF = Δf, and the host
+# Gram matrix G = ΔFᵀΔF and right-hand side b = ΔFᵀf.
+function anderson_history(P, m::Integer)
+    m > 0 || throw(ArgumentError("anderson_PH must be ≥ 0 (got $m)"))
+    T = eltype(P)
+    return (;
+        f = similar(P), P_prev = similar(P), f_prev = similar(P),
+        ΔX = [similar(P) for _ in 1:m], ΔF = [similar(P) for _ in 1:m],
+        G = zeros(T, m, m), b = zeros(T, m),
+    )
+end
+
+# Passes since the last Anderson restart. The history restarts whenever the PH error grows: it
+# then spans a non-contracting phase (e.g. inexact early inner solves) and would extrapolate
+# the wrong way, so the next step falls back to the plain update.
+anderson_restart(k, err, err_prev) = (err > err_prev ? 1 : k + 1), err
+
+# P ← P + f − (ΔX + ΔF)·θ with θ = argmin ‖f − ΔF·θ‖₂. The step vanishes with f, so the
+# fixed point RP = 0 is that of the plain update. `k` counts the passes since the last
+# restart; k = 1 takes the plain step and starts a new history.
+function anderson_pressure_update!(P, history, k)
+    (; f, P_prev, f_prev, ΔX, ΔF, G, b) = history
+    m = length(ΔX)
+    n = min(k - 1, m)
+    if k > 1
+        slot = (k - 2) % m + 1
+        @. ΔX[slot] = P - P_prev
+        @. ΔF[slot] = f - f_prev
+        for j in 1:n
+            G[slot, j] = G[j, slot] = dot_mpi(ΔF[slot], ΔF[j])
+        end
+    end
+    copyto!(P_prev, P)
+    copyto!(f_prev, f)
+    P .+= f
+    iszero(n) && return nothing
+    for i in 1:n
+        b[i] = dot_mpi(ΔF[i], f)
+    end
+    # the history columns turn nearly collinear near convergence; pinv drops the
+    # directions the update differences cannot resolve
+    θ = pinv(@view(G[1:n, 1:n]); rtol = sqrt(eps(eltype(G)))) * @view(b[1:n])
+    all(isfinite, θ) || error("Anderson PH: non-finite mixing coefficients θ = $θ")
+    for i in 1:n
+        @. P -= θ[i] * (ΔX[i] + ΔF[i])
+    end
+    return nothing
+end
 
 @inline function dyrel_fields(dyrel::JustRelax.DYREL, ::Val{2})
     return (

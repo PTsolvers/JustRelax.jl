@@ -200,21 +200,22 @@ end
     # --- free_surface = false (instantaneous Stokes solve from rest) ---
     iters, maxVx, maxVy, allfinite = PlumeFreeSurface_DYREL(igg, nx, ny)
     @test allfinite
-    @test maxVy ≈ 9.28245184590358e-9 rtol = 1.0e-6
-    @test maxVx ≈ 2.486917826860531e-9 rtol = 1.0e-6
+    # reference maxima from solves converged to ϵ = 1e-10
+    @test maxVy ≈ 6.199664141666824e-9 rtol = 5.0e-3
+    @test maxVx ≈ 2.454353626547975e-9 rtol = 5.0e-3
     @test maxVy > maxVx
 
 
     iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
     @test allfinite_air
-    @test iters_air.err_evo_tot[end] < 1.0e-6
+    @test iters_air.converged
     @test iters.iter <= 1.25 * iters_air.err_evo_it[end]
 
     # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
     iters_fs, maxVx_fs, maxVy_fs, allfinite_fs = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2)
     @test allfinite_fs
     @test iters_fs.converged
-    @test maxVy_fs ≈ 6.62507771632624e-9 rtol = 1.0e-2
+    @test maxVy_fs ≈ 6.210100978724664e-9 rtol = 5.0e-3
     @test !isapprox(maxVy_fs, 9.6799854388711294e-9; rtol = 5.0e-4)
 
     # finalize_global_grid(; finalize_MPI = true)

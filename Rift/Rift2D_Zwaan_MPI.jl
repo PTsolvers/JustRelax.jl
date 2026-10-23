@@ -116,13 +116,6 @@ end
     return nothing
 end
 
-# Global offset of the local arrays along each dimension: ImplicitGlobalGrid places local
-# index `i` of the rank at Cartesian coordinate `c` on global index `c * (n - overlap) + i`.
-function global_offsets()
-    gg = ImplicitGlobalGrid.global_grid()
-    return ntuple(d -> gg.coords[d] * (gg.nxyz[d] - gg.overlaps[d]), Val(2))
-end
-
 # Overlap cells of the phase ratios at the edge of a subdomain miss the particles of the
 # neighboring rank; take them from the rank that owns them.
 function update_phase_ratios_halo!(phase_ratios)
@@ -130,51 +123,19 @@ function update_phase_ratios_halo!(phase_ratios)
     return nothing
 end
 
-# Assemble the local arrays `A` of all ranks into the global host array `A_g`, available
-# on every rank. Overlap entries agree after a halo update, so averaging them is exact.
-function assemble_global!(A_g, count, A, igg)
-    A_h = Array(A)
-    idx = ntuple(d -> global_offsets()[d] .+ axes(A_h, d), Val(2))
-    fill!(A_g, 0)
-    fill!(count, 0)
-    A_g[idx...] .= A_h
-    count[idx...] .= 1
-    MPI.Allreduce!(A_g, +, igg.comm_cart)
-    MPI.Allreduce!(count, +, igg.comm_cart)
-    all(>(0), count) || error("the local arrays do not cover the global array")
-    A_g ./= count
-    return A_g
-end
-
-# JustPIC's marker chain is not distributed, and its kernels index the chain with the local
-# cell index. Every rank therefore holds the global chain `chain_g` and a copy `chain` cut
-# to its own columns. Rank 0 advects the global chain with the global velocity field and
-# broadcasts the vertex heights.
-function advect_markerchain_mpi!(chain, chain_g, method, V, V_g, grid_g, dt, igg, backend)
-    foreach(V_g, V) do (A_g, count), A
-        assemble_global!(A_g, count, A, igg)
-    end
-    h = Array(chain_g.h_vertices)
-    if igg.me == 0
-        V_dev = map(((A_g, _),) -> PTArray(backend)(A_g), V_g)
-        semilagrangian_advection_markerchain!(chain_g, method, V_dev, grid_g.xi_vel, grid_g.xvi, dt)
-        copyto!(h, chain_g.h_vertices)
-    end
-    MPI.Bcast!(h, 0, igg.comm_cart)
-    if igg.me != 0
-        copyto!(chain_g.h_vertices, h)
-        JustPIC.finish_markerchain_step!(chain_g, nothing)
-    end
-    sync_local_chain!(chain, chain_g)
-    return nothing
-end
-
-function sync_local_chain!(chain, chain_g)
-    h = Array(chain_g.h_vertices)
-    offset = global_offsets()[1]
-    copyto!(chain.h_vertices, h[offset .+ (1:length(chain.h_vertices))])
-    JustPIC.finish_markerchain_step!(chain, nothing)
-    return nothing
+# Vertices of the local marker chain that this rank owns along x, gathered on rank 0 into
+# the global chain `(x, h)`; `nothing` on the other ranks. The ranks of a y-column hold the
+# same chain, so only the bottom row contributes.
+function gather_chain(chain, igg)
+    x, h = Array(chain.cell_vertices), Array(chain.h_vertices)
+    n = length(h)
+    i0 = igg.coords[1] == 0 ? 1 : 2
+    i1 = igg.coords[1] == igg.dims[1] - 1 ? n : n - 2
+    part = igg.coords[2] == 0 ? (igg.coords[1], x[i0:i1], h[i0:i1]) : nothing
+    parts = MPI.gather(part, igg.comm_cart; root = 0)
+    igg.me == 0 || return nothing
+    sorted = sort!(filter(!isnothing, parts); by = first)
+    return reduce(vcat, getindex.(sorted, 2)), reduce(vcat, getindex.(sorted, 3))
 end
 
 # Cells owned by each rank, without the overlap, gathered on rank 0 into an
@@ -257,9 +218,7 @@ function main(
     )
     # Physical domain ------------------------------------
     xvi_nd_g = ntuple(i -> nondimensionalize(collect(xvi_km[i]) .* km, CharDim), Val(2))
-    # the subdomain of this rank, and the global grid that advects the global marker chain
-    grid = Geometry(PTArray(backend), xvi_nd_g...)
-    grid_g = Geometry(PTArray(backend), xvi_nd_g...; distributed = false)
+    grid = Geometry(PTArray(backend), xvi_nd_g...) # the subdomain of this rank
     (; xci, xvi, ni) = grid   # nodes at the center and vertices of the cells
     li_nd = grid.li
     origin_nd = grid.origin
@@ -300,14 +259,9 @@ function main(
     air_phase = 5
     nxcell_chain, max_xcell_chain, min_xcell_chain = 100, 125, 75
     initial_elevation = nondimensionalize(0.0e0 * m, CharDim)
-    chain_g = init_markerchain(
-        backend_JP, nxcell_chain, min_xcell_chain, max_xcell_chain, grid_g.xvi[1], initial_elevation
-    )
     chain = init_markerchain(
         backend_JP, nxcell_chain, min_xcell_chain, max_xcell_chain, xvi[1], initial_elevation
     )
-    # host buffers and overlap counters for the global velocity that advects the global chain
-    V_g = map(n -> (zeros(n), zeros(n)), (grid_g.ni .+ (1, 2), grid_g.ni .+ (2, 1)))
     update_phases_given_markerchain!(pPhases, chain, particles, origin_nd, dxi, air_phase)
     pEII.data[pPhases.data .== air_phase] .= 0.0
     # the plastic strain noise is random, so the overlap particles must come from their owner
@@ -411,9 +365,8 @@ function main(
     if !isnothing(restart_from)
         igg.nprocs == 1 || error("This restart helper supports serial checkpoints only")
         t, dt, it = reload_zwaan_checkpoint!(
-            restart_from, stokes, thermal, particles, particle_args, phase_ratios, chain_g, pτ; P_lith = P_lith
+            restart_from, stokes, thermal, particles, particle_args, phase_ratios, chain, pτ; P_lith = P_lith
         )
-        sync_local_chain!(chain, chain_g)
         compute_rock_fraction!(ϕ, chain, xvi, dxi)
         prune_orphan_faces!(ϕ)
         compute_ρg!(ρg[2], phase_ratios, rheology, (T = thermal.T, P = stokes.P); air_phase = air_phase)
@@ -554,7 +507,7 @@ function main(
         # advect particles in memory
         move_particles!(particles, particle_args)
         # advect the free surface and relabel the particles against it before injection
-        advect_markerchain_mpi!(chain, chain_g, RungeKutta2(), @velocity(stokes), V_g, grid_g, dt, igg, backend)
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin_nd, dxi, air_phase)
         # check if we need to inject particles
         fill_ghosted!(EII_ghosted, stokes.EII_pl)
@@ -646,6 +599,8 @@ function main(
                 )
             end
 
+            chain_global = gather_chain(chain, igg)
+
             if igg.me == 0
                 if do_vtk
                     data_c = (;
@@ -679,8 +634,8 @@ function main(
                     )
                     save_marker_chain(
                         joinpath(vtk_dir, "topo_" * lpad("$it", 6, "0")),
-                        chain_g;
-                        conversion = chain_conversion,
+                        chain_global[1] ./ chain_conversion,
+                        chain_global[2] ./ chain_conversion;
                         t = ustrip(dimensionalize(t, yr, CharDim)),
                         pvd = joinpath(vtk_dir, "Rift2D_Zwaan_topo"),
                     )
@@ -688,8 +643,8 @@ function main(
 
                 # blank cells that are mostly air
                 mask_air(A) = ifelse.(fields.rock .≥ 0.5, A, NaN)
-                chain_x = dim(chain_g.cell_vertices, km)
-                chain_y = dim(chain_g.h_vertices, km)
+                chain_x = dim(chain_global[1], km)
+                chain_y = dim(chain_global[2], km)
 
                 ar = DataAspect()
                 fig2 = Figure(size = (1200, 900))

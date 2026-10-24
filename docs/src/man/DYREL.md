@@ -1,9 +1,9 @@
 # Using the APT method with auto tuned damping coefficients
 
 > [!WARNING]
-> This solver is experimental. The DYREL path supports 2D Stokes only. The
-> separate 2D variational-Stokes solver is documented in
-> [2D variational Stokes](./variational_stokes.md).
+> This solver is experimental. Standard and variational DYREL support 2D and 3D.
+> The 3D variational path requires a uniform, nonperiodic grid. See also
+> [variational Stokes](./variational_stokes.md).
 
 Instead of using the Accelerated Pseudo-Transient method, where the damping coefficients are constant throughout the PT iterations (as in [Räss et al., 2022](https://gmd.copernicus.org/articles/15/5757/2022/)), we can use a self-tuning version of the APT method based on the approach described in [Duretz et al., 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
 
@@ -75,16 +75,16 @@ where the solver keyword arguments are:
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
-- `free_surface` $\rightarrow$ include the 2D density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+- `free_surface` $\rightarrow$ include the density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
 
 When `free_surface=true`, DYREL adds the local diagonal
 $-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
 row bound whenever the pseudo-transient coefficients are refreshed. The same
 term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
 
-## 2D variational DYREL
+## Variational DYREL
 
-Free surfaces represented by a `RockRatio` use the dedicated 2D entry point
+Free surfaces represented by a `RockRatio` use the dedicated 2D/3D entry point
 `solve_VariationalDYREL!`. It combines DYREL's Powell--Hestenes and dynamic
 relaxation iteration with the volume-weighted operator of Larionov, Batty, and
 Bridson (2017): center fractions weight pressure and normal stress, vertex
@@ -112,10 +112,25 @@ pressure and velocity rows are eliminated, positive sliver faces use a bounded
 face mass, and changing the mask between calls resets the dynamic-relaxation
 history. `air_phase` excludes the air phase from material averages, while
 `pressure_relaxation` damps the Powell--Hestenes pressure update; its default is
-`1`. The solver accepts either a `Geometry{2}` or a legacy uniform-spacing tuple,
+`1`. The solver accepts either a `Geometry{2}`, a `Geometry{3}`, or a legacy uniform-spacing tuple,
 and takes its options either as the plain keywords above or bundled as a single
 `kwargs = (; ...)` NamedTuple.
-Standard `solve_DYREL!` remains unchanged for unweighted 2D problems.
+The 3D variational path requires a uniform, nonperiodic grid. Its shear stresses
+live on `yz`, `xz`, and `xy` edges. The Gershgorin diagonal and row bound use
+the Maxwell viscosity `η / (1 + η / (G * dt))` at cell centers and each shear
+edge, with the phase ratios and harmonic creep-viscosity averages used by the
+stress update. Bulk elasticity enters through `ηb = Kb * dt` and `γ_eff`.
+
+Standard `solve_DYREL!` remains available for unweighted problems.
+
+`solve_VariationalDYREL!` also accepts `surface_pressure = Pload`, either a real
+scalar or a cell-centered real field on the same backend as `stokes.P`.
+Positive pressure compresses the embedded rock–air interface. Both the outer
+PH residual and the inner DR update include the same prescribed load. It is
+independent of the `free_surface` stabilization keyword and requires
+`flow_bcs.free_surface = false`. See
+[Prescribed surface pressure](./variational_stokes.md#Prescribed-surface-pressure)
+for the mask operator, prescribed-field extension, and update lifecycle.
 
 A velocity row whose preconditioner diagonal comes out zero is decoupled from
 its neighbours and is preconditioned with the identity. A diagonal that comes
@@ -126,7 +141,7 @@ failure rather than continuing with an arbitrary substitute. Reaching it with
 `free_surface = true` indicates the timestep is too large for the density
 contrast at the surface.
 
-See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
+See [variational Stokes](./variational_stokes.md) for marker-chain ordering,
 mask construction, and the mathematical reference.
 
 # Examples

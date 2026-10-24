@@ -1,4 +1,4 @@
-# 2D variational Stokes
+# Variational Stokes
 
 The variational Stokes solver is a matrix-free, volume-fraction discretization
 of the embedded liquid domain. It is intended for free surfaces represented by
@@ -8,10 +8,10 @@ of Larionov, Batty and Bridson (2017), with the physical geodynamic body-force
 terms and JustRelax's pseudo-transient iteration added separately.
 
 The equations and operators described on this page are the 2D ones, which is
-what the miniapps exercise. `solve_VariationalStokes!` also has a 3D method,
-built on the same weights and limited to uniform grids; it is tested against the
-standard 3D solver at full rock fraction and with a flat free surface. Both are
-implemented in
+what the miniapps exercise. `solve_VariationalStokes!` and
+`solve_VariationalDYREL!` also have 3D methods, built on the same weights and
+limited to uniform grids; they are tested against the standard 3D solvers at
+full rock fraction and with a flat free surface. Both are implemented in
 [`src/variational_stokes/`](https://github.com/PTsolvers/JustRelax.jl/tree/main/src/variational_stokes).
 
 The equations below distinguish the mathematical target from the current

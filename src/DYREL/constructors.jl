@@ -138,8 +138,11 @@ end
 
 """
     DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0)
+    DYREL(stokes, rheology, phase_ratios, ϕ::RockRatio, di, dt; kwargs...)
 
 Constructs and initializes a `DYREL` object based on existing Stokes fields.
+The `RockRatio` method builds the volume-weighted state required by
+`solve_VariationalDYREL!` in 2D and 3D; pass the same `ϕ` to the solver.
 
 This function:
 1. Allocates zero-initialized arrays using grid dimensions from `stokes`.
@@ -151,6 +154,7 @@ This function:
 - `stokes`: `JustRelax.StokesArrays` struct.
 - `rheology`: Material properties.
 - `phase_ratios`: Phase fraction information.
+- `ϕ`: `JustRelax.RockRatio` volume fractions (variational method only).
 - `di`: Grid spacing tuple.
 - `dt`: Time step.
 

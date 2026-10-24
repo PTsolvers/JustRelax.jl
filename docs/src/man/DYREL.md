@@ -141,7 +141,7 @@ failure rather than continuing with an arbitrary substitute. Reaching it with
 `free_surface = true` indicates the timestep is too large for the density
 contrast at the surface.
 
-See [2D variational Stokes](./variational_stokes.md) for marker-chain ordering,
+See [variational Stokes](./variational_stokes.md) for marker-chain ordering,
 mask construction, and the mathematical reference.
 
 # Examples

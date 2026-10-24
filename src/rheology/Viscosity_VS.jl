@@ -87,7 +87,7 @@ function _compute_viscosity!(
         local_viscosity_args,
         ϕ,
     )
-    # vertex viscosity (DYREL is 2D-only)
+    # vertex viscosity (2D only; 3D returns early above)
     @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
         stokes.viscosity.ηv,
         ν,

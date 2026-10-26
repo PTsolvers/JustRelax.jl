@@ -76,11 +76,52 @@ where the solver keyword arguments are:
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
 - `free_surface` $\rightarrow$ include the 2D density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+- `anderson_PH` $\rightarrow$ depth $m$ of the Anderson acceleration of the Powell--Hestenes pressure update. The default `0` takes the plain update.
 
 When `free_surface=true`, DYREL adds the local diagonal
 $-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
 row bound whenever the pseudo-transient coefficients are refreshed. The same
 term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
+
+## Anderson acceleration of the Powell--Hestenes loop
+
+The Powell--Hestenes loop updates the pressure as a fixed-point iteration,
+$P_{k+1} = P_k + f_k$ with $f_k = \omega\,\gamma_\mathrm{eff}\,R_P(P_k)$, where
+$\omega$ is `pressure_relaxation`. With a pressure-dependent yield function
+(Drucker--Prager with $\phi > 0$) the plastic return reads the pressure that this
+loop updates once per pass, and the loop converges only linearly: plastic time
+steps can need tens of passes where elastic ones need a few.
+
+`anderson_PH = m` replaces the plain step by type-II Anderson acceleration
+([Walker & Ni, 2011](https://doi.org/10.1137/10078356X)) over the last $m$
+passes. With the differences $\Delta X = [P_j - P_{j-1}]$ and
+$\Delta F = [f_j - f_{j-1}]$,
+
+```math
+\theta = \arg\min_\theta \lVert f_k - \Delta F\,\theta \rVert_2,
+\qquad
+P_{k+1} = P_k + f_k - (\Delta X + \Delta F)\,\theta .
+```
+
+The step vanishes with $R_P$, so the converged solution is the one of the plain
+update; only the path to it changes. The history restarts at every solver call
+and whenever the Powell--Hestenes error grows from one pass to the next, so the
+pass after such a growth takes the plain step. In `solve_VariationalDYREL!` the
+acceleration mixes the whole pressure update of a pass, including the
+volumetric-mode relaxation, and its inner products run over the active pressure
+cells only.
+
+The acceleration pays off for plastic models: `anderson_PH = 3` is a good
+starting point, and the plastic DYREL miniapps use it. For viscous or elastic
+models the plain update already converges in a few passes, so keep the default.
+Each level of depth stores two extra pressure-sized arrays.
+
+```julia
+solve_DYREL!(
+    stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+    anderson_PH = 3,
+)
+```
 
 ## 2D variational DYREL
 

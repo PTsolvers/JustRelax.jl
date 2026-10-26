@@ -71,7 +71,7 @@ function init_phases!(phase_ratios, xci, xvi)
     return nothing
 end
 
-function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1, variational = true)
+function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1, variational = true, anderson_PH = 0)
     # Physical domain ------------------------------------
     thick_air = 100.0e3
     ly = 400.0e3 + thick_air
@@ -147,6 +147,7 @@ function PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = false, nsolves = 1, 
             linear_viscosity = true,
             free_surface = free_surface,
             viscosity_cutoff = viscosity_cutoff,
+            anderson_PH,
         )
         iters = if variational
             solve_VariationalDYREL!(
@@ -204,10 +205,17 @@ end
     @test maxVx ≈ 2.486917826860531e-9 rtol = 1.0e-6
     @test maxVy > maxVx
 
+    # reference maxima from solves converged to ϵ = 1e-10; at ϵ = 1e-6 the plain update above
+    # stops far from them, the accelerated one does not
+    _, maxVx_aa, maxVy_aa, allfinite_aa = PlumeFreeSurface_DYREL(igg, nx, ny; anderson_PH = 3)
+    @test allfinite_aa
+    @test maxVy_aa ≈ 6.199664141666824e-9 rtol = 5.0e-3
+    @test maxVx_aa ≈ 2.454353626547975e-9 rtol = 5.0e-3
+
 
     iters_air, _, _, allfinite_air = PlumeFreeSurface_DYREL(igg, nx, ny; variational = false)
     @test allfinite_air
-    @test iters_air.err_evo_tot[end] < 1.0e-6
+    @test iters_air.converged
     @test iters.iter <= 1.25 * iters_air.err_evo_it[end]
 
     # --- free_surface = true (stabilization term active on the 2nd solve, Vy ≠ 0) ---
@@ -216,6 +224,11 @@ end
     @test iters_fs.converged
     @test maxVy_fs ≈ 6.62507771632624e-9 rtol = 1.0e-2
     @test !isapprox(maxVy_fs, 9.6799854388711294e-9; rtol = 5.0e-4)
+
+    iters_fs_aa, _, maxVy_fs_aa, allfinite_fs_aa = PlumeFreeSurface_DYREL(igg, nx, ny; free_surface = true, nsolves = 2, anderson_PH = 3)
+    @test allfinite_fs_aa
+    @test iters_fs_aa.converged
+    @test maxVy_fs_aa ≈ 6.210100978724664e-9 rtol = 5.0e-3
 
     # finalize_global_grid(; finalize_MPI = true)
     # end

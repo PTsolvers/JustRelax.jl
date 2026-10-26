@@ -363,6 +363,7 @@ function main(li, origin, phases_GMG, T_GMG, igg; nx = 16, ny = 16, figdir = "fi
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_DR = false,
                 iterMax = 250.0e3,
                 nout = 400,

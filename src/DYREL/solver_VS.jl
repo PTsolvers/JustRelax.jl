@@ -23,6 +23,7 @@ function _solve_VariationalDYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
+        anderson_PH = 0,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -133,6 +134,8 @@ function _solve_VariationalDYREL!(
     # small pressure correction θc = γ_eff·RP + ΔPψ, assembled each iteration and read (alongside
     # the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num scratch.
     θc = dyrel.P_num
+    anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH, maskP)
+    itAA, err_PH_prev = 0, Inf
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
@@ -180,6 +183,7 @@ function _solve_VariationalDYREL!(
         RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt))
+        itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
         # Convergence additionally accepts a continuity residual that is negligible in absolute
         # terms: a field at rest has no velocity scale, so `Vspan` collapses to the residual-level
         # noise and `errPt` stops carrying information. `RP` is a divergence, so `RP·dt` is the
@@ -318,6 +322,7 @@ function _solve_VariationalDYREL!(
         # update pressure — refresh RP from the final velocity first (do_strain_rate = false leaves
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
+        isnothing(anderson) || copyto!(anderson.f, stokes.P)
         @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
@@ -326,6 +331,12 @@ function _solve_VariationalDYREL!(
         if !iszero(compliance)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
             relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
+        end
+        # Anderson mixes the whole update of the pass, volumetric mode included
+        if !isnothing(anderson)
+            @. anderson.f = stokes.P - anderson.f
+            @. stokes.P -= anderson.f
+            anderson_pressure_update!(stokes.P, anderson, itAA)
         end
 
         iter > total_iterMax && break

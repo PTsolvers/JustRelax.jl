@@ -124,6 +124,9 @@ function _solve_VariationalDYREL!(
     stokes.λ .= 0.0
     stokes.λv .= 0.0
 
+    # the forward loop tightens `rel_drop` whenever its error rises; the adjoint starts from
+    # the caller's value instead of inheriting the forward's tightened one
+    rel_drop_adjoint = rel_drop
     # Iteration loop
     err_min = Inf
     err = 1.0
@@ -385,7 +388,7 @@ function _solve_VariationalDYREL!(
             iterMax_DR,
             total_iterMax,
             nout,
-            rel_drop,
+            rel_drop = rel_drop_adjoint,
             verbose_PH,
             verbose_DR,
             observation,

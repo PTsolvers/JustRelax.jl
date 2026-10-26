@@ -252,6 +252,9 @@ function _solve_DYREL!(
         update_dτV_α_β!(dyrel)
     end
 
+    # the forward loop tightens `rel_drop` whenever its error rises; the adjoint starts from
+    # the caller's value instead of inheriting the forward's tightened one
+    rel_drop_adjoint = rel_drop
     # viscosity before each outer update, for the viscosity residual
     η_previous = linear_viscosity ? nothing : (similar(stokes.viscosity.η), similar(stokes.viscosity.ηv))
 
@@ -458,7 +461,7 @@ function _solve_DYREL!(
             iterMax_DR,
             total_iterMax,
             nout,
-            rel_drop,
+            rel_drop = rel_drop_adjoint,
             verbose_PH,
             verbose_DR,
             observation,

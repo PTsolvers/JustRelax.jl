@@ -111,6 +111,13 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
     `miniapps/Adjoint2D/NonAssociatedPlasticity2D_adjoint.jl` (diverges at Ψ = 0°, converges at
     Ψ = ϕ and at η_vp = 0.1).
 
+19. ⬜ **GeoParams' `PowerlawViscous` with n > 1 is shear-thickening.** GeoParams defines
+    τII = η0 (εII/ε0)^n, so a shear-thinning stress exponent 3 needs `n = 1/3`. Every power-law
+    miniapp and test here uses `n = 3` (e.g. `ShearBand2D_PowerLaw*.jl`, the adjoint shear-band
+    miniapps, `test_enzyme_parallelstencil.jl`), i.e. shear thickening. That is a positive
+    viscosity feedback: the adjoint step size shrinks with 1/(1 − F) and errors for F ≥ 1.
+    Decide whether the miniapps meant shear thinning and fix them, or document the convention.
+
 ## P3 — Performance
 
 11. 🟡 **Adjoint efficiency.** Profiled 2026-10-23 (CPU, 1 thread). One adjoint iteration at 128²
@@ -142,9 +149,13 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
 13. ⬜ Vertex→center gradient fold (`combine_center_vertex_gradient_kernel!`) maps boundary vertex 1
     to cells 1 and 2, while the forward `clamped_indices` reads cell 1 only. Sum preserved,
     attribution at the boundary differs. Align or fix the docstring.
-14. ⬜ With `viscosity_relaxation = 1e-2`, the forward stops on residuals, so η may not satisfy
-    η = viscosity(τ) exactly at the linearization point. Consider one unrelaxed viscosity update
-    before the adjoint.
+14. ✅ **Forward stopped with an inconsistent viscosity.** The forward convergence test only
+    checked the momentum and continuity residuals, which use the stress of the previous viscosity,
+    so a solve could stop with η far from h(τ(η)) (a factor 2.6 seen from a homogeneous start,
+    where the residuals vanish at once). Both forward solvers now also require the viscosity
+    residual RMS(|h(τ) − η| / η) < ϵ for nonlinear viscosity (rock cells only in the variational
+    solver); `test/test_dyrel_viscosity_residual.jl`. The adjoint linearizes about a consistent
+    state.
 15. ⬜ `test/test_dyrel.jl` uses an undefined `JR3` (pre-existing).
 16. ⬜ Typos "caclulate feedbck" in `Enzyme_kernels.jl` and `Enzyme_kernels_VS.jl`; the `typos`
     CI check will likely flag them.

@@ -252,6 +252,9 @@ function _solve_DYREL!(
         update_dτV_α_β!(dyrel)
     end
 
+    # viscosity before each outer update, for the viscosity residual
+    η_previous = linear_viscosity ? nothing : (similar(stokes.viscosity.η), similar(stokes.viscosity.ηv))
+
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
@@ -270,10 +273,16 @@ function _solve_DYREL!(
             Pf = fluid_pressure(args, stokes.P),
         )
         @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
+        errη = zero(ϵ)
         if !linear_viscosity
+            foreach(copyto!, η_previous, (stokes.viscosity.η, stokes.viscosity.ηv))
             compute_viscosity_τII!(
                 stokes, phase_ratios, args, rheology, viscosity_cutoff;
                 relaxation = viscosity_relaxation,
+            )
+            errη = max(
+                viscosity_residual(stokes.viscosity.η, η_previous[1], viscosity_relaxation),
+                viscosity_residual(stokes.viscosity.ηv, η_previous[2], viscosity_relaxation),
             )
         end
         update_stress_halo!(stokes, dim, linear_viscosity)
@@ -313,14 +322,14 @@ function _solve_DYREL!(
             errV0 = map(x -> x + eps(), errV)
             errPt0 = errPt + eps()
         end
-        err = maximum((errV..., errPt))
+        err = maximum((errV..., errPt, errη))
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
                 ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e, η=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0, errη)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
@@ -553,6 +562,20 @@ end
 end
 
 @inline dyrel_fields(::JustRelax.DYREL, ::Val{N}) where {N} = error("Unsupported dimension $N")
+
+# Viscosity residual of a nonlinear rheology: the RMS of |h(τ) - η| / η over the selected points,
+# recovered from the relaxed update η_new = η + ν (h(τ) - η). The momentum and continuity
+# residuals use the stress of the previous viscosity, so they alone can be small while η is
+# still far from the viscosity its stress implies.
+function viscosity_residual(η_new, η_old, ν)
+    sum_sq = sum_mpi((a, b) -> abs2((a - b) / b), η_new, η_old)
+    return sqrt(sum_sq / sum_mpi(_ -> 1.0, η_old)) / ν
+end
+
+function viscosity_residual(η_new, η_old, ν, mask)
+    sum_sq = sum_mpi((m, a, b) -> m ? abs2((a - b) / b) : zero(a), mask, η_new, η_old)
+    return sqrt(sum_sq / max(sum_mpi(m -> m ? 1.0 : 0.0, mask), 1)) / ν
+end
 
 # The adjoint differentiates the 2D kernels point by point, and its reverse pass adds into
 # neighbouring cells, which would need a summing halo exchange across ranks.

@@ -114,6 +114,8 @@ include("variational_stokes/PressureKernels.jl")
 
 include("variational_stokes/MiniKernels.jl")
 
+include("variational_stokes/SurfacePressure.jl")
+
 include("variational_stokes/StressKernels.jl")
 
 include("variational_stokes/VelocityKernels.jl")

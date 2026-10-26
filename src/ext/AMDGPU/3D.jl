@@ -46,9 +46,11 @@ import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_inde
 __init__() = @init_parallel_stencil(AMDGPU, Float64, 3)
 
 include("../../common.jl")
+include("../../DYREL/variational3D.jl")
 include("../../stokes/Stokes3D.jl")
 include("../../variational_stokes/Stokes3D.jl")
 include("../../DYREL/solver.jl")
+include("../../DYREL/solver_VS.jl")
 
 # Types
 function JR3D.StokesArrays(::Type{AMDGPUBackend}, ni::NTuple{N, Integer}) where {N}
@@ -470,6 +472,22 @@ end
 
 function JR3D.solve_VariationalStokes!(::AMDGPUBackendTrait, stokes, args...; kwargs)
     return _solve_VS!(stokes, args...; kwargs...)
+end
+
+function JR3D.compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, phases, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn::F) where {F}
+    return _compute_viscosity!(stokes, ν, phases, ϕ, args, rheology, air_phase, cutoff, fn)
+end
+
+function compute_viscosity!(::AMDGPUBackendTrait, stokes, ν, phases, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn::F) where {F}
+    return _compute_viscosity!(stokes, ν, phases, ϕ, args, rheology, air_phase, cutoff, fn)
+end
+
+function JR3D.solve_VariationalDYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)
+    return _solve_VariationalDYREL!(stokes, args...; kwargs...)
+end
+
+function JR3D.DYREL(::Type{AMDGPUBackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; kwargs...)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; kwargs...)
 end
 
 function JR3D.solve_DYREL!(::AMDGPUBackendTrait, stokes, args...; kwargs)

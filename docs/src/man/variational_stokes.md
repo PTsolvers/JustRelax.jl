@@ -1,4 +1,4 @@
-# 2D variational Stokes
+# Variational Stokes
 
 The variational Stokes solver is a matrix-free, volume-fraction discretization
 of the embedded liquid domain. It is intended for free surfaces represented by
@@ -8,10 +8,10 @@ of Larionov, Batty and Bridson (2017), with the physical geodynamic body-force
 terms and JustRelax's pseudo-transient iteration added separately.
 
 The equations and operators described on this page are the 2D ones, which is
-what the miniapps exercise. `solve_VariationalStokes!` also has a 3D method,
-built on the same weights and limited to uniform grids; it is tested against the
-standard 3D solver at full rock fraction and with a flat free surface. Both are
-implemented in
+what the miniapps exercise. `solve_VariationalStokes!` and
+`solve_VariationalDYREL!` also have 3D methods, built on the same weights and
+limited to uniform grids; they are tested against the standard 3D solvers at
+full rock fraction and with a flat free surface. Both are implemented in
 [`src/variational_stokes/`](https://github.com/PTsolvers/JustRelax.jl/tree/main/src/variational_stokes).
 
 The equations below distinguish the mathematical target from the current
@@ -303,8 +303,8 @@ solve_VariationalStokes!(
 
 The same weighted operator is available with dynamic relaxation. Build `DYREL`
 with the `RockRatio` and call `solve_VariationalDYREL!`; see
-[DYREL](./DYREL.md#2D-variational-DYREL). The variational DYREL path reuses the
-center, vertex, and face weights described here and is 2D-only.
+[DYREL](./DYREL.md#Variational-DYREL). The variational DYREL path reuses the
+center, vertex, and face weights described here in 2D and 3D.
 
 Options may be given either as the plain keywords above or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -313,9 +313,74 @@ For a marker-chain free surface, `air_phase` must identify the phase removed
 from liquid material averages. Omitting it preserves API compatibility but does
 not produce the intended air/liquid buoyancy or viscosity weighting.
 
+## Prescribed surface pressure
+
+Pass `surface_pressure` to `solve_VariationalStokes!` (2D or 3D) or
+`solve_VariationalDYREL!` (2D/3D) to load the embedded rock–air interface:
+
+```julia
+solve_VariationalStokes!(
+    stokes, pt_stokes, grid, flow_bcs, ρg, phase_ratios, ϕ,
+    rheology, args, dt, igg;
+    surface_pressure = 1.0e6, # uniform compressive pressure, in model pressure units
+    free_surface = true,
+)
+```
+
+The default, `nothing`, preserves zero external traction. A real scalar applies
+uniform pressure; a real array must have the same axes and backend as `stokes.P`.
+Positive values compress the rock. With the outward rock normal \(\boldsymbol n\),
+the imposed condition is
+
+\[
+(\boldsymbol\tau-P\mathbf I)\boldsymbol n
+=-P_{\mathrm{load}}\boldsymbol n.
+\]
+
+The array is a prescribed field sampled at cell centers, not a set of pressure
+unknowns. Extend it smoothly through the interface stencil on both sides of the
+surface. For example, a horizontal load can be constant along the vertical
+direction. Do not populate only air or cut cells: that creates an artificial
+discontinuity. Construct fields from global coordinates under MPI.
+
+Following Larionov et al. (2017), §5.1, the momentum residual receives
+
+\[
+\boldsymbol f_{\mathrm{load}}
+=G(\widetilde W_L^pP_{\mathrm{load}})
+-W_L^uG(P_{\mathrm{load}}).
+\]
+
+Here \(G\) is the staggered gradient, \(W_L^u\) contains velocity-face
+fractions, and \(\widetilde W_L^p\) contains center fractions projected onto
+retained pressure rows. This projection matches JustRelax's pressure elimination:
+a removed pressure cell also has zero weight in the prescribed-pressure term.
+For a constant load, the source balances a constant pressure offset on retained
+cells, including when a positive-fraction pressure cell is eliminated. For a
+variable load, the second term cancels the interior gradient, so a fully filled
+rock stencil receives no surface force. Existing cut-cell geometry and pressure
+elimination still limit interface accuracy.
+
+`stokes.P` remains the solved pressure used by constitutive laws and
+compressibility. Surface loading is separate from the pore pressure `Pf`.
+The prescribed array is copied and its halos synchronized at the start of each
+solve; changing it during the solve does not change the applied load. Update
+the load and `RockRatio` before each subsequent solve as the surface moves.
+
+Set `flow_bcs.free_surface = false` for this embedded-interface treatment.
+Combining `surface_pressure` with the zero-traction box-top condition
+`flow_bcs.free_surface = true` raises an `ArgumentError`. The solver keyword
+`free_surface = true` independently enables density-gradient stabilization and
+can be used with surface loading.
+
+The runnable
+[`SurfacePressure2D.jl` benchmark](https://github.com/PTsolvers/JustRelax.jl/blob/main/miniapps/benchmarks/stokes2D/free_surface_stabilization/SurfacePressure2D.jl)
+compares PT and DYREL for a sinusoidal load and reports the initial surface
+velocity response.
+
 ## Reference
 
-Larionov, A., Batty, C. and Bridson, R. (2017), *Variational Stokes: A Unified
+Larionov, E., Batty, C. and Bridson, R. (2017), *Variational Stokes: A Unified
 Pressure-Viscosity Solver for Accurate Viscous Liquids*, ACM Transactions on
 Graphics, 36(4), Article 101. See the
-[publisher record and mathematical reference](https://doi.org/10.1145/3099564.3099569).
+[publisher record and mathematical reference](https://doi.org/10.1145/3072959.3073628).

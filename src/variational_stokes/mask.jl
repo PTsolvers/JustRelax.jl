@@ -225,7 +225,7 @@ Base.@propagate_inbounds @inline function isvalid_c(ϕ::JustRelax.RockRatio, i, 
     return vx & vy
 end
 
-@parallel_indices (i, j) function update_valid_c_mask!(mask, ϕ::JustRelax.RockRatio)
+@parallel_indices (i, j) function update_valid_c_mask!(mask::AbstractArray{T, 2}, ϕ::JustRelax.RockRatio) where {T}
     mask[i, j] = isvalid_c(ϕ, i, j)
     return nothing
 end

@@ -370,6 +370,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax_DR = 150.0e3,

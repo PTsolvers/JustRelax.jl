@@ -187,6 +187,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs", nsteps = 30)
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,

@@ -28,7 +28,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
 - `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update, which
   mixes the last `m` passes instead of taking the plain step `P += pressure_relaxation * γ_eff * RP`;
-  `0` takes the plain step. Default: `3`.
+  `0` takes the plain step. Plastic models with a pressure-dependent yield function typically need
+  fewer passes with `m = 3`. Default: `0`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Compatibility alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -87,7 +88,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `λ_relaxation_PH`: Relaxation factor for Powell-Hestenes iterations. Default: `1`.
 - `pressure_relaxation`: Relaxation factor for the Powell-Hestenes pressure update. Default: `1`.
 - `anderson_PH`: Depth `m` of the Anderson acceleration of the Powell-Hestenes pressure update
-  (local update and volumetric-mode relaxation together); `0` takes the plain update. Default: `3`.
+  (local update and volumetric-mode relaxation together); `0` takes the plain update. Plastic models
+  with a pressure-dependent yield function typically need fewer passes with `m = 3`. Default: `0`.
 - `iterMax_PH`: Maximum number of Powell-Hestenes passes. Default: `1.0e3`.
 - `iterMax_DR`: Maximum number of iterations for each dynamic-relaxation solve. Default: `50.0e3`.
 - `iterMax`: Alias for `iterMax_DR`; used when `iterMax_DR` is not given.
@@ -128,7 +130,7 @@ function _solve_DYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
-        anderson_PH = 3,
+        anderson_PH = 0,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -355,7 +357,7 @@ function _solve_DYREL!(
 
         # update pressure
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, false; args...)
-        if iszero(anderson_PH)
+        if isnothing(anderson)
             @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
         else
             @. anderson.f = pressure_relaxation * dyrel.γ_eff * stokes.R.RP
@@ -414,14 +416,18 @@ end
 # History of the type-II Anderson acceleration of the Powell-Hestenes fixed-point iteration
 # P ← P + f, f = pressure_relaxation·γ_eff·RP: the plain update `f`, the previous pressure and
 # update, ring buffers of depth `m` with their differences ΔX = ΔP and ΔF = Δf, and the host
-# Gram matrix G = ΔFᵀΔF and right-hand side b = ΔFᵀf.
-function anderson_history(P, m::Integer)
+# Gram matrix G = ΔFᵀΔF and right-hand side b = ΔFᵀf. The inner products run over the cells in
+# `weight`: the cells this rank owns, restricted to the `active` cells when a mask is given, so
+# every rank computes the same θ as a serial run would.
+function anderson_history(P, m::Integer, active = nothing)
     m > 0 || throw(ArgumentError("anderson_PH must be ≥ 0 (got $m)"))
     T = eltype(P)
+    weight = owned_cells(P)
+    isnothing(active) || (weight .&= active)
     return (;
         f = similar(P), P_prev = similar(P), f_prev = similar(P),
         ΔX = [similar(P) for _ in 1:m], ΔF = [similar(P) for _ in 1:m],
-        G = zeros(T, m, m), b = zeros(T, m),
+        G = zeros(T, m, m), b = zeros(T, m), weight,
     )
 end
 
@@ -434,7 +440,7 @@ anderson_restart(k, err, err_prev) = (err > err_prev ? 1 : k + 1), err
 # fixed point RP = 0 is that of the plain update. `k` counts the passes since the last
 # restart; k = 1 takes the plain step and starts a new history.
 function anderson_pressure_update!(P, history, k)
-    (; f, P_prev, f_prev, ΔX, ΔF, G, b) = history
+    (; f, P_prev, f_prev, ΔX, ΔF, G, b, weight) = history
     m = length(ΔX)
     n = min(k - 1, m)
     if k > 1
@@ -442,7 +448,7 @@ function anderson_pressure_update!(P, history, k)
         @. ΔX[slot] = P - P_prev
         @. ΔF[slot] = f - f_prev
         for j in 1:n
-            G[slot, j] = G[j, slot] = dot_mpi(ΔF[slot], ΔF[j])
+            G[slot, j] = G[j, slot] = dot_mpi(ΔF[slot], ΔF[j], weight)
         end
     end
     copyto!(P_prev, P)
@@ -450,7 +456,7 @@ function anderson_pressure_update!(P, history, k)
     P .+= f
     iszero(n) && return nothing
     for i in 1:n
-        b[i] = dot_mpi(ΔF[i], f)
+        b[i] = dot_mpi(ΔF[i], f, weight)
     end
     # the history columns turn nearly collinear near convergence; pinv drops the
     # directions the update differences cannot resolve

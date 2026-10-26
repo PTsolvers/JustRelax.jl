@@ -23,7 +23,7 @@ function _solve_VariationalDYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
-        anderson_PH = 3,
+        anderson_PH = 0,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -134,7 +134,7 @@ function _solve_VariationalDYREL!(
     # small pressure correction θc = γ_eff·RP + ΔPψ, assembled each iteration and read (alongside
     # the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num scratch.
     θc = dyrel.P_num
-    anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH)
+    anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH, maskP)
     itAA, err_PH_prev = 0, Inf
 
     # recompute all the DYREL variables

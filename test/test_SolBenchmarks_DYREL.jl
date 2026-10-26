@@ -54,7 +54,7 @@ end
 struct PassthroughDensity <: AbstractDensity{Float64} end
 @inline GeoParams.compute_density(::PassthroughDensity, args) = args.ρ_target
 
-function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax, variational, global_penalty = true)
+function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax, variational, global_penalty = true, anderson_PH = 0)
     ni = size(phase_ratios.center)
     stokes = StokesArrays(backend_JR, ni)
     ρg = @zeros(ni...), @zeros(ni...)
@@ -67,7 +67,7 @@ function solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, i
         verbose_PH = false, verbose_DR = false,
         iterMax = iterMax, total_iterMax = iterMax,
         nout = 100, rel_drop = 0.1,
-        linear_viscosity = true, viscosity_cutoff = (-Inf, Inf),
+        linear_viscosity = true, viscosity_cutoff = (-Inf, Inf), anderson_PH,
     )
 
     if variational
@@ -177,7 +177,7 @@ function solkz_density(xci, ni; km = 2)
     return ρ
 end
 
-function run_solkz(igg, nx, ny; variational, Δη = 1.0e6, km = 2, γfact = 3, ϵ = 1.0e-6)
+function run_solkz(igg, nx, ny; variational, Δη = 1.0e6, km = 2, γfact = 3, ϵ = 1.0e-6, anderson_PH = 0)
     ni = nx, ny
     li = 1.0, 1.0
     grid = Geometry(ni, li; origin = (0.0, 0.0))
@@ -198,7 +198,7 @@ function run_solkz(igg, nx, ny; variational, Δη = 1.0e6, km = 2, γfact = 3, �
     args = (; T = @zeros(ni .+ 2...), P = @zeros(ni...), dt = dt, η_target = η_target, ρ_target = ρ)
     flow_bcs = VelocityBoundaryConditions(; free_slip = (left = true, right = true, top = true, bot = true))
 
-    return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational)
+    return solve_sol_benchmark(rheology, phase_ratios, args, flow_bcs, grid, dt, igg; γfact, ϵ, iterMax = 5.0e3 * nx, variational, anderson_PH)
 end
 
 # ------------------------------------------------------------------------------------ #
@@ -323,8 +323,19 @@ end
             @test iters.converged
             @test iters_vs.converged
             @test all(isfinite, Array(stokes.P)) && all(isfinite, Array(stokes_vs.P))
-            # a residual of ϵ = 1e-6 still leaves a pressure error of several percent at Δη = 1e6,
-            # so the pressure bounds separate an accurate solve from an early exit
+            @test maximum(abs, Array(stokes.V.Vx)) ≈ 0.00010315674748001426 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.V.Vy)) ≈ 6.045868650922067e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes.P)) ≈ 0.10001155920216592 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vx)) ≈ 0.000105434676741088 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.V.Vy)) ≈ 6.162915680233704e-5 rtol = 1.0e-6
+            @test maximum(abs, Array(stokes_vs.P)) ≈ 0.1029917627786186 rtol = 1.0e-6
+
+            stokes, iters = run_solkz(igg, nx, ny; variational = false, anderson_PH = 3)
+            stokes_vs, iters_vs = run_solkz(igg, nx, ny; variational = true, anderson_PH = 3)
+            @test iters.converged
+            @test iters_vs.converged
+            # a residual of ϵ = 1e-6 leaves a pressure error of several percent at Δη = 1e6 with
+            # the plain update; the accelerated update has to stay within these bounds
             solkz = X -> Stokes2D_SolKz_Zhong1996(X; params = (Δη = 1.0e6, B = log(1.0e6) / 2, km = 2, n = 3, σ = 1.0))
             e = analytical_error(stokes, (nx, ny), solkz)
             @test e.P < 4.0e-2

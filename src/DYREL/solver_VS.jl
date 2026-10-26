@@ -139,6 +139,9 @@ function _solve_VariationalDYREL!(
     compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
+    # viscosity before each outer update, for the viscosity residual
+    η_previous = linear_viscosity ? nothing : similar(stokes.viscosity.η)
+
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
@@ -151,8 +154,12 @@ function _solve_VariationalDYREL!(
         # vertex viscosity as harm_clamped(η) — the same convention as the APT variational stress
         # kernel; a stored ηv would disagree at the free-surface interface and under-move it.
         compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P))
+        errη = zero(ϵ)
         if !linear_viscosity
+            copyto!(η_previous, stokes.viscosity.η)
             update_viscosity_τII!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
+            # only the rock viscosity is part of the solution
+            errη = viscosity_residual(stokes.viscosity.η, η_previous, viscosity_relaxation, maskP)
         end
 
         # compute velocity residuals (pressure residual stokes.R.RP already computed above;
@@ -179,14 +186,14 @@ function _solve_VariationalDYREL!(
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
         RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
-        err = maximum((errV..., errPt))
+        err = maximum((errV..., errPt, errη))
         # Convergence additionally accepts a continuity residual that is negligible in absolute
         # terms: a field at rest has no velocity scale, so `Vspan` collapses to the residual-level
         # noise and `errPt` stops carrying information. `RP` is a divergence, so `RP·dt` is the
         # volumetric strain the step would accumulate — dimensionless and solution-independent.
         # Only the convergence test uses it; `err` continues to drive the tolerance schedule below,
         # which is tuned against the relative form.
-        err_converged = max(maximum(errV), min(errPt, RP_rms * dt))
+        err_converged = max(maximum(errV), min(errPt, RP_rms * dt), errη)
 
         if itPH ≤ 2
             errV0 = map(x -> x + eps(), errV)
@@ -198,7 +205,7 @@ function _solve_VariationalDYREL!(
                 ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e, η=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0, errη)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")

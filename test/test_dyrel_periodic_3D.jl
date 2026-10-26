@@ -75,7 +75,7 @@ function _init_simple_shear!(stokes, grid, ni, lz, εbg)
     return nothing
 end
 
-_linear_phase(η, phase = 1) = SetMaterialParams(;
+_linear_phase(η; phase = 1) = SetMaterialParams(;
     Phase = phase,
     Density = ConstantDensity(; ρ = 0.0),
     Gravity = ConstantGravity(; g = 0.0),
@@ -169,7 +169,7 @@ _linear_phase(η, phase = 1) = SetMaterialParams(;
         εbg, lz = 1.0, li[3]
         grid = Geometry(ni, li; origin = (0.0, 0.0, 0.0))
         dt = Inf
-        rheology = (_linear_phase(1.0, 1), _linear_phase(100.0, 2))
+        rheology = (_linear_phase(1.0), _linear_phase(100.0; phase = 2))
 
         function solve_shifted(shift)
             phase_ratios = PhaseRatios(backend_JP, 2, ni)

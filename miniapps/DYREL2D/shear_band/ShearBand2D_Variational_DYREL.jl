@@ -156,6 +156,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 air_phase = air_phase,
                 verbose_PH = true,
                 verbose_DR = false,

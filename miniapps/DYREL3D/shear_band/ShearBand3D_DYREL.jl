@@ -180,6 +180,7 @@ function main3D(
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax_DR = 50.0e3,

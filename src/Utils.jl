@@ -714,6 +714,48 @@ norm_mpi(A) = sqrt(sum_mpi(abs2, A))
 norm_mpi(A, B) = sqrt(sum_mpi((a, b) -> abs2(a * b), A, B))
 
 """
+    dot_mpi(A, B, weight)
+
+Compute the dot product of arrays `A` and `B` over the cells where `weight` is `true`, across
+all MPI processes. With `weight = owned_cells(A)` every cell of the global grid counts once.
+"""
+dot_mpi(A, B, weight) = sum_mpi((a, b, w) -> w * a * b, A, B, weight)
+
+"""
+    owned_cells(A)
+
+Boolean array shaped like `A` that is `true` on the cells of `A` this rank owns. Neighboring
+ranks share the overlap layers of a field of the global grid; each shared layer is owned by
+exactly one of them, so a reduction weighted by `owned_cells(A)` counts every global cell once.
+Without an initialized global grid every cell is owned.
+"""
+function owned_cells(A::AbstractArray{<:Any, N}) where {N}
+    owned = similar(A, Bool)
+    fill!(owned, true)
+    ImplicitGlobalGrid.grid_is_initialized() || return owned
+    grid = ImplicitGlobalGrid.global_grid()
+    owned_range(d) = begin
+        has_lo = grid.neighbors[1, d] != MPI.PROC_NULL
+        has_hi = grid.neighbors[2, d] != MPI.PROC_NULL
+        ax = axes(A, d)
+        (has_lo || has_hi) || return ax
+        # number of layers this array shares with each neighbor along `d`
+        nshared = grid.overlaps[d] + size(A, d) - grid.nxyz[d]
+        0 ≤ nshared < size(A, d) || error(
+            "an array of size $(size(A, d)) along dimension $d cannot share $nshared layers with its neighbors; `A` must be a field of the global grid"
+        )
+        # of the layers shared across an interface, the lower rank owns nshared - nshared ÷ 2
+        # and the upper rank the remaining nshared ÷ 2
+        lo = has_lo ? nshared - nshared ÷ 2 : 0
+        hi = has_hi ? nshared ÷ 2 : 0
+        return (first(ax) + lo):(last(ax) - hi)
+    end
+    fill!(owned, false)
+    view(owned, ntuple(owned_range, Val(N))...) .= true
+    return owned
+end
+
+"""
     sum_mpi(A)
 
 Compute the sum of array `A` across all MPI processes.

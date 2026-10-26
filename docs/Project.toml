@@ -14,7 +14,7 @@ JustRelax = {path = ".."}
 [compat]
 CairoMakie = "0.15"
 Documenter = "1"
-DocumenterVitepress = "0.2"
+DocumenterVitepress = "0.3"
 GeoParams = "0.8, 0.9"
 JustPIC = "0.7.14"
 Literate = "2"

@@ -68,8 +68,8 @@ function _heatdiffusion_PT!(
     err = 2 * ϵ
 
     if isnothing(igg) || igg.me == 0
-        println("\n====================================\n")
-        println("Starting thermal diffusion solver...\n")
+        verbose && println("\n====================================\n")
+        verbose && println("Starting thermal diffusion solver...\n")
     end
 
     while err > ϵ && iter < iterMax
@@ -81,7 +81,7 @@ function _heatdiffusion_PT!(
                     thermal.T,
                     K,
                     pt_thermal.θr_dτ,
-                    _di.center,
+                    _di,
                     thermal_bc.constant_flux,
                 )
             else
@@ -91,7 +91,7 @@ function _heatdiffusion_PT!(
                     thermal.T,
                     K,
                     pt_thermal.θr_dτ,
-                    _di.center,
+                    _di,
                     thermal_bc.constant_flux,
                 )
             end
@@ -103,7 +103,7 @@ function _heatdiffusion_PT!(
                 pt_thermal,
                 thermal_bc.dirichlet,
                 _dt,
-                _di.center,
+                _di.vertex,
                 ni,
             )
             thermal_bcs!(thermal, thermal_bc)
@@ -124,7 +124,7 @@ function _heatdiffusion_PT!(
                     ρCp,
                     thermal_bc.dirichlet,
                     _dt,
-                    _di.center,
+                    _di.vertex,
                 )
             end
 
@@ -143,8 +143,8 @@ function _heatdiffusion_PT!(
         if !(err ≤ ϵ)
             @warn "heatdiffusion_PT! did not converge: err = $err > ϵ = $ϵ after $iter iterations"
         end
-        println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
-        println("====================================\n")
+        verbose && println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
+        verbose && println("====================================\n")
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)
@@ -228,8 +228,8 @@ function _heatdiffusion_PT!(
     err = 2 * ϵ
 
     if isnothing(igg) || igg.me == 0
-        println("\n====================================\n")
-        println("Starting thermal diffusion solver...\n")
+        verbose && println("\n====================================\n")
+        verbose && println("Starting thermal diffusion solver...\n")
     end
 
     while err > ϵ && iter < iterMax
@@ -244,7 +244,7 @@ function _heatdiffusion_PT!(
                 rheology,
                 phase_flux...,
                 pt_thermal.θr_dτ,
-                grid._di.center,
+                grid._di,
                 args,
                 thermal_bc.constant_flux,
             )
@@ -303,8 +303,8 @@ function _heatdiffusion_PT!(
         if !(err ≤ ϵ)
             @warn "heatdiffusion_PT! did not converge: err = $err > ϵ = $ϵ after $iter iterations"
         end
-        println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
-        println("====================================\n")
+        verbose && println("\n ...solver finished in $(round(wtime0, sigdigits = 5)) seconds \n")
+        verbose && println("====================================\n")
     end
 
     @parallel update_ΔT!(thermal.ΔT, thermal.T, thermal.Told)

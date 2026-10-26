@@ -27,6 +27,14 @@ else
     JustPIC.CPU
 end
 
+const JR2K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax2D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D
+else
+    JustRelax.JustRelax2D
+end
+
 # host copy of the values held by the active particles
 active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
 
@@ -92,4 +100,20 @@ active_values(p, particles) = Array(p.data)[Array(particles.index.data)]
             @test active_values(p, particles) ≈ τ_before .+ Δ
         end
     end
+end
+
+@testset "Vorticity of a rigid rotation 2D" begin
+    ni = 6, 5
+    grid = Geometry(ni, (1.2, 0.75); origin = (0.0, 0.0))
+    Ω = 0.8
+    stokes = StokesArrays(backend, ni)
+    # V = Ω × r, with Vx = -Ω y and Vy = Ω x on their staggered coordinates
+    xvx, yvx = grid.xi_vel[1]
+    xvy, yvy = grid.xi_vel[2]
+    copyto!(stokes.V.Vx, [-Ω * y for _ in xvx, y in yvx])
+    copyto!(stokes.V.Vy, [Ω * x for x in xvy, _ in yvy])
+    JR2K.compute_vorticity!(stokes, grid._di, ni, Val(2))
+    # ω_xy = (∂Vy/∂x - ∂Vx/∂y) / 2 is the angular velocity
+    @test all(Array(stokes.ω.xy) .≈ Ω)
+    @test all(Array(stokes.ω.xy_c) .≈ Ω)
 end

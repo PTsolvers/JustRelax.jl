@@ -165,6 +165,89 @@ end
     end
 end
 
+@testset "heatdiffusion_PT! runs on a non-uniform grid" begin
+    # src/thermal_diffusion/DiffusionPT_solver.jl: update_T!/check_res! must divide the
+    # flux divergence by the thermal cell width, `grid._di.vertex` (one entry per cell).
+    # `grid._di.center` is one entry shorter (the gaps between interior cell centers)
+    # and throws a BoundsError as soon as the grid spacing is a genuine vector instead
+    # of a repeated scalar.
+    xv = [0.0, 0.2, 0.5, 0.6, 1.0, 1.3, 1.45, 1.8] .* 1.0e3
+    yv = [0.0, 0.1, 0.35, 0.45, 0.7, 0.8, 1.0] .* 1.0e3
+    nx, ny = length(xv) - 1, length(yv) - 1
+    ni = (nx, ny)
+    li = (xv[end] - xv[1], yv[end] - yv[1])
+    di = (minimum(diff(xv)), minimum(diff(yv)))
+    init_mpi = JustRelax.MPI.Initialized() ? false : true
+    igg = IGG(init_global_grid(nx, ny, 1; init_MPI = init_mpi)...)
+    grid = Geometry(PTArray(backend), xv, yv)
+
+    thermal = ThermalArrays(backend, ni)
+    thermal.T .= 1000.0
+    thermal_bc = TemperatureBoundaryConditions(; no_flux = (left = true, right = true, top = true, bot = true))
+    K = @fill(3.0, ni...)
+    ρCp = @fill(3.1e3 * 1.2e3, ni...)
+    dt = 1.0e3
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.95 / √2.1)
+
+    try
+        @suppress begin
+            result = heatdiffusion_PT!(
+                thermal,
+                pt_thermal,
+                thermal_bc,
+                K,
+                ρCp,
+                dt,
+                grid;
+                kwargs = (; igg = igg, nout = 1, iterMax = 20, verbose = false),
+            )
+            @test !isempty(result.iter_count)
+        end
+    finally
+        finalize_global_grid(; finalize_MPI = false)
+    end
+end
+
+@testset "Precomputed diffusion uses nonuniform cell widths" begin
+    ni = (8, 8)
+    xv = collect(range(0.0, 1.0; length = ni[1] + 1)) .^ 2
+    grid = Geometry(typeof(@zeros(1)), xv, xv)
+    init_mpi = !JustRelax.MPI.Initialized()
+    igg = IGG(init_global_grid(ni..., 1; init_MPI = init_mpi)...)
+    try
+        thermal = ThermalArrays(backend, ni)
+        initial = zeros((ni .+ 2)...)
+        xc = (xv[1:(end - 1)] + xv[2:end]) / 2
+        initial[2:(end - 1), 2:(end - 1)] .= xc .^ 2 .+ (xc .^ 2)'
+        thermal.T .= PTArray(backend)(initial)
+        K = @fill(1.0, ni...)
+        ρCp = @fill(1.0, ni...)
+        dt = 0.1
+        pt = PTThermalCoeffs(backend, K, ρCp, dt, (minimum(diff(xv)), minimum(diff(xv))), grid.li)
+        bc = TemperatureBoundaryConditions(;
+            no_flux = (left = true, right = true, top = true, bot = true),
+        )
+        @suppress heatdiffusion_PT!(
+            thermal, pt, bc, K, ρCp, dt, grid;
+            kwargs = (; igg, iterMax = 1, nout = 1, verbose = false),
+        )
+        T, R = Array(thermal.T), Array(thermal.ResT)
+        qx, qy = Array(thermal.qTx), Array(thermal.qTy)
+        qx2, qy2 = Array(thermal.qTx2), Array(thermal.qTy2)
+        dτ = Array(pt.dτ_ρ)
+        widths = diff(xv)
+        for j in 2:(ni[2] - 1), i in 2:(ni[1] - 1)
+            divq = (qx[i + 1, j] - qx[i, j]) / widths[i] + (qy[i, j + 1] - qy[i, j]) / widths[j]
+            expected = (initial[i + 1, j + 1] + dτ[i, j] * (initial[i + 1, j + 1] / dt - divq)) / (1 + dτ[i, j] / dt)
+            @test T[i + 1, j + 1] ≈ expected
+            divq2 = (qx2[i + 1, j] - qx2[i, j]) / widths[i] + (qy2[i, j + 1] - qy2[i, j]) / widths[j]
+            @test R[i, j] ≈ -(T[i + 1, j + 1] - initial[i + 1, j + 1]) / dt - divq2
+        end
+    finally
+        finalize_global_grid(; finalize_MPI = false)
+    end
+end
+
 @testset "Diffusion_2D" begin
     @suppress begin
         nx, ny = 32, 32

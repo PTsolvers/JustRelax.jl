@@ -438,6 +438,10 @@ distinct from `EII_pl` (which integrates the second invariant of the deviatoric 
 strain rate via [`accumulate_tensor!`](@ref)).
 """
 function accumulate_vol!(EVol_pl::AbstractArray, ε_vol_pl::AbstractArray, dt)
+    return accumulate_vol!(backend(EVol_pl), EVol_pl, ε_vol_pl, dt)
+end
+
+function accumulate_vol!(::CPUBackendTrait, EVol_pl, ε_vol_pl, dt)
     _accumulate_vol!(EVol_pl, ε_vol_pl, dt)
     return nothing
 end
@@ -508,114 +512,6 @@ end
         τ = xx[I...], yy[I...], zz[I...], gather_yz(yz), gather_xz(xz), gather_xy(xy)
         II[I...] = second_invariant_staggered(τ...)
     end
-
-    return nothing
-end
-
-####
-
-function update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args)
-    return update_stress!(
-        islinear(rheology), stokes, θ, λ, phase_ratios, rheology, dt, θ_dτ, args
-    )
-end
-
-function update_stress!(
-        ::LinearRheologyTrait, stokes, ::Any, ::Any, phase_ratios, rheology, dt, θ_dτ, args
-    )
-    dim(::AbstractArray{T, N}) where {T, N} = Val(N)
-
-    function f!(stokes, ::Val{2})
-        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-        update_halo!(stokes.τ.xy)
-        return nothing
-    end
-
-    function f!(stokes, ::Val{3})
-        center2vertex!(
-            stokes.τ.yz,
-            stokes.τ.xz,
-            stokes.τ.xy,
-            stokes.τ.yz_c,
-            stokes.τ.xz_c,
-            stokes.τ.xy_c,
-        )
-        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
-        return nothing
-    end
-
-    ni = size(phase_ratios.center)
-    nDim = dim(stokes.viscosity.η)
-
-    @parallel (@idx ni) compute_τ!(
-        @tensor_center(stokes.τ)...,
-        @tensor_center(stokes.τ_o)...,
-        @strain(stokes)...,
-        stokes.viscosity.η,
-        θ_dτ,
-        dt,
-        phase_ratios.center,
-        tupleize(rheology), # needs to be a tuple
-    )
-
-    f!(stokes, nDim)
-
-    return nothing
-end
-
-function update_stress!(
-        ::NonLinearRheologyTrait,
-        stokes,
-        θ,
-        λ::AbstractArray{T, N},
-        phase_ratios,
-        rheology,
-        dt,
-        θ_dτ,
-        args,
-    ) where {N, T}
-    ni = size(phase_ratios.center)
-    nDim = Val(N)
-
-    function f!(stokes, ::Val{2})
-        center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
-        update_halo!(stokes.τ.xy)
-        return nothing
-    end
-
-    function f!(stokes, ::Val{3})
-        center2vertex!(
-            stokes.τ.yz,
-            stokes.τ.xz,
-            stokes.τ.xy,
-            stokes.τ.yz_c,
-            stokes.τ.xz_c,
-            stokes.τ.xy_c,
-        )
-        update_halo!(stokes.τ.yz, stokes.τ.xz, stokes.τ.xy)
-        return nothing
-    end
-
-    @parallel (@idx ni) compute_τ_nonlinear!(
-        @tensor_center(stokes.τ),
-        stokes.τ.II,
-        @tensor_center(stokes.τ_o),
-        @strain(stokes),
-        @plastic_strain(stokes.ε_pl),
-        stokes.EII_pl,
-        stokes.P,
-        fluid_pressure(args, stokes.P),
-        θ,
-        stokes.viscosity.η,
-        stokes.viscosity.η_vep,
-        λ,
-        phase_ratios.center,
-        tupleize(rheology), # needs to be a tuple
-        dt,
-        θ_dτ,
-    )
-
-    f!(stokes, nDim)
 
     return nothing
 end
@@ -1263,7 +1159,8 @@ end
 
         τII_ij = @inbounds if !iszero(λ[I...])
             εij_pl = λ[I...] .* dQdτij
-            dτij = @muladd @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
+            c_pl = 2.0 * ηij * dt * dτ_r
+            dτij = @muladd @. dτij - c_pl * εij_pl
             τij = dτij .+ τij
 
             # volumetric plastic strain rate (accumulated by accumulate_vol!)

@@ -10,6 +10,7 @@ steps:
             - "src/**"
             - "ext/**"
             - "test/**"
+            - "benchmarking/**"
           target: ".buildkite/run_tests.yml"
     agents:
       queue: "cuda"

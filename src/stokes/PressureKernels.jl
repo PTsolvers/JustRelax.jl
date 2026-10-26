@@ -37,23 +37,26 @@ function check_ghosted_ΔT(ΔT::AbstractArray, ni)
 end
 
 """
-   compute_P!(P, P0, RP, ∇V, Q, ΔT, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ)
+    compute_P!(P, P0, RP, ∇V, Q, η, rheology::NTuple{N,MaterialParams}, phase_ratio, dt, r, θ_dτ; ΔT = nothing, melt_fraction = nothing)
 
 Compute the pressure field `P` and the residual `RP` for the compressible case. This function introduces thermal stresses after the implementation of Kiss et al. (2023).
 
 ## Arguments
 - `P`: pressure field
+- `P0`: pressure field at the previous time step
 - `RP`: residual field
 - `∇V`: divergence of the velocity field
 - `Q`: volumetric source/sink term which should have the properties of `dV/V_tot [m³/m³]` normalized per cell, default is zero.
-- `ΔT`: temperature difference on the cell centers with ghost nodes, size `size(P) .+ 2` (as `thermal.ΔT`), to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters.
 - `η`: viscosity field
 - `rheology`: material parameters
 - `phase_ratio`: phase field
-- `melt_fraction`: melt fraction field, used for the thermal expansion coefficient if provided
 - `dt`: time step
 - `r`: relaxation parameter for the pressure update
 - `θ_dτ`: numerical parameter for the pressure update
+
+## Keyword Arguments
+- `ΔT`: temperature difference on the cell centers with ghost nodes, size `size(P) .+ 2` (as `thermal.ΔT`), to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters. Default: `nothing`.
+- `melt_fraction`: melt fraction field, used for the thermal expansion coefficient if provided. Default: `nothing`.
 """
 function compute_P!(
         P,

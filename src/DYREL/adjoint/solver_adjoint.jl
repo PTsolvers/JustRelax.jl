@@ -175,6 +175,8 @@ function solve_DYREL_adjoint!(
             converged = true
             break
         end
+        # the iteration budget is checked here, after the full criterion of the last pass
+        iter ≥ total_iterMax && break
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -187,7 +189,7 @@ function solve_DYREL_adjoint!(
 
         ϵ_vel = err * rel_drop
         itPT = 0
-        while (err > ϵ_vel && itPT ≤ iterMax_DR)
+        while (err > ϵ_vel && itPT ≤ iterMax_DR && iter < total_iterMax)
             itPT += 1
             iter += 1
 
@@ -244,8 +246,6 @@ function solve_DYREL_adjoint!(
         end
 
         @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P
-
-        iter > total_iterMax && break
     end
     if !converged
         # Leave the shared DYREL state ready for a subsequent solve, but do not calculate or

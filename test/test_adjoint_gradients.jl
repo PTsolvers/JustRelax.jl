@@ -52,19 +52,23 @@ observed_sum(field, mask) =
 # objective is well posed. Returns J, the adjoint dJ/d`parameter` of the block (phase 2), and the
 # viscosity left in `stokes` after the solve. `solves` time steps run on the same arrays; before
 # each, λ is kept (`λ_start = :previous`), zeroed (`:zero`) or poisoned with NaN (`:nan`).
+# With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead.
 function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
-        solves = 1, λ_start = :previous, adjoint_ϵ = nothing,
+        solves = 1, λ_start = :previous, adjoint_ϵ = nothing, activation_volume = nothing,
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
     elasticity = ConstantElasticity(; G = 1.0e6, Kb = 2.0)
+    linear_viscosity = isnothing(activation_volume)
+    viscous(η) = linear_viscosity ? LinearViscous(; η) :
+        DislocationCreep(; n = 1.0, r = 0.0, A = 0.5 / η, E = 0.0, V = activation_volume)
     material(phase, ρ, η) = SetMaterialParams(;
         Phase = phase,
         Density = ConstantDensity(; ρ),
         Elasticity = elasticity,
-        CompositeRheology = CompositeRheology((LinearViscous(; η), elasticity)),
+        CompositeRheology = CompositeRheology((viscous(η), elasticity)),
         Gravity = ConstantGravity(; g = 1.0),
     )
     rheology = (material(1, 1.0, 1.0), material(2, ρ_block, η_block))
@@ -87,7 +91,7 @@ function sinking_block(
     gradients = material_controls(backend, ni, (parameter,); nphases = length(rheology))
     solver_kwargs = (;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
-        nout = 50, linear_viscosity = true, adjoint, observation, gradients, adjoint_ϵ,
+        nout = 50, linear_viscosity, adjoint, observation, gradients, adjoint_ϵ,
     )
     if variational
         ϕ = RockRatio(backend, ni)
@@ -234,6 +238,19 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test all(==(7.0), Array(next.cVx))
         @test all(==(3.0), Array(next.Dx))
         @test next.Dx !== coupled.dyrel.Dx
+    end
+
+    # The viscosity depends on the solved pressure only, so its pullback must reach λP.
+    @testset "pressure-dependent viscosity, $(variational ? "variational" : "standard")" for variational in (false, true)
+        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        activation_volume = 8.3145 # V P / R T = P at T = 1
+        solution = @suppress sinking_block(
+            igg; observation, variational, adjoint = true, activation_volume,
+        )
+        fd = central_difference(1.2, 1.0e-4) do ρ_block
+            @suppress(sinking_block(igg; observation, variational, ρ_block, activation_volume)).J
+        end
+        @test solution.gradient ≈ fd rtol = 1.0e-6
     end
 
     # a looser adjoint tolerance changes the gradient, not the forward solution

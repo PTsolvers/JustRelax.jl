@@ -342,6 +342,33 @@ end
         @test Jv_w ≈ v_JTw rtol = 1.0e-7
     end
 
+    @testset "pressure-dependent viscosity, ni = $ni" for ni in sizes
+        creep(A) = DislocationCreep(; n = 3.0, r = 0.0, A, E = 0.0, V = 8.3145)
+        rheology = (
+            SetMaterialParams(; Phase = 1, CompositeRheology = CompositeRheology((creep(1.0),))),
+            SetMaterialParams(; Phase = 2, CompositeRheology = CompositeRheology((creep(0.5),))),
+        )
+        s = setup(ni, flow_bcs_cases.free_slip, rheologies.viscoelastic)
+        (; stokes, adjoint, phase_ratios) = s
+        args = (; T = @ones(ni .+ 2...), P = stokes.P, s.dt)
+        cutoff = (-Inf, Inf)
+        forward!() = compute_viscosity_τII!(stokes, phase_ratios, args, rheology, cutoff)
+        reverse!() = JR2K.enzyme_compute_viscosity_τII!(
+            (stokes.viscosity.η, stokes.viscosity.ηv),
+            (adjoint.viscosity.η, adjoint.viscosity.ηv),
+            ((adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c), (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
+            stokes, phase_ratios, args, rheology, cutoff; P_bar = adjoint.P,
+        )
+        inputs = (
+            stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy, stokes.τ.xy_c => adjoint.τ.xy_c,
+            stokes.τ.xx_v => adjoint.τ.xx_v, stokes.τ.yy_v => adjoint.τ.yy_v, stokes.τ.xy => adjoint.τ.xy,
+            stokes.P => adjoint.P,
+        )
+        outputs = (stokes.viscosity.η => adjoint.viscosity.η, stokes.viscosity.ηv => adjoint.viscosity.ηv)
+        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes,), (adjoint,))
+        @test Jv_w ≈ v_JTw rtol = 1.0e-7
+    end
+
     @testset "velocity boundary conditions, $name, ni = $ni" for (name, bcs) in pairs(flow_bcs_cases), ni in sizes
         s = setup(ni, bcs, rheologies.viscoelastic)
         (; stokes, adjoint) = s

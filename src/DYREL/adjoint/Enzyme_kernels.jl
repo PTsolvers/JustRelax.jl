@@ -256,12 +256,36 @@ function enzyme_reverse_stress_DRYEL!(
 end
 
 # Reverse one pointwise viscosity evaluation. `η_adjoint` seeds its viscosity output and Enzyme
-# adds `(∂η/∂τ)'η̄` to `tensor_adjoint`. `η_target` is a copy of the converged forward viscosity,
-# so differentiating this scratch output does not overwrite the forward state.
+# adds `(∂η/∂τ)'η̄` to `tensor_adjoint`, and `(∂η/∂P)'η̄` to `P_adjoint` when it is given.
+# `η_target` is a copy of the converged forward viscosity, so differentiating this scratch
+# output does not overwrite the forward state.
 function enzyme_compute_viscosity_point!(
         η_target, η_adjoint, ratios, tensor, tensor_adjoint, args, rheology, cutoff,
-        fn_viscosity, fn_args; air_phase::Integer = 0,
+        fn_viscosity, fn_args; air_phase::Integer = 0, P_adjoint = nothing,
     )
+    if !isnothing(P_adjoint)
+        # `args.P` goes in as an argument of its own, so that its shadow can be seeded
+        enzyme_reverse_pointwise!(
+            compute_viscosity_pressure_point!,
+            size(η_target),
+            (
+                η_target => η_adjoint,
+                one(eltype(η_target)) => nothing,
+                ratios => nothing,
+                tensor[1] => tensor_adjoint[1],
+                tensor[2] => tensor_adjoint[2],
+                tensor[3] => tensor_adjoint[3],
+                args.P => P_adjoint,
+                merge(args, (; P = nothing)) => nothing,
+                rheology => nothing,
+                air_phase => nothing,
+                cutoff => nothing,
+                fn_viscosity => nothing,
+                fn_args => nothing,
+            ),
+        )
+        return nothing
+    end
     enzyme_reverse_pointwise!(
         compute_viscosity_kernel_point!,
         size(η_target),
@@ -286,24 +310,42 @@ end
 function enzyme_compute_viscosity_τII!(
         viscosity_target, viscosity_seed, stress_seed, stokes, phase_ratios, args,
         rheology, cutoff;
-        air_phase::Integer = 0,
+        air_phase::Integer = 0, P_bar = nothing,
     )
     η_target, ηv_target = viscosity_target
     η_bar, ηv_bar = viscosity_seed
     τ_bar, τv_bar = stress_seed
+    P_adjoint = viscosity_pressure_adjoint(args, stokes, P_bar)
     enzyme_compute_viscosity_point!(
         η_target, η_bar, phase_ratios.center,
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
         τ_bar,
         args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args;
-        air_phase,
+        air_phase, P_adjoint,
     )
     enzyme_compute_viscosity_point!(
         ηv_target, ηv_bar, phase_ratios.vertex,
         (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
         τv_bar,
         args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args_vertex;
-        air_phase,
+        air_phase, P_adjoint,
+    )
+    return nothing
+end
+
+# The viscosity depends on the solved pressure only when `args.P` is `stokes.P`; any other
+# pressure in `args` is a fixed input.
+viscosity_pressure_adjoint(_, _, ::Nothing) = nothing
+viscosity_pressure_adjoint(args, stokes, P_bar) =
+    hasproperty(args, :P) && args.P === stokes.P ? P_bar : nothing
+
+@inline function compute_viscosity_pressure_point!(
+        η, ν, ratios, Axx, Ayy, Axyv, P, args, rheology, air_phase::Integer, cutoff,
+        fn_viscosity::F1, fn_args::F2, I::Vararg{Integer, 2},
+    ) where {F1, F2}
+    compute_viscosity_kernel_point!(
+        η, ν, ratios, Axx, Ayy, Axyv, merge(args, (; P)), rheology, air_phase, cutoff,
+        fn_viscosity, fn_args, I...,
     )
     return nothing
 end
@@ -400,7 +442,7 @@ function enzyme_compute_implicit_viscosity_τII!(
     enzyme_compute_viscosity_τII!(
         (scratch.η_target, scratch.ηv_target),
         (adjoint.viscosity.η, adjoint.viscosity.ηv), (τ_bar, τv_bar),
-        stokes, phase_ratios, args, rheology, cutoff,
+        stokes, phase_ratios, args, rheology, cutoff; P_bar = adjoint.P,
     )
     fill!(adjoint.viscosity.η, 0)
     fill!(adjoint.viscosity.ηv, 0)

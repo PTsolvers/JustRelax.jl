@@ -346,7 +346,7 @@ function enzyme_prepare_variational_implicit_viscosity_τII!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
         (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
         args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args;
-        air_phase,
+        air_phase, P_adjoint = viscosity_pressure_adjoint(args, stokes, adjoint.P),
     )
     fill!(adjoint.viscosity.η, 0)
     return nothing

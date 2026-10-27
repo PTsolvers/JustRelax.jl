@@ -74,10 +74,19 @@ Two layers, all on the selected backend (CPU-verified only so far):
 Not covered: nonlinear viscosity next to sticky air (the forward diverges, see 17), strongly
 non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any of the above.
 
+### 20. ✅ Pressure dependence of the viscosity was not differentiated
+The viscosity pullback marked `args` as constant, but `args.P` is `stokes.P`: for a creep law
+with an activation volume (V ≠ 0) the term (∂η/∂P)ᵀ η̄ never reached `adjoint.P`. The implicit
+viscosity step of both solvers now passes `args.P` as an argument of its own and seeds
+`adjoint.P` (`compute_viscosity_pressure_point!`, only when `args.P === stokes.P`). The
+feedback F is unchanged: P is an independent input of η = V(τ(ε, P, η), P). Tests: a
+dot-product check with `DislocationCreep` (V ≠ 0), and FD gradients of a sinking block whose
+viscosity depends on P only, in both solvers; without the fix the gradient was off by 0.3 %.
+
 ## P2 — Consistency and robustness
 
-6. ✅ **Non-convergence handling unified.** Both adjoint solvers now reset the shared DYREL
-   state and throw `"… adjoint did not converge (err=…, ϵ=…, …)"` instead of the standard solver
+6. ✅ **Non-convergence handling unified.** Both adjoint solvers now
+   throw `"… adjoint did not converge (err=…, ϵ=…, …)"` instead of the standard solver
    returning unconverged sensitivities with a warning. Tested in `test_adjoint_gradients.jl`.
 7. ✅ **MPI guarded.** `check_adjoint_support` (`src/DYREL/solver.jl`) throws an `ArgumentError`
    for `adjoint = true` with `nprocs > 1`: the reverse pass adds into neighbouring cells, which
@@ -132,16 +141,26 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
       Drucker–Prager shear 64²: 64,200 → 6,700 adjoint iterations; linear sinking block
       1,800 → 1,400; variational Drucker–Prager 6,700 → 4,950. Gradient tests: 136 → 59 s and
       313 → 146 s. The dike example (50–100× forward) still to be re-measured.
-    - ⬜ Precompute the local stress tangent once per adjoint solve and apply it with a stencil
-      kernel (folds in the nonlinear viscosity feedback and ∂ρg/∂P). Estimated 2.5–6× per
-      iteration.
+    - ⬜ **Cache the implicit-viscosity vectors.** With nonlinear viscosity every iteration runs
+      one extra stress reverse sweep, only to get the scalar (∂S/∂η)ᵀ τ̄, and two viscosity
+      reverse sweeps (centers, vertices) for (∂V/∂τ)ᵀ η̄. Both vectors are fixed during an
+      adjoint solve, like the feedback F, which is already cached: store ∂S/∂η (5 numbers per
+      center, 3 per vertex) and ∂V/∂τ (3 + 3) once per solve and replace the two steps with the
+      pointwise η̄ = (s·τ̄)/(1 − F), τ̄ += v η̄ (and P̄ += (∂V/∂P) η̄, see 20). Independent of
+      the next item; about half a day. Gain to be measured.
+    - ⬜ **Precompute the local stress tangent** once per adjoint solve and apply it with a
+      gather-form stencil kernel, without Enzyme. Stress evaluation only (centers 5×5, vertices
+      3×5; the nonlinear viscosity feedback folds into it); momentum, continuity and buoyancy
+      pullbacks stay on Enzyme. Stages: standard solver with linear viscosity (measure here
+      first), nonlinear viscosity, variational solver, tests. About 3–4 days. Bounded by the
+      stress pullback's share of an iteration (54–83 %).
     - ⬜ Hand-written transposes of the linear momentum and continuity residuals (the momentum
       pullback costs 5× its forward kernel). ~20–25 % of a viscoelastic iteration.
     - ⬜ Skip the buoyancy pullback for pressure-independent density (~10 %).
     - ⬜ Thread/GPU scaling: 4 threads give only 1.5× per iteration (colored launches); mostly
       solved by the two stencil items.
-    - ⬜ Warm start from the previous step's λ; a separate adjoint tolerance; merge the
-      per-iteration zeroing and avoid per-call allocations.
+    - ✅ Warm start from the previous step's λ; a separate adjoint tolerance (`adjoint_ϵ`,
+      `adjoint_rel_drop`); merged per-iteration zeroing (`PERFORMANCE.md` 6–8).
 
 ## P4 — Cleanup
 

@@ -79,7 +79,7 @@ end
     ) where {_T}
     I = i, j, k
 
-    get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
+    @inline get_K(idx, args) = compute_phase(compute_conductivity, rheology, idx, args)
     nx, ny, nz = size(θr_dτ)
 
     @inbounds if all(I .≤ size(qTx))
@@ -443,7 +443,7 @@ end
     ) where {_T, N, C1, C2, C3, C4}
     nx, ny = size(θr_dτ)
 
-    compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
+    @inline compute_K(phase, args) = fn_ratio(compute_conductivity, rheology, phase, args)
 
     @inbounds if all((i, j) .≤ size(qTx))
         if i == 1 && !isa(bc_flux.left, Bool)

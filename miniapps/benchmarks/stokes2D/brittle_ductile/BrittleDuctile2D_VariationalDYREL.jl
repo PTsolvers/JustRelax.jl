@@ -227,6 +227,7 @@ function run_case(
         result = solve_VariationalDYREL!(
             stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
             kwargs = (;
+                anderson_PH = 3,
                 air_phase = air_phase,
                 iterMax = 50.0e3,
                 total_iterMax = 50.0e3,

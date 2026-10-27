@@ -3,7 +3,7 @@
 # Mirror of `_solve_DYREL!` (src/DYREL/solver.jl) but taking `ϕ::JustRelax.RockRatio`
 # as a positional argument after `phase_ratios`, exactly like `_solve_VS!` vs the APT
 # `_solve!`. Julia dispatch routes through the same public `solve_DYREL!` entry point.
-# 2D only — DYREL is 2D-only (Gershgorin_Stokes2D_SchurComplement!).
+# Shared 2D/3D outer and inner iteration loops.
 
 function _solve_VariationalDYREL!(
         stokes::JustRelax.StokesArrays,
@@ -23,6 +23,7 @@ function _solve_VariationalDYREL!(
         λ_relaxation_DR = 1,
         λ_relaxation_PH = 1,
         pressure_relaxation = 1,
+        anderson_PH = 0,
         iterMax = nothing,
         iterMax_PH = 1.0e3,
         iterMax_DR = isnothing(iterMax) ? 50.0e3 : iterMax,
@@ -33,16 +34,22 @@ function _solve_VariationalDYREL!(
         verbose_DR = true,
         linear_viscosity = false,
         free_surface = false,
+        surface_pressure = nothing,
         kwargs...,
     ) where {N}
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
+    N == 3 && require_uniform_spacing(grid, "`solve_VariationalDYREL!`")
+    N == 3 && reject_periodic_bcs(flow_bcs, "`solve_VariationalDYREL!` in 3D")
     dim = Val(N)
     _di = grid._di
     lx = grid.max_li
     ni = size(stokes.P)
+    momentum_pressure = prepare_surface_pressure(stokes.P, surface_pressure, ϕ, flow_bcs)
     periodic = periodic_dims(stokes)
+    nthreads = N == 3 ? (32, 4, 1) : (32, 8, 1)
+    nblocks = (cld(ni[1], nthreads[1]), cld(ni[2], nthreads[2]), N == 3 ? ni[3] : 1)
 
     residuals = @residuals(stokes.R)
     fields = dyrel_fields(dyrel, dim)
@@ -52,10 +59,7 @@ function _solve_VariationalDYREL!(
     # threads, and `BitArray` `setindex!` is a non-atomic read-modify-write of a whole 64-bit
     # chunk, so neighbouring columns would race.
     # Shaped like the momentum residual, so a periodic direction carries the seam row here too.
-    maskV = (
-        similar(ϕ.Vx, Bool, momentum_rows(ni, periodic, 1)),
-        similar(ϕ.Vy, Bool, momentum_rows(ni, periodic, 2)),
-    )
+    maskV = ntuple(d -> similar(ϕ.center, Bool, momentum_rows(ni, periodic, d)), dim)
     maskP = similar(ϕ.center, Bool)
     @parallel (@idx ni) update_valid_c_mask!(maskP, ϕ)
     @parallel (@idx ni) update_valid_v_masks!(maskV..., ϕ)
@@ -113,7 +117,7 @@ function _solve_VariationalDYREL!(
 
     # reset plastic multiplier at the beginning of the time step
     stokes.λ .= 0.0
-    stokes.λv .= 0.0
+    foreach(A -> fill!(A, 0.0), dyrel_vertex_λ_tuple(stokes, dim))
 
     # Iteration loop
     err_min = Inf
@@ -133,6 +137,8 @@ function _solve_VariationalDYREL!(
     # small pressure correction θc = γ_eff·RP + ΔPψ, assembled each iteration and read (alongside
     # the separately-differenced P) by the momentum kernel. Reuses the dyrel.P_num scratch.
     θc = dyrel.P_num
+    anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH, maskP)
+    itAA, err_PH_prev = 0, Inf
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
@@ -161,13 +167,14 @@ function _solve_VariationalDYREL!(
             # only the rock viscosity is part of the solution
             errη = viscosity_residual(stokes.viscosity.η, η_previous, viscosity_relaxation, maskP)
         end
+        N == 3 && update_variational_stress_halo!(stokes, dim, linear_viscosity)
 
         # compute velocity residuals (pressure residual stokes.R.RP already computed above;
         # free-surface stabilization via dt * free_surface)
-        @parallel (@idx ni) compute_PH_residual_V!(
+        @parallel (@idx ni) nblocks nthreads compute_PH_residual_V!(
             residuals...,
             @velocity(stokes)...,
-            stokes.P,
+            momentum_pressure,
             stokes.ΔPψ,
             @stress(stokes)...,
             ρg...,
@@ -187,6 +194,7 @@ function _solve_VariationalDYREL!(
         RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt, errη))
+        itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
         # Convergence additionally accepts a continuity residual that is negligible in absolute
         # terms: a field at rest has no velocity scale, so `Vspan` collapses to the residual-level
         # noise and `errPt` stops carrying information. `RP` is a divergence, so `RP·dt` is the
@@ -234,7 +242,7 @@ function _solve_VariationalDYREL!(
         # velocity updates would drive the free-surface-stabilization residual term against
         # a dτ tuned for the plain viscous operator and diverge.
         if !iszero(free_surface)
-            Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
+            Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
             update_dτV_α_β!(dyrel)
         end
         while (err_vel > ϵ_vel && itPT ≤ iterMax_DR)
@@ -256,21 +264,18 @@ function _solve_VariationalDYREL!(
             end
             # exchange vertex-stress halos (+ vertex viscosity, refreshed above) before the momentum
             # kernel reads them, matching the non-variational solver
-            if linear_viscosity
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-            else
-                update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy, stokes.viscosity.ηv)
-            end
+            update_variational_stress_halo!(stokes, dim, linear_viscosity)
             @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
+            N == 3 && update_halo!(θc)
 
             # Velocity residual + damped pseudo-transient velocity update (fused, masked). The face
             # fraction enters only through `variational_face_mass` inside `D`; the damping
             # recurrence itself carries no ϕ factor.
-            @parallel (@idx ni) compute_DR_residual_update_V!(
+            @parallel (@idx ni) nblocks nthreads compute_DR_residual_update_V!(
                 residuals...,
                 @velocity(stokes)...,
                 fields.dVdτ...,
-                stokes.P,
+                momentum_pressure,
                 θc,
                 @stress(stokes)...,
                 ρg...,
@@ -312,7 +317,7 @@ function _solve_VariationalDYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes2D_SchurComplement!(fields.D..., fields.λmaxV..., stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
+                Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)
@@ -325,6 +330,7 @@ function _solve_VariationalDYREL!(
         # update pressure — refresh RP from the final velocity first (do_strain_rate = false leaves
         # the strain-rate arrays untouched), otherwise the pressure correction lags one velocity update
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
+        isnothing(anderson) || copyto!(anderson.f, stokes.P)
         @. stokes.P += pressure_relaxation * dyrel.γ_eff * stokes.R.RP
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
@@ -334,6 +340,13 @@ function _solve_VariationalDYREL!(
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
             relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
         end
+        # Anderson mixes the whole update of the pass, volumetric mode included
+        if !isnothing(anderson)
+            @. anderson.f = stokes.P - anderson.f
+            @. stokes.P -= anderson.f
+            anderson_pressure_update!(stokes.P, anderson, itAA)
+        end
+        N == 3 && update_halo!(stokes.P)
 
         iter > total_iterMax && break
     end
@@ -378,11 +391,25 @@ function _solve_VariationalDYREL!(
         ϕ::JustRelax.RockRatio,
         rheology,
         args,
-        di::Union{NTuple{2, <:Real}, NamedTuple},
+        di::Union{Tuple{Vararg{Real}}, NamedTuple},
         dt,
         igg::IGG;
         kwargs...,
     )
     grid = JustRelax.legacy_uniform_grid(size(stokes.P), di)
     return _solve_VariationalDYREL!(stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg; kwargs...)
+end
+
+@inline dyrel_vertex_λ_tuple(stokes, ::Val{2}) = (stokes.λv,)
+@inline dyrel_vertex_λ_tuple(stokes, ::Val{3}) = dyrel_vertex_λ(stokes, Val(3))
+
+function update_variational_stress_halo!(stokes, ::Val{2}, linear_viscosity)
+    update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+    linear_viscosity || update_halo!(stokes.viscosity.ηv)
+    return nothing
+end
+function update_variational_stress_halo!(stokes, ::Val{3}, linear_viscosity)
+    update_halo!(@stress(stokes)..., stokes.ΔPψ)
+    linear_viscosity || update_halo!(stokes.viscosity.η)
+    return nothing
 end

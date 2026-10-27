@@ -228,6 +228,7 @@ function Gershgorin_Stokes3D_SchurComplement!(Dx, Dy, Dz, λmaxVx, λmaxVy, λma
         phase_ratios.xy,
         rheology,
         dt,
+        nothing, nothing,
     )
     return nothing
 end
@@ -277,7 +278,7 @@ end
 
 @parallel_indices (i, j, k) function _Gershgorin_Stokes3D_SchurComplement!(
         Dx, Dy, Dz, λmaxVx, λmaxVy, λmaxVz, η, γ_eff, di_center, di_vertex,
-        phase_center, phase_yz, phase_xz, phase_xy, rheology, dt
+        phase_center, phase_yz, phase_xz, phase_xy, rheology, dt, ϕ, ρgz
     )
 
     ni = size(η)
@@ -286,8 +287,8 @@ end
     periodic = (size(Dx, 1) == ni[1], size(Dy, 2) == ni[2], size(Dz, 3) == ni[3])
     c23 = 2 / 3
     c43 = 4 / 3
-    ηC = _ηve_center(η, phase_center, rheology, dt, i, j, k)
-    γC = γ_eff[i, j, k]
+    ηC = _weighted_ηve_center(ϕ, η, phase_center, rheology, dt, i, j, k)
+    γC = _weighted_penalty(γ_eff, ϕ, i, j, k)
 
     # DYREL D/λ arrays store active velocity updates; boundary values are enforced by flow_bcs! after the shifted update.
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2) && k ≤ size(Dx, 3)
@@ -305,13 +306,13 @@ end
         # there -- index `ni[1] + 1` is the seam plane of the `xy`/`xz` vertex arrays.
         iE = wrap_next(i, ni[1])
         ηW = ηC
-        ηE = _ηve_center(η, phase_center, rheology, dt, iE, j, k)
-        ηS = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j, k)
-        ηN = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
-        ηB = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k)
-        ηF = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
+        ηE = _weighted_ηve_center(ϕ, η, phase_center, rheology, dt, iE, j, k)
+        ηS = _weighted_ηve_xy(ϕ, η, phase_xy, rheology, dt, ni, periodic, i + 1, j, k)
+        ηN = _weighted_ηve_xy(ϕ, η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
+        ηB = _weighted_ηve_xz(ϕ, η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k)
+        ηF = _weighted_ηve_xz(ϕ, η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
         γW = γC
-        γE = γ_eff[iE, j, k]
+        γE = _weighted_penalty(γ_eff, ϕ, iE, j, k)
         γηW = γW + c43 * ηW
         γηE = γE + c43 * ηE
         γτW = γW - c23 * ηW
@@ -339,7 +340,14 @@ end
                 Dx_ijk
         )
 
-        λmaxVx[i, j, k] = Cx * inv(Dx_ijk)
+        if ϕ === nothing
+            λmaxVx[i, j, k] = Cx * inv(Dx_ijk)
+        elseif valid_momentum3(ϕ, 1, i, j, k)
+            set_variational_preconditioner3D!(Dx, λmaxVx, Dx_ijk, Cx, i, j, k)
+        else
+            Dx[i, j, k] = one(Dx_ijk)
+            λmaxVx[i, j, k] = one(Dx_ijk)
+        end
     end
 
     if i ≤ size(Dy, 1) && j ≤ size(Dy, 2) && k ≤ size(Dy, 3)
@@ -354,14 +362,14 @@ end
 
         # Counterpart of `iE` in the x-block: the northern cell of the y seam face is the first.
         jN = wrap_next(j, ni[2])
-        ηW = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i, j + 1, k)
-        ηE = _ηve_xy(η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
+        ηW = _weighted_ηve_xy(ϕ, η, phase_xy, rheology, dt, ni, periodic, i, j + 1, k)
+        ηE = _weighted_ηve_xy(ϕ, η, phase_xy, rheology, dt, ni, periodic, i + 1, j + 1, k)
         ηS = ηC
-        ηN = _ηve_center(η, phase_center, rheology, dt, i, jN, k)
-        ηB = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k)
-        ηF = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
+        ηN = _weighted_ηve_center(ϕ, η, phase_center, rheology, dt, i, jN, k)
+        ηB = _weighted_ηve_yz(ϕ, η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k)
+        ηF = _weighted_ηve_yz(ϕ, η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
         γS = γC
-        γN = γ_eff[i, jN, k]
+        γN = _weighted_penalty(γ_eff, ϕ, i, jN, k)
         γηS = γS + c43 * ηS
         γηN = γN + c43 * ηN
         γτS = γS - c23 * ηS
@@ -388,7 +396,14 @@ end
                 Dy_ijk
         )
 
-        λmaxVy[i, j, k] = Cy * inv(Dy_ijk)
+        if ϕ === nothing
+            λmaxVy[i, j, k] = Cy * inv(Dy_ijk)
+        elseif valid_momentum3(ϕ, 2, i, j, k)
+            set_variational_preconditioner3D!(Dy, λmaxVy, Dy_ijk, Cy, i, j, k)
+        else
+            Dy[i, j, k] = one(Dy_ijk)
+            λmaxVy[i, j, k] = one(Dy_ijk)
+        end
     end
 
     if i ≤ size(Dz, 1) && j ≤ size(Dz, 2) && k ≤ size(Dz, 3)
@@ -403,14 +418,14 @@ end
 
         # Counterpart of `iE` in the x-block: the front cell of the z seam face is the first.
         kF = wrap_next(k, ni[3])
-        ηW = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i, j, k + 1)
-        ηE = _ηve_xz(η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
-        ηS = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j, k + 1)
-        ηN = _ηve_yz(η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
+        ηW = _weighted_ηve_xz(ϕ, η, phase_xz, rheology, dt, ni, periodic, i, j, k + 1)
+        ηE = _weighted_ηve_xz(ϕ, η, phase_xz, rheology, dt, ni, periodic, i + 1, j, k + 1)
+        ηS = _weighted_ηve_yz(ϕ, η, phase_yz, rheology, dt, ni, periodic, i, j, k + 1)
+        ηN = _weighted_ηve_yz(ϕ, η, phase_yz, rheology, dt, ni, periodic, i, j + 1, k + 1)
         ηB = ηC
-        ηF = _ηve_center(η, phase_center, rheology, dt, i, j, kF)
+        ηF = _weighted_ηve_center(ϕ, η, phase_center, rheology, dt, i, j, kF)
         γB = γC
-        γF = γ_eff[i, j, kF]
+        γF = _weighted_penalty(γ_eff, ϕ, i, j, kF)
         γηB = γB + c43 * ηB
         γηF = γF + c43 * ηF
         γτB = γB - c23 * ηB
@@ -437,7 +452,15 @@ end
                 Dz_ijk
         )
 
-        λmaxVz[i, j, k] = Cz * inv(Dz_ijk)
+        if ϕ === nothing
+            λmaxVz[i, j, k] = Cz * inv(Dz_ijk)
+        elseif valid_momentum3(ϕ, 3, i, j, k)
+            c_fs = ρgz === nothing ? zero(Dz_ijk) : -_d_za(ρgz, ϕ.center, _dz, i, j, k) * dt
+            set_variational_preconditioner3D!(Dz, λmaxVz, Dz_ijk + c_fs, Cz - Dz_ijk + abs(Dz_ijk + c_fs), i, j, k)
+        else
+            Dz[i, j, k] = one(Dz_ijk)
+            λmaxVz[i, j, k] = one(Dz_ijk)
+        end
     end
 
     return nothing

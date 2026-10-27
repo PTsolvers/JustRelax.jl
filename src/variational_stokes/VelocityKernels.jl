@@ -231,7 +231,7 @@ diagonal; inactive faces receive zero velocity and zero residual.
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
-                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
@@ -249,7 +249,7 @@ diagonal; inactive faces receive zero velocity and zero residual.
         if isvalid_vy(ϕ, i, j + 1)
             Ry[i, j] =
                 R_Vy =
-                -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                -variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center)
             Vy[i + 1, j + 1] += R_Vy * ηdτ / (variational_face_mass(ϕ.Vy[i, j + 1]) * av_ya(ητ))
         else
@@ -292,7 +292,7 @@ Compute the x-component of the velocity field `Vx` from the pressure `P`, stress
         if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = (
-                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
@@ -353,7 +353,7 @@ Compute the y-component of the velocity field `Vy` from the pressure `P`, stress
                 # timesteps because the correction is evaluated at the old
                 # face velocity but is scaled by the physical dt.
                 R_Vy =
-                    -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                    -variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                     av_ya(ρgy, ϕ.center)
                 face_mass = variational_face_mass(ϕ.Vy[i, j + 1])
                 face_viscosity = av_ya(ητ)
@@ -407,7 +407,7 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
         @inbounds if isvalid_vx(ϕ, i + 1, j)
             Rx[i, j] =
                 R_Vx = @inbounds (
-                -d_xa(P, ϕ.center) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
+                -variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) + d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) -
                     av_xa(ρgx, ϕ.center)
             )
             Vx[i + 1, j + 1] += R_Vx * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j]) * av_xa(ητ))
@@ -435,7 +435,7 @@ Compute the velocity field `V` with the timestep dt from the pressure `P`, stres
             # Treat the density-gradient correction implicitly; see the
             # corresponding explanation in the first 2D overload above.
             R_Vy =
-                @inbounds -d_ya(P, ϕ.center) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
+                @inbounds -variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) + d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) -
                 av_ya(ρgy, ϕ.center)
             face_mass = variational_face_mass(ϕ.Vy[i, j + 1])
             face_viscosity = av_ya(ητ)
@@ -500,7 +500,7 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
                     d_xa(τxx, ϕ.center) +
                     _dy * (m(τxy, ϕ.xy, i + 1, j + 1, k) - m(τxy, ϕ.xy, i + 1, j, k)) +
                     _dz * (m(τxz, ϕ.xz, i + 1, j, k + 1) - m(τxz, ϕ.xz, i + 1, j, k)) -
-                    d_xa(P, ϕ.center) - av_x(fx, ϕ.center)
+                    variational_pressure_gradient(P, ϕ, Val(1), _dx, i, j, k) - av_x(fx, ϕ.center)
                 Vx[i + 1, j + 1, k + 1] +=
                     Rx_ijk * ηdτ / (variational_face_mass(ϕ.Vx[i + 1, j, k]) * av_x(ητ))
             else
@@ -515,7 +515,7 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
                     _dx * (m(τxy, ϕ.xy, i + 1, j + 1, k) - m(τxy, ϕ.xy, i, j + 1, k)) +
                     d_ya(τyy, ϕ.center) +
                     _dz * (m(τyz, ϕ.yz, i, j + 1, k + 1) - m(τyz, ϕ.yz, i, j + 1, k)) -
-                    d_ya(P, ϕ.center) - av_y(fy, ϕ.center)
+                    variational_pressure_gradient(P, ϕ, Val(2), _dy, i, j, k) - av_y(fy, ϕ.center)
                 Vy[i + 1, j + 1, k + 1] +=
                     Ry_ijk * ηdτ / (variational_face_mass(ϕ.Vy[i, j + 1, k]) * av_y(ητ))
             else
@@ -528,7 +528,7 @@ Compute the 3D velocity field `V` from the pressure `P`, stress components `τ`,
                 R_Vz =
                     _dx * (m(τxz, ϕ.xz, i + 1, j, k + 1) - m(τxz, ϕ.xz, i, j, k + 1)) +
                     _dy * (m(τyz, ϕ.yz, i, j + 1, k + 1) - m(τyz, ϕ.yz, i, j, k + 1)) +
-                    d_za(τzz, ϕ.center) - d_za(P, ϕ.center) - av_z(fz, ϕ.center)
+                    d_za(τzz, ϕ.center) - variational_pressure_gradient(P, ϕ, Val(3), _dz, i, j, k) - av_z(fz, ϕ.center)
                 # Free-surface stabilization: the buoyancy change over one time step of vertical
                 # motion, taken implicitly (see the 2D kernel); `dt = 0` switches it off.
                 Vzᵢⱼₖ = Vz[i + 1, j + 1, k + 1]

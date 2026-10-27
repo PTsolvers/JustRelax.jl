@@ -138,8 +138,11 @@ end
 
 """
     DYREL(stokes, rheology, phase_ratios, di, dt; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0)
+    DYREL(stokes, rheology, phase_ratios, ϕ::RockRatio, di, dt; kwargs...)
 
 Constructs and initializes a `DYREL` object based on existing Stokes fields.
+The `RockRatio` method builds the volume-weighted state required by
+`solve_VariationalDYREL!` in 2D and 3D; pass the same `ϕ` to the solver.
 
 This function:
 1. Allocates zero-initialized arrays using grid dimensions from `stokes`.
@@ -151,6 +154,7 @@ This function:
 - `stokes`: `JustRelax.StokesArrays` struct.
 - `rheology`: Material properties.
 - `phase_ratios`: Phase fraction information.
+- `ϕ`: `JustRelax.RockRatio` volume fractions (variational method only).
 - `di`: Grid spacing tuple.
 - `dt`: Time step.
 
@@ -229,9 +233,12 @@ end
 function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ, di, dt, ρgy = nothing; CFL = dyrel.CFL, γfact = dyrel.γfact)
     # compute bulk viscosity and penalty parameter
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, ϕ, γfact, dt)
+    if ndims(stokes.P) == 3 && ImplicitGlobalGrid.grid_is_initialized()
+        update_halo!(stokes.viscosity.η, dyrel.γ_eff)
+    end
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phase_ratios, ϕ, rheology, di, dt, ρgy)
+    Gershgorin_variational!(Val(ndims(stokes.P)), dyrel, stokes, phase_ratios, ϕ, rheology, di, dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)

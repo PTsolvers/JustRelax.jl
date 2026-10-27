@@ -59,7 +59,7 @@ function init_phases!(phase_ratios, xci, xvi, circle)
 end
 
 # MAIN SCRIPT --------------------------------------------------------------------
-function ShearBand2D()
+function ShearBand2D(; anderson_PH = 0, finalize_MPI = true)
     n = 32
     nx = n
     ny = n
@@ -183,6 +183,7 @@ function ShearBand2D()
                 viscosity_relaxation = 1,
                 linear_viscosity = true,
                 viscosity_cutoff = (-Inf, Inf),
+                anderson_PH,
             )
         )
         tensor_invariant!(stokes.τ)
@@ -201,14 +202,15 @@ function ShearBand2D()
     end
     tensor_invariant!(stokes.τ)
 
-    finalize_global_grid(; finalize_MPI = true)
+    finalize_global_grid(; finalize_MPI)
 
     return iters, τII, sol, extrema(stokes.τ.II)
 end
 
-@testset "ShearBand2D" begin
+@testset "ShearBand2D (anderson_PH = $m)" for m in (5, 0)
     @suppress begin
-        iters, τII, sol, extrema_τII = ShearBand2D()
+        # the last run finalizes MPI
+        iters, τII, sol, extrema_τII = ShearBand2D(; anderson_PH = m, finalize_MPI = iszero(m))
         @test iters.err_evo_tot[end] < 1.0e-6
         @test extrema_τII[1] ≈ 1.5443419501214892 atol = 1.0e-3
         @test extrema_τII[2] ≈ 1.6392107249658066 atol = 1.0e-3

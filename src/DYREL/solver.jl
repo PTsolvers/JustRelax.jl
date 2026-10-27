@@ -195,6 +195,7 @@ function _solve_DYREL!(
     di_center = di.center
     ni = size(stokes.P)
     lx = grid.max_li
+    dx_min = minimum(minimum_mpi, di.vertex)
 
     igg.me == 0 && @printf("\n######## Running forward Stokes solver (DYREL) ########\n")
 
@@ -311,14 +312,17 @@ function _solve_DYREL!(
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
-        # Scale-free, as in the variational solver: momentum residuals against the pressure span
-        # over the domain length, continuity against the velocity scale. (The relative-or-absolute
+        # Scale-free, as in the variational solver: momentum residuals against the driving force
+        # density, continuity against the velocity scale. (The relative-or-absolute
         # form used before accepted any residual that is small in the problem's units, e.g. a
         # continuity residual of ~1e-16 1/s for velocities of ~1e-9 m/s.)
         Pspan = nonzero_span(maximum_mpi(stokes.P) - minimum_mpi(stokes.P))
         Vscale = maximum(V -> max(maximum_mpi(V), -minimum_mpi(V)), @velocity(stokes))
         Vspan = continuity_velocity_scale(Vscale, Pspan, lx, maximum_mpi(stokes.viscosity.η), ϵ)
-        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]) / Pspan * lx, dim)
+        Fscale = momentum_force_scale(
+            body_force_scales(ρg)..., maximum_mpi(stokes.τ.II), Pspan, lx, dx_min, ϵ
+        )
+        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]) / Fscale, dim)
         RP_rms = norm_mpi(stokes.R.RP) / √(p_dof)
         errPt = RP_rms * lx / Vspan
         if itPH ≤ 2
@@ -407,9 +411,8 @@ function _solve_DYREL!(
             if iszero(iter % nout)
 
                 # D·(stored residual) is the raw momentum residual; normalized exactly like the
-                # outer check, so ϵ_vel compares like with like. P is fixed within a pass, so the
-                # outer Pspan is still current here.
-                errV_in = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]) / Pspan * lx, dim)
+                # outer check, so ϵ_vel compares like with like, with the scale of that check.
+                errV_in = ntuple(d -> norm_mpi(fields.D[d] .* residuals[d]) / √(v_dofs[d]) / Fscale, dim)
                 err_vel = maximum(errV_in)
                 isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 
@@ -630,6 +633,34 @@ end
     V = max(Vscale, floor_fraction * Pspan * lx / η_max)
     return iszero(V) || !isfinite(V) ? one(V) : V
 end
+
+# Force density the momentum residuals are measured against: the force that drives the flow, i.e.
+# the buoyancy anomaly or, for boundary-driven flow, the deviatoric stress over the domain length.
+# The pressure gradient `Pspan/lx` is no such scale in a gravity-driven model: it is dominated by
+# the hydrostatic pressure, which balances the mean body force and drives nothing, so a residual
+# small against it can leave the driving force barely balanced. A field at rest has a residual of
+# hydrostatic round-off, `≈ eps·P/dx`; the floor makes that read as `≈ 0.1ϵ`.
+@inline function momentum_force_scale(ρg_anomaly, ρg_rms, τII_max, Pspan, lx, dx_min, ϵ)
+    floor_fraction = min(one(ϵ), 10 * eps(typeof(ϵ)) / ϵ * lx / dx_min)
+    F = max(ρg_anomaly, τII_max / lx, floor_fraction * max(Pspan / lx, ρg_rms))
+    return iszero(F) || !isfinite(F) ? one(F) : F
+end
+
+# RMS deviation of the body force from its mean, and its RMS, over the selected cells. A uniform
+# body force is balanced by a pressure gradient alone; only its deviation drives flow.
+function body_force_scales(ρg, mask = nothing)
+    n = max(masked_sum(_ -> 1.0, first(ρg), mask), 1)
+    anomaly = total = 0.0
+    for f in ρg
+        mean = masked_sum(identity, f, mask) / n
+        total += masked_sum(abs2, f, mask) / n
+        anomaly += masked_sum(x -> abs2(x - mean), f, mask) / n
+    end
+    return sqrt(anomaly), sqrt(total)
+end
+
+masked_sum(f, A, ::Nothing) = sum_mpi(f, A)
+masked_sum(f, A, mask) = sum_mpi((m, a) -> m ? f(a) : zero(f(a)), mask, A)
 @inline volumetric_compliance(ηb) = ηb > 0 ? inv(ηb) : zero(ηb)
 
 @inline function masked_extrema(mask, A)

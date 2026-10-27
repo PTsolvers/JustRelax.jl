@@ -200,11 +200,14 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     end
 
     @testset "viscosity" begin
+        # J depends only weakly on the block viscosity (d ln J/d ln η ≈ 5e-3 here, less for a
+        # stiffer block), so the difference quotient amplifies the forward residual; a larger
+        # step keeps that below the tolerance.
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
         adjoint_gradient = @suppress sinking_block(
-            igg; observation, adjoint = true, parameter = :η,
+            igg; observation, adjoint = true, parameter = :η, η_block = 0.5,
         ).gradient
-        fd = central_difference(10.0, 1.0e-4) do η_block
+        fd = central_difference(0.5, 1.0e-3) do η_block
             @suppress sinking_block(igg; observation, η_block).J
         end
         @test adjoint_gradient ≈ fd rtol = 1.0e-6

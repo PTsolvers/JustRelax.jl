@@ -10,7 +10,7 @@ Creates a new `DYREL` struct with fields initialized to zero.
   off the containers instead, so the two cannot disagree.
 
 # Keyword arguments
-- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ`: General convergence tolerance. Momentum residuals are measured against the force density that drives the flow (the buoyancy anomaly, or the deviatoric stress over the domain length), continuity against the velocity scale, and a nonlinear viscosity against the viscosity its stress implies. Default: `1.0e-6`.
 - `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
 - `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
 - `c_fact`: Damping scaling factor. Default: `0.5`.
@@ -154,7 +154,7 @@ This function:
 - `dt`: Time step.
 
 # Keyword arguments
-- `ϵ`: General convergence tolerance. Default: `1.0e-6`.
+- `ϵ`: General convergence tolerance. Momentum residuals are measured against the force density that drives the flow (the buoyancy anomaly, or the deviatoric stress over the domain length), continuity against the velocity scale, and a nonlinear viscosity against the viscosity its stress implies. Default: `1.0e-6`.
 - `ϵ_vel`: Velocity convergence tolerance. Default: `1.0e-6`.
 - `CFL`: Courant-Friedrichs-Lewy number. Default: `0.99`.
 - `c_fact`: Damping scaling factor. Default: `0.5`.

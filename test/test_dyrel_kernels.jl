@@ -579,3 +579,30 @@ end
         end
     end
 end
+
+@testset "DYREL momentum residual scale" begin
+    JustRelax.MPI.Initialized() || JustRelax.MPI.Init()
+    TA = PTArray(backend)
+    ρgx = zeros(4, 4)
+    ρgy = fill(3.0, 4, 4)
+    ρgy[2, 2] = 7.0
+    ρg = TA(ρgx), TA(ρgy)
+    # uniform part 3 + one anomalous cell of +4: mean 3.25, variance 4²·(1/16)·(15/16)
+    anomaly, rms = JR2K.body_force_scales(ρg)
+    @test anomaly ≈ 4 * sqrt(15) / 16
+    @test rms ≈ sqrt((15 * 9 + 49) / 16)
+    # masked cells are excluded: without the anomalous cell the body force is uniform
+    mask = trues(4, 4)
+    mask[2, 2] = false
+    anomaly_masked, rms_masked = JR2K.body_force_scales(ρg, TA(mask))
+    @test anomaly_masked ≈ 0 atol = 1.0e-14
+    @test rms_masked ≈ 3
+
+    lx, dx_min, ϵ, Pspan = 2.0, 0.1, 1.0e-6, 100.0
+    floor = 10 * eps() / ϵ * lx / dx_min * Pspan / lx
+    # the driving force, not the hydrostatic gradient Pspan/lx = 50, sets the scale
+    @test JR2K.momentum_force_scale(0.5, 0.0, 0.2, Pspan, lx, dx_min, ϵ) == 0.5
+    @test JR2K.momentum_force_scale(0.0, 0.0, 3.0, Pspan, lx, dx_min, ϵ) == 1.5
+    # a field at rest falls back to the round-off floor of the hydrostatic balance
+    @test JR2K.momentum_force_scale(0.0, 0.0, 0.0, Pspan, lx, dx_min, ϵ) ≈ floor
+end

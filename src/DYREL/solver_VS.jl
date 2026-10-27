@@ -50,6 +50,7 @@ function _solve_VariationalDYREL!(
     dim = Val(N)
     _di = grid._di
     lx = grid.max_li
+    dx_min = minimum(minimum_mpi, grid.di.vertex)
     ni = size(stokes.P)
     periodic = periodic_dims(stokes)
 
@@ -207,7 +208,11 @@ function _solve_VariationalDYREL!(
         Vscale = maximum(map(masked_value_scale, maskV, Vi))
         η_max = maximum_mpi(ifelse.(maskP, stokes.viscosity.η, zero(eltype(stokes.viscosity.η))))
         Vspan = continuity_velocity_scale(Vscale, Pspan, lx, η_max, ϵ)
-        errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
+        τII_max = maximum_mpi(ifelse.(maskP, stokes.τ.II, zero(eltype(stokes.τ.II))))
+        Fscale = momentum_force_scale(
+            body_force_scales(ρg, maskP)..., τII_max, Pspan, lx, dx_min, ϵ
+        )
+        errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Fscale / √(nV[d]), dim)
         RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt, errη))
@@ -311,8 +316,7 @@ function _solve_VariationalDYREL!(
 
                 # D·(stored residual) is the raw momentum residual; normalize it exactly
                 # like the outer check so ϵ_vel = err_vel·rel_drop compares like with like.
-                # P is fixed within a pass, so the outer Pspan is still current here.
-                errV = ntuple(d -> masked_norm_mpi(maskRi[d], Di[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
+                errV = ntuple(d -> masked_norm_mpi(maskRi[d], Di[d], Ri[d]) / Fscale / √(nV[d]), dim)
                 err_vel = maximum(errV)
                 isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
 

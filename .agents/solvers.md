@@ -131,6 +131,10 @@ The loop is two-level: an outer Powell–Hestenes loop on the pressure/plastic m
 loop on velocity (`iterMax_DR`, `λ_relaxation_DR`, `rel_drop`), with `total_iterMax`
 bounding the sum. `verbose_PH` and `verbose_DR` control the two progress streams
 separately. `linear_viscosity = true` skips the non-linear viscosity update.
+Convergence (`ϵ` of the `DYREL` state) measures the momentum residuals against the force that
+drives the flow: the larger of the buoyancy anomaly (RMS deviation of `ρg` from its mean) and
+`max τII / lx`, not `Pspan / lx` as the other Stokes solvers do, because in a gravity-driven model
+the pressure span is mostly hydrostatic. A nonlinear viscosity must also satisfy η = h(τ(η)).
 The Gershgorin bound and DYREL parameters refresh every `nout` inner iterations. The
 variational adjoint differentiates the converged stress-based viscosity law; its stress
 pullback includes the harmonic interpolation from center viscosity to vertex stress.

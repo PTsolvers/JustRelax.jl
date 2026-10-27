@@ -101,7 +101,8 @@ end
     R, V, u = (Rx, Ry, Rz), (Vx, Vy, Vz), (ux, uy, uz)
     D, α, β, t = (Dx, Dy, Dz), (ax, ay, az), (bx, by, bz), (tx, ty, tz)
     τ, g = (xx, yy, zz, yz, xz, xy), (gx, gy, gz)
-    for d in 1:3
+    # Unrolled: indexing these tuples with a runtime `d` spills them to GPU local memory.
+    Base.Cartesian.@nexprs 3 d -> begin
         if all((i, j, k) .≤ size(R[d]))
             if valid_momentum3(ϕ, d, i, j, k)
                 r = variational_momentum3D(d, V, P, θ, τ, g, ϕ, dc, dv, dt, i, j, k) / D[d][i, j, k]

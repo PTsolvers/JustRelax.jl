@@ -120,7 +120,7 @@ end
     return nothing
 end
 
-function _compute_pt_thermal_arrays!(
+@inline function _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, phase, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
     ) where {N}
     args_ij = getindex_NamedTuple(args, size(dτ_ρ), Idx...)
@@ -135,7 +135,7 @@ function _compute_pt_thermal_arrays!(
     return nothing
 end
 
-function _compute_pt_thermal_arrays!(
+@inline function _compute_pt_thermal_arrays!(
         θr_dτ, dτ_ρ, rheology, args, max_lxyz, Vpdτ, _dt, Idx::Vararg{Int, N}
     ) where {N}
     args_ij = getindex_NamedTuple(args, size(dτ_ρ), Idx...)

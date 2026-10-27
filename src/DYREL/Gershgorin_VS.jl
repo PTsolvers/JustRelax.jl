@@ -238,3 +238,7 @@ end
 
     return nothing
 end
+
+function Gershgorin_variational!(::Val{2}, dyrel, stokes, phases, ϕ, rheology, di, dt, ρg = nothing)
+    return Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phases, ϕ, rheology, di, dt, ρg)
+end

@@ -24,7 +24,7 @@ Solver code is written once and compiled for CPU, CUDA and AMDGPU, in 2D and 3D.
 The shared sources are included by six modules: CPU 2D/3D (`src/JustRelax_CPU.jl`) and CUDA/AMDGPU 2D/3D (`src/ext/…`).
 
 - **Every module has its own copy of the `import JustRelax: …` block.** A name defined in the root module (or imported from JustPIC) and used in shared code must be added to **all six**. A missing one is an `UndefVarError` at run time on that backend only: CPU tests cannot see it, and it costs a full GPU CI round trip. After adding a name, `grep -n <name> src/JustRelax_CPU.jl src/ext/*/*.jl` must hit every file.
-- A new source file must be `include`d by every module that needs it. What a module provides is what its `include` lines say — check them instead of assuming symmetry. For example `DYREL/solver_VS.jl` is included by the 2D modules only.
+- A new source file must be `include`d by every module that needs it. What a module provides is what its `include` lines say — check them instead of assuming symmetry. For example `DYREL/variational3D.jl` is included by the 3D modules only.
 - Never include a 2D kernel file from a 3D module or the reverse.
 
 ## ParallelStencil initialization

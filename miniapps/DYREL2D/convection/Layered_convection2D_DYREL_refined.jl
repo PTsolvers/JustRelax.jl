@@ -291,6 +291,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,

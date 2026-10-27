@@ -418,6 +418,7 @@ function main2D(igg; figdir = "Thermal_stresses", nx = 32, ny = 32, do_vtk = fal
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 100.0e3,

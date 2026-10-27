@@ -129,7 +129,7 @@ makedocs(;
                 "APT equations" => "man/equations_APT.md",
                 "Discretization" => "man/equations_discretization.md",
                 "Material physics" => "man/material_physics.md",
-                "2D variational Stokes" => "man/variational_stokes.md",
+                "Variational Stokes" => "man/variational_stokes.md",
             ],
             "Boundary conditions" => "man/boundary_conditions.md",
             "Advection" => "man/advection.md",
@@ -162,6 +162,7 @@ makedocs(;
             "Grid" => "man/api/grid.md",
             "Index" => "man/listfunctions.md",
         ],
+        "Performance" => "performance.md",
         "Citing JustRelax.jl" => "man/citing.md",
         "References" => Any[
             "JustPIC" => "man/JustPIC.md",

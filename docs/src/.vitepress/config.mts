@@ -21,6 +21,7 @@ const nav = [
   { text: "Home", link: "/" },
   { text: "Documentation", link: "/man/installation" },
   { text: "API", link: "/man/listfunctions" },
+  { text: "Performance", link: "/performance" },
   {
     component: 'VersionPicker'
   }

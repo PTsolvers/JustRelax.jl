@@ -1,7 +1,7 @@
 ## VARIATIONAL (masked) DYREL VELOCITY KERNELS
 #
 # Masked (RockRatio ϕ) counterparts of the fused DYREL kernels in velocity_kernels.jl, used by the
-# variational `_solve_DYREL!` (solver_VS.jl). 2D only — the variational DYREL path is 2D-only.
+# variational solver (solver_VS.jl). The 3D kernels live in variational3D.jl.
 
 ## DIVERGENCE + DEVIATORIC STRAIN RATE + PRESSURE RESIDUAL (fused, masked)
 # Masked analogue of `compute_∇V_strain_rate_RP!`: divergence, deviatoric strain rate and the
@@ -16,6 +16,9 @@ function compute_∇V_strain_rate_RP!(
         stokes, dyrel, rheology, phase_ratios, ϕ::JustRelax.RockRatio, _di, ni, dt, do_strain_rate = true;
         ΔT = nothing, melt_fraction = nothing, kwargs...,
     )
+    if ndims(stokes.P) == 3
+        return compute_variational_kinematics3D!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
+    end
     @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,
@@ -156,7 +159,7 @@ end
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
-                d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
+                d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
             else
                 0.0e0
             end
@@ -176,7 +179,7 @@ end
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
-                d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction
+                d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction
             else
                 0.0e0
             end
@@ -229,7 +232,7 @@ end
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
             if isvalid_vx(ϕ, i + 1, j)
-                Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - d_xa(P, ϕ.center) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
+                Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
                 dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
                 dVxdτ[i, j] = dVx_new
@@ -255,7 +258,7 @@ end
                 ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
-                Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - d_ya(P, ϕ.center) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction) / Dy[i, j]
+                Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction) / Dy[i, j]
                 Ry[i, j] = Ry_ij
                 dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij, αVy[i, j], βVy[i, j], dτVy[i, j])
                 dVydτ[i, j] = dVy_new

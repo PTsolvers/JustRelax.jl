@@ -21,7 +21,7 @@ Set up a model in stages and check each stage before adding the next. Convention
 | Strong heterogeneity or non-linear rheology, hand-tuned damping fails | `solve_DYREL!` / `solve_VariationalDYREL!` | self-tuned; needs a `DYREL` state built before the time loop |
 | Heat only / thermal evolution | `heatdiffusion_PT!` | `ThermalArrays` has a ghost ring |
 
-Which dimensions and backends a solver exists for is defined by the `include` lines in `src/JustRelax_CPU.jl` and `src/ext/*/{2D,3D}.jl` (for instance `solve_VariationalDYREL!` is 2D only). Solver arguments differ between families — read the docstring, and see `.agents/solvers.md`.
+Which dimensions and backends a solver exists for is defined by the `include` lines in `src/JustRelax_CPU.jl` and `src/ext/*/{2D,3D}.jl` (for instance 3D `solve_VariationalDYREL!` requires a uniform, nonperiodic grid). Solver arguments differ between families — read the docstring, and see `.agents/solvers.md`.
 
 ## Step 3: Start from the closest miniapp
 

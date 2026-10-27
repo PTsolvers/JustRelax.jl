@@ -35,6 +35,9 @@ connectivity rule the weights encode.
 - `verbose`: Print iteration info. Default: `true`.
 - `b_width`: Halo width used to overlap communication with computation. Default: `(4, 4, 4)`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
+- `surface_pressure`: Prescribed compressive pressure on the embedded rock–air interface;
+  `nothing` (default), a real scalar, or a cell-centered field shaped like `stokes.P`.
+  Extend fields smoothly through the interface stencil. Requires `flow_bcs.free_surface = false`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -73,6 +76,7 @@ function _solve_VS!(
         viscosity_relaxation = 1.0e-2,
         viscosity_cutoff = (-Inf, Inf),
         free_surface = false,
+        surface_pressure = nothing,
         kwargs...,
     ) where {N}
 
@@ -88,6 +92,7 @@ function _solve_VS!(
     require_uniform_spacing(grid, "`solve_VariationalStokes!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
+    momentum_pressure = prepare_surface_pressure(stokes.P, surface_pressure, ϕ, flow_bcs)
     (; η, η_vep) = stokes.viscosity
 
     # errors
@@ -203,7 +208,7 @@ function _solve_VS!(
             @parallel (@idx ni .+ 1) nblocks_V nthreads_V compute_V!(
                 @velocity(stokes)...,
                 @residuals(stokes.R)...,
-                stokes.P,
+                momentum_pressure,
                 ρg...,
                 @stress(stokes)...,
                 ητ,

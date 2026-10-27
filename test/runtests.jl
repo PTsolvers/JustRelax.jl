@@ -25,12 +25,14 @@ args = copy(ARGS)
 _, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
 skip_mpi, _ = parse_flags!(args, "--no-mpi")
 
+include(joinpath(@__DIR__, "add_backend_package.jl"))
+
 @static if backend_name == "AMDGPU"
-    Pkg.add("AMDGPU")
+    add_backend_package("AMDGPU")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
     using AMDGPU; AMDGPU.versioninfo()
 elseif backend_name == "CUDA"
-    Pkg.add("CUDA")
+    add_backend_package("CUDA")
     ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
     import CUDA; CUDA.versioninfo()
 elseif backend_name == "CPU"

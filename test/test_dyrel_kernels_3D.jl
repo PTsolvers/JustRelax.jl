@@ -431,7 +431,7 @@ end
         @test iszero(out[17])
     end
 
-    @testset "Gershgorin shear staggering" begin
+    @testset "Gershgorin shear staggering G=$G" for G in (Inf, 0.2, 5.0)
         η_host = [10.0^mod(i + 2j + 3k, 4) for i in 1:ni[1], j in 1:ni[2], k in 1:ni[3]]
         γ_host = [isodd(i + j + k) ? 0.01 : 1000.0 for i in 1:ni[1], j in 1:ni[2], k in 1:ni[3]]
         copyto!(stokes.viscosity.η, η_host)
@@ -442,6 +442,7 @@ end
             SetMaterialParams(;
                 Phase = 1,
                 CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),)),
+                Elasticity = ConstantElasticity(; G, Kb = Inf),
             ),
         )
         JR3K.Gershgorin_Stokes3D_SchurComplement!(
@@ -518,6 +519,8 @@ end
                 stokes.P .= 0.0
                 stokes.P0 .= 0.0
                 stokes.Q .= 0.0
+                # Stress memory is an affine forcing, not part of the velocity operator.
+                foreach(A -> fill!(A, 0.0), (@tensor_center(stokes.τ_o)..., stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy))
                 θc = dyrel.P_num
                 ρg = ntuple(_ -> zeros(ni), 3)
                 linear_args = (; T = zeros(ni .+ 2), P = stokes.P, dt = dt)

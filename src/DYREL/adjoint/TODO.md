@@ -141,13 +141,16 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
       Drucker–Prager shear 64²: 64,200 → 6,700 adjoint iterations; linear sinking block
       1,800 → 1,400; variational Drucker–Prager 6,700 → 4,950. Gradient tests: 136 → 59 s and
       313 → 146 s. The dike example (50–100× forward) still to be re-measured.
-    - ⬜ **Cache the implicit-viscosity vectors.** With nonlinear viscosity every iteration runs
-      one extra stress reverse sweep, only to get the scalar (∂S/∂η)ᵀ τ̄, and two viscosity
-      reverse sweeps (centers, vertices) for (∂V/∂τ)ᵀ η̄. Both vectors are fixed during an
-      adjoint solve, like the feedback F, which is already cached: store ∂S/∂η (5 numbers per
-      center, 3 per vertex) and ∂V/∂τ (3 + 3) once per solve and replace the two steps with the
-      pointwise η̄ = (s·τ̄)/(1 − F), τ̄ += v η̄ (and P̄ += (∂V/∂P) η̄, see 20). Independent of
-      the next item; about half a day. Gain to be measured.
+    - ✅ **Implicit-viscosity derivatives computed once per solve.** Nonlinear viscosity cost one
+      extra stress reverse sweep, for (∂τ/∂η)ᵀ τ̄, and two viscosity reverse sweeps per
+      iteration. Now ∂τ/∂η, ∂η/∂τ, ∂η/∂P and F come from forward-mode sweeps once per solve
+      and stress relaxation (`implicit_viscosity_scratch`, `enzyme_forward_pointwise!`); an
+      iteration applies them pointwise and reverses only the stress kernel. The variational
+      solver seeds η̇ = η, so the harmonic vertex mean H gives Ḣ = H and ∂τ/∂H follows by
+      division; its transpose is a cheap reverse of `harm_clamped`. Matches the previous sweeps
+      to 1e-10 (`test_adjoint_dot_product.jl`). One nonlinear sweep at 128²: 12.0 → 5.6 ms
+      (power law), 17.7 → 8.3 ms (+ Drucker–Prager), variational 13.5 → 6.3 and
+      16.8 → 9.3 ms, 1 thread; 1.5–2× with 4 threads.
     - ⬜ **Precompute the local stress tangent** once per adjoint solve and apply it with a
       gather-form stencil kernel, without Enzyme. Stress evaluation only (centers 5×5, vertices
       3×5; the nonlinear viscosity feedback folds into it); momentum, continuity and buoyancy

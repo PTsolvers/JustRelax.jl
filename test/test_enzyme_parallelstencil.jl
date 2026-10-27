@@ -275,19 +275,7 @@ end
     converged_objective()
     adjoint.τ.xx .= center_weights
     adjoint.τ.xy .= vertex_weights
-    scratch = (;
-        η_target = copy(stokes.viscosity.η),
-        ηv_target = copy(stokes.viscosity.ηv),
-        η = similar(stokes.viscosity.η),
-        ηv = similar(stokes.viscosity.ηv),
-        feedback = similar(stokes.viscosity.η),
-        feedback_v = similar(stokes.viscosity.ηv),
-        feedback_λ = Ref{Any}(nothing),
-        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
-        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
-        τII = similar(stokes.τ.II),
-        θ = similar(stokes.ΔPψ),
-    )
+    scratch = JustRelax2D.implicit_viscosity_scratch(stokes)
     JustRelax2D.enzyme_compute_stress_DRYEL!(
         stokes, adjoint, rheology, phases, 1.0, 1.0, args, (-Inf, Inf), false, scratch,
     )
@@ -381,16 +369,7 @@ end
     converged_objective()
     adjoint.τ.xx .= center_weights
     adjoint.τ.xy .= vertex_weights
-    scratch = (;
-        η_target = copy(stokes.viscosity.η),
-        η = similar(stokes.viscosity.η),
-        feedback = similar(stokes.viscosity.η),
-        feedback_λ = Ref{Any}(nothing),
-        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
-        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
-        τII = similar(stokes.τ.II),
-        θ = similar(stokes.ΔPψ),
-    )
+    scratch = JustRelax2D.implicit_viscosity_scratch(stokes, ϕ)
     JustRelax2D.enzyme_compute_variational_stress_DRYEL!(
         scratch, stokes, adjoint, rheology, phases, ϕ, 1.0, 1.0, args, (-Inf, Inf),
     )
@@ -1040,19 +1019,7 @@ end
             relaxation = 0.5,
         )
     end
-    nonlinear_scratch = (;
-        η_target = copy(stokes.viscosity.η),
-        ηv_target = copy(stokes.viscosity.ηv),
-        η = similar(stokes.viscosity.η),
-        ηv = similar(stokes.viscosity.ηv),
-        feedback = similar(stokes.viscosity.η),
-        feedback_v = similar(stokes.viscosity.ηv),
-        feedback_λ = Ref{Any}(nothing),
-        τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
-        τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
-        τII = similar(stokes.τ.II),
-        θ = similar(stokes.ΔPψ),
-    )
+    nonlinear_scratch = JustRelax2D.implicit_viscosity_scratch(stokes)
     # The final-state nonlinear path starts with the stress seed supplied by the momentum
     # residual. Viscosity is a locally eliminated constitutive variable, so a stale viscosity
     # seed must be ignored. The adjoint interface therefore has no relaxation argument.

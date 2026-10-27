@@ -87,16 +87,7 @@ function solve_VariationalDYREL_adjoint!(
     dyrel = adjoint_dyrel!(stokes_ad, dyrel)
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
-    constitutive_scratch = linear_viscosity ? nothing : (;
-            η_target = copy(stokes.viscosity.η),
-            η = similar(stokes.viscosity.η),
-            feedback = similar(stokes.viscosity.η),
-            feedback_λ = Ref{Any}(nothing),
-            τ = map(similar, (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)),
-            τ_v = map(similar, (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)),
-            τII = similar(stokes.τ.II),
-            θ = similar(stokes.ΔPψ),
-        )
+    constitutive_scratch = linear_viscosity ? nothing : implicit_viscosity_scratch(stokes, ϕ)
     if !isnothing(constitutive_scratch)
         compute_constitutive_tangent_amplification!(
             constitutive_scratch, stokes, rheology, phase_ratios, ϕ,

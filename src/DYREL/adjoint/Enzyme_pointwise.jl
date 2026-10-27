@@ -66,17 +66,50 @@ end
 # real shadows are not accumulated twice.
 const compiled_pullbacks = Set{Any}()
 
-function compile_pullback_serially!(op, primals, shadows, context, index)
+function compile_pullback_serially!(
+        op, primals, shadows, context, index, apply! = apply_point!
+    )
     Threads.nthreads() > 1 || return nothing
     package = ParallelStencil.ParallelKernel.get_package(@__MODULE__)
     package in (ParallelStencil.ParallelKernel.PKG_THREADS, ParallelStencil.ParallelKernel.PKG_POLYESTER) ||
         return nothing
-    signature = typeof((op, primals, shadows, context))
+    signature = typeof((apply!, op, primals, shadows, context))
     signature in compiled_pullbacks && return nothing
-    apply_point!(op, deepcopy(primals), deepcopy(shadows), deepcopy(context), index...)
+    apply!(op, deepcopy(primals), deepcopy(shadows), deepcopy(context), index...)
     push!(compiled_pullbacks, signature)
     return nothing
 end
+
+"""
+    enzyme_forward_pointwise!(f, n, args)
+
+Forward-mode differentiate the point function `f(primals..., i, j)` over `1:n[1] × 1:n[2]`.
+`args` lists pairs `x => dx`: `dx` is the tangent of `x`, the seed of an input and the result
+of an output, and `x => nothing` keeps `x` constant. A point writes only its own outputs, so
+all points run at once.
+"""
+function enzyme_forward_pointwise!(f, n::NTuple{2, Integer}, args::Tuple)
+    primals, tangents = map(first, args), map(last, args)
+    compile_pullback_serially!(f, primals, tangents, nothing, (1, 1), tangent_point!)
+    @parallel (1:n[1], 1:n[2]) forward_point!(f, primals, tangents)
+    return nothing
+end
+
+@parallel_indices (i, j) function forward_point!(f, primals, tangents)
+    tangent_point!(f, primals, tangents, nothing, i, j)
+    return nothing
+end
+
+@inline function tangent_point!(f, primals, tangents, context, i, j)
+    Enzyme.autodiff_deferred(
+        Enzyme.Forward, Enzyme.Const(f), Enzyme.Const,
+        map(annotate_tangent, primals, tangents)..., Enzyme.Const(i), Enzyme.Const(j),
+    )
+    return nothing
+end
+
+@inline annotate_tangent(x, dx) = Enzyme.Duplicated(x, dx)
+@inline annotate_tangent(x, ::Nothing) = Enzyme.Const(x)
 
 # A type object cannot be passed as GPU kernel data. Construct Active on the device.
 @inline kernel_shadow(dx) = dx === Enzyme.Active ? Val(:active) : dx

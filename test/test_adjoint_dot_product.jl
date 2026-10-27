@@ -369,6 +369,103 @@ end
         @test Jv_w ≈ v_JTw rtol = 1.0e-7
     end
 
+    # The implicit viscosity pullback, from local derivatives computed once per solve, against
+    # its definition by Enzyme reverse sweeps: η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F), τ̄ += (∂η/∂τ)ᵀ η̄ and
+    # P̄ += (∂η/∂P)ᵀ η̄, with F from unit viscosity seeds.
+    @testset "implicit viscosity pullback, $(variational ? "variational" : "standard"), $name" for variational in (false, true),
+            (name, bcs) in pairs(flow_bcs_cases)
+        ni = (7, 6)
+        elasticity = ConstantElasticity(; G = 1.0, Kb = 5.0)
+        rheology = ntuple(2) do phase
+            creep = DislocationCreep(; n = 3.0, r = 0.0, A = 1.0 / phase, E = 0.0, V = 8.3145)
+            SetMaterialParams(;
+                Phase = phase, Elasticity = elasticity,
+                CompositeRheology = CompositeRheology((creep, elasticity)),
+            )
+        end
+        s = setup(ni, bcs, rheology; air = variational)
+        (; stokes, adjoint, phase_ratios, dt, ϕ) = s
+        args = (; T = @ones(ni .+ 2...), P = stokes.P, dt)
+        air_phase = variational ? 2 : 0
+        cutoff = (-Inf, Inf)
+        center_stress = (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
+        vertex_stress = (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+        if variational
+            JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, dt)
+        else
+            JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1.0, dt)
+        end
+        seeds = (
+            adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c, adjoint.τ.xx_v, adjoint.τ.yy_v,
+            adjoint.τ.xy, adjoint.τ.II, adjoint.θ,
+        )
+        initial = map((A, k) -> TA(pseudo_random(size(A), 200 + k)), seeds, Tuple(eachindex(seeds)))
+        reverse_stress!(τ̄; η̄, η̄v = nothing) = variational ?
+            JR2K.enzyme_reverse_stress_DRYEL!(
+                stokes, rheology, phase_ratios, ϕ, 1.0, dt, args;
+                τ_bar = τ̄[1:3], τv_bar = τ̄[4:6], τII_bar = τ̄[7], θ_bar = τ̄[8], η_bar = η̄,
+            ) :
+            JR2K.enzyme_reverse_stress_DRYEL!(
+                stokes, rheology, phase_ratios, 1.0, dt, args;
+                τ_bar = τ̄[1:3], τv_bar = τ̄[4:6], τII_bar = τ̄[7], θ_bar = τ̄[8], η_bar = η̄,
+                ηv_bar = η̄v,
+            )
+        function reverse_viscosity!(η̄, η̄v, τ̄, τ̄v; P_bar = nothing)
+            JR2K.enzyme_compute_viscosity_point!(
+                copy(stokes.viscosity.η), η̄, phase_ratios.center, center_stress, τ̄, args,
+                rheology, cutoff, JR2K.compute_viscosity_τII, JR2K.local_viscosity_args;
+                air_phase, P_adjoint = P_bar,
+            )
+            variational || JR2K.enzyme_compute_viscosity_point!(
+                copy(stokes.viscosity.ηv), η̄v, phase_ratios.vertex, vertex_stress, τ̄v, args,
+                rheology, cutoff, JR2K.compute_viscosity_τII, JR2K.local_viscosity_args_vertex;
+                P_adjoint = P_bar,
+            )
+            return nothing
+        end
+        zeros_like(A) = fill!(similar(A), 0)
+
+        # definition
+        foreach(copyto!, seeds, initial)
+        adjoint.P .= 0
+        η̄, η̄v = zeros_like(stokes.viscosity.η), zeros_like(stokes.viscosity.ηv)
+        reverse_stress!(map(copy, initial); η̄, η̄v)
+        F, Fv = zeros_like(η̄), zeros_like(η̄v)
+        unit = (fill!(similar(η̄), 1), fill!(similar(η̄v), 1))
+        τ̄_unit = (map(zeros_like, center_stress)..., map(zeros_like, vertex_stress)...)
+        reverse_viscosity!(unit..., τ̄_unit[1:3], τ̄_unit[4:6])
+        reverse_stress!((τ̄_unit..., zeros_like(stokes.τ.II), zeros_like(stokes.ΔPψ)); η̄ = F, η̄v = Fv)
+        η̄ ./= 1 .- F
+        η̄v ./= 1 .- Fv
+        expected_η = (Array(η̄), Array(η̄v))
+        reverse_viscosity!(η̄, η̄v, seeds[1:3], seeds[4:6]; P_bar = adjoint.P)
+        expected = (map(Array, seeds)..., Array(adjoint.P))
+
+        # cached
+        foreach(copyto!, seeds, initial)
+        adjoint.P .= 0
+        if variational
+            scratch = JR2K.implicit_viscosity_scratch(stokes, ϕ)
+            JR2K.enzyme_prepare_variational_implicit_viscosity_τII!(
+                scratch, stokes, adjoint, rheology, phase_ratios, ϕ, 1.0, dt, args, cutoff;
+                air_phase,
+            )
+        else
+            scratch = JR2K.implicit_viscosity_scratch(stokes)
+            JR2K.enzyme_compute_implicit_viscosity_τII!(
+                scratch, stokes, adjoint, rheology, phase_ratios, 1.0, dt, args, cutoff,
+            )
+        end
+        @test maximum(abs, Array(F)) > 1.0e-3
+        @test maximum(abs, expected[end]) > 1.0e-3
+        @test Array(scratch.feedback) ≈ Array(F) rtol = 1.0e-10
+        @test Array(scratch.η) ≈ expected_η[1] rtol = 1.0e-10
+        variational || @test Array(scratch.ηv) ≈ expected_η[2] rtol = 1.0e-10
+        for (A, B) in zip((map(Array, seeds)..., Array(adjoint.P)), expected)
+            @test A ≈ B rtol = 1.0e-10
+        end
+    end
+
     @testset "velocity boundary conditions, $name, ni = $ni" for (name, bcs) in pairs(flow_bcs_cases), ni in sizes
         s = setup(ni, bcs, rheologies.viscoelastic)
         (; stokes, adjoint) = s

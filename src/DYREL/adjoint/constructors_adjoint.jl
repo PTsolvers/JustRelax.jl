@@ -120,6 +120,7 @@ function AdjointStokesArrays(
         η,
         ρ,
         dρgx,
+        JustRelax.AdjointSolverState(nothing),
     )
 end
 

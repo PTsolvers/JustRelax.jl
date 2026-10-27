@@ -126,7 +126,9 @@ non-associated plasticity (the adjoint diverges, see 18), MPI, GPU runs of any o
     iteration although the forward state is fixed.
     - ✅ **Adaptive damping.** The adjoint kept the forward's final damping, which does not fit the
       softer consistent tangent. Both solvers now re-estimate λmin every `nout` iterations
-      (`AdjointDamping`, `update_adjoint_damping!`) and restore the forward damping afterwards.
+      (`AdjointDamping`, `update_adjoint_damping!`) on the adjoint's own `DYREL` state
+      (`adjoint_dyrel!`, kept in `AdjointStokesArrays`), which carries the damping over to the
+      next adjoint solve and leaves the forward state untouched.
       Drucker–Prager shear 64²: 64,200 → 6,700 adjoint iterations; linear sinking block
       1,800 → 1,400; variational Drucker–Prager 6,700 → 4,950. Gradient tests: 136 → 59 s and
       313 → 146 s. The dike example (50–100× forward) still to be re-measured.

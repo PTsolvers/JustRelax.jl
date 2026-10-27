@@ -45,6 +45,8 @@ function solve_VariationalDYREL_adjoint!(
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
         linear_viscosity = false,
+        adjoint_ϵ = nothing,
+        adjoint_rel_drop = nothing,
         kwargs...,
     ) where {N}
     dim = Val(N)
@@ -81,9 +83,8 @@ function solve_VariationalDYREL_adjoint!(
     nP = max(sum_mpi(maskP), 1)
     lx = grid.max_li
 
-    # Reuse the forward DYREL parameters, but not its iteration history.
-    dyrel.dVxdτ .= 0
-    dyrel.dVydτ .= 0
+    # the adjoint iterates with its own DYREL state; the forward one is left untouched
+    dyrel = adjoint_dyrel!(stokes_ad, dyrel)
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
     constitutive_scratch = linear_viscosity ? nothing : (;
@@ -109,7 +110,7 @@ function solve_VariationalDYREL_adjoint!(
         norm_trim(mask) .= maskRi[d]
         mask
     end
-    damping = AdjointDamping(dyrel, damping_masks)
+    damping = AdjointDamping(damping_masks)
     update_steps! = if isnothing(constitutive_scratch)
         () -> update_dτV_α_β!(dyrel)
     else
@@ -122,7 +123,8 @@ function solve_VariationalDYREL_adjoint!(
     # Iteration loop
     err_min = Inf
     iter = 0
-    ϵ = dyrel.ϵ
+    ϵ = something(adjoint_ϵ, dyrel.ϵ)
+    rel_drop = something(adjoint_rel_drop, rel_drop)
     err = 2 * ϵ
 
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
@@ -275,9 +277,7 @@ function solve_VariationalDYREL_adjoint!(
         @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P
     end
     if !converged
-        # Leave the shared DYREL state ready for a subsequent solve, but do not calculate or
-        # return sensitivities from an unconverged adjoint state.
-        restore_forward_damping!(damping, dyrel)
+        # do not calculate or return sensitivities from an unconverged adjoint state
         error(
             "Variational DYREL adjoint did not converge " *
                 "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
@@ -289,9 +289,6 @@ function solve_VariationalDYREL_adjoint!(
         stokes, stokes_ad, ρg, phase_ratios, ϕ, rheology, _di, ni, λ_relaxation, dt, igg,
         gradients, args; viscosity_cutoff, free_surface, air_phase, constitutive_scratch,
     )
-
-    # Do not carry adjoint damping or iteration history into the next forward solve.
-    restore_forward_damping!(damping, dyrel)
 
     return stokes_ad
 end

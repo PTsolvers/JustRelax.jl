@@ -43,6 +43,11 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   reset to zero if the previous solve diverged), which shortens it in a time loop. To start
   from zero, e.g. for a different objective, zero them or use separate `AdjointStokesArrays`.
   The stopping criterion does not depend on the start. Default: `false`.
+  The adjoint keeps its own DYREL iteration state in `stokes_ad`: it uses the forward
+  preconditioner and penalty of the current state, and carries its damping over from one
+  adjoint solve to the next; the forward DYREL state is not modified.
+- `adjoint_ϵ`: Convergence tolerance of the adjoint solve. Default: the `ϵ` of `dyrel`.
+- `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: the `rel_drop` passed.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
@@ -123,6 +128,8 @@ fraction vanishes are eliminated rather than solved with air properties.
   rank only; an unconverged adjoint solve throws an error. Starts from the previous adjoint
   state as for `solve_DYREL!`; rows and cells eliminated since then start at zero.
   Default: `false`.
+- `adjoint_ϵ`, `adjoint_rel_drop`: Tolerance and `rel_drop` of the adjoint solve, as for
+  `solve_DYREL!`.
 - `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law

@@ -55,7 +55,7 @@ observed_sum(field, mask) =
 function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
-        solves = 1, λ_start = :previous,
+        solves = 1, λ_start = :previous, adjoint_ϵ = nothing,
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -87,7 +87,7 @@ function sinking_block(
     gradients = material_controls(backend, ni, (parameter,); nphases = length(rheology))
     solver_kwargs = (;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
-        nout = 50, linear_viscosity = true, adjoint, observation, gradients,
+        nout = 50, linear_viscosity = true, adjoint, observation, gradients, adjoint_ϵ,
     )
     if variational
         ϕ = RockRatio(backend, ni)
@@ -117,6 +117,8 @@ function sinking_block(
         J = observed_sum(field, mask),
         gradient = sum(Array(gradients[parameter].center)[2, :, :]),
         η = Array(stokes.viscosity.η),
+        dyrel,
+        stokes_ad,
     )
 end
 
@@ -211,6 +213,39 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             @suppress sinking_block(igg; observation, η_block).J
         end
         @test adjoint_gradient ≈ fd rtol = 1.0e-6
+    end
+
+    @testset "adjoint DYREL state, $(variational ? "variational" : "standard")" for variational in (false, true)
+        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        forward = @suppress sinking_block(igg; observation, variational)
+        coupled = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        # the adjoint solve leaves the forward DYREL state as the forward solve left it
+        for name in (:cVx, :cVy, :dτVx, :dτVy, :βVx, :αVx, :dVxdτ)
+            @test Array(getfield(coupled.dyrel, name)) == Array(getfield(forward.dyrel, name))
+        end
+        state = coupled.stokes_ad.solver.dyrel
+        @test state isa JustRelax.DYREL
+        @test state.cVx !== coupled.dyrel.cVx
+        # a later adjoint solve keeps the adjoint damping and takes the current forward operator
+        fill!(state.cVx, 7.0)
+        fill!(coupled.dyrel.Dx, 3.0)
+        next = JustRelax2D.adjoint_dyrel!(coupled.stokes_ad, coupled.dyrel)
+        @test next.cVx === state.cVx
+        @test all(==(7.0), Array(next.cVx))
+        @test all(==(3.0), Array(next.Dx))
+        @test next.Dx !== coupled.dyrel.Dx
+    end
+
+    # a looser adjoint tolerance changes the gradient, not the forward solution
+    @testset "adjoint tolerance, $(variational ? "variational" : "standard")" for variational in (false, true)
+        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        tight = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        loose = @suppress sinking_block(
+            igg; observation, variational, adjoint = true, adjoint_ϵ = 1.0e-3,
+        )
+        @test loose.J == tight.J
+        @test loose.gradient != tight.gradient
+        @test loose.gradient ≈ tight.gradient rtol = 1.0e-2
     end
 
     # Starting from the previous time step's λ changes the iteration, not the result, and the λ

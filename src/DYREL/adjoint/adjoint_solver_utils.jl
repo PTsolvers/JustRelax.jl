@@ -19,19 +19,47 @@ end
 # solver does: λmin is the Rayleigh quotient of the last velocity step against the change of the
 # preconditioned residual it caused. The residual of a step only exists in the next iteration,
 # so the step and its residual are stored one iteration before each estimate.
-struct AdjointDamping{C, M}
-    cV0::C         # forward damping, restored after the adjoint solve
+struct AdjointDamping{M}
     masks::M       # momentum rows entering the estimate
     stored::Base.RefValue{Int}  # iteration of the stored step, 0 if none
 end
 
-function AdjointDamping(dyrel, masks)
-    return AdjointDamping((copy(dyrel.cVx), copy(dyrel.cVy)), masks, Ref(0))
-end
+AdjointDamping(masks) = AdjointDamping(masks, Ref(0))
 
-AdjointDamping(dyrel) = AdjointDamping(
-    dyrel, (fill!(similar(dyrel.Dx, Bool), true), fill!(similar(dyrel.Dy, Bool), true))
+AdjointDamping(dyrel::JustRelax.DYREL) = AdjointDamping(
+    (fill!(similar(dyrel.Dx, Bool), true), fill!(similar(dyrel.Dy, Bool), true))
 )
+
+"""
+    adjoint_dyrel!(stokes_ad, dyrel)
+
+Return the adjoint's own `DYREL` state, kept in `stokes_ad` between adjoint solves, so that the
+forward `dyrel` is never modified. The operator — penalty, bulk viscosity, preconditioner and
+eigenvalue bounds — and the scalar parameters are those of the forward `dyrel` at the current
+state. The damping carries over from the previous adjoint solve; the first solve starts from the
+forward damping. The pseudo-velocity history starts at zero.
+"""
+function adjoint_dyrel!(stokes_ad, dyrel::JustRelax.DYREL)
+    names = fieldnames(JustRelax.DYREL)
+    previous = stokes_ad.solver.dyrel
+    reuse = typeof(previous) === typeof(dyrel) && all(names) do name
+        A = getfield(dyrel, name)
+        !(A isa AbstractArray) || size(A) == size(getfield(previous, name))
+    end
+    fields = map(names) do name
+        A = getfield(dyrel, name)
+        A isa AbstractArray || return A
+        reuse || return copy(A)
+        B = getfield(previous, name)
+        name in (:cVx, :cVy, :cVz) || copyto!(B, A)
+        return B
+    end
+    adjoint = JustRelax.DYREL(fields...)
+    fill!(adjoint.dVxdτ, 0)
+    fill!(adjoint.dVydτ, 0)
+    stokes_ad.solver.dyrel = adjoint
+    return adjoint
+end
 
 @inline preconditioned_residual(R, D) = iszero(D) ? zero(R) : R / D
 
@@ -77,17 +105,6 @@ function adjoint_λminV(dV, residuals, D, residuals0, masks)
         ntuple(d -> sum_mpi((m, dv) -> m ? abs2(dv) : zero(abs2(dv)), masks[d], dV[d]), Val(2))
     )
     return rayleigh_quotient(numerator, denominator)
-end
-
-# Hand the shared DYREL state back to the forward solver: its damping, the pseudo-time steps
-# derived from it, and no velocity history.
-function restore_forward_damping!(damping, dyrel)
-    copyto!(dyrel.cVx, damping.cV0[1])
-    copyto!(dyrel.cVy, damping.cV0[2])
-    update_dτV_α_β!(dyrel)
-    dyrel.dVxdτ .= 0
-    dyrel.dVydτ .= 0
-    return nothing
 end
 
 # A diverged adjoint solve leaves no usable starting point for the next one.

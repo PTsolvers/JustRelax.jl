@@ -212,6 +212,9 @@ function _solve_DYREL!(
         update_dτV_α_β!(dyrel)
     end
 
+    # viscosity before each outer update, for the viscosity residual
+    η_previous = linear_viscosity ? nothing : (similar(stokes.viscosity.η), similar(stokes.viscosity.ηv))
+
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
         # update buoyancy forces
@@ -222,7 +225,12 @@ function _solve_DYREL!(
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
+        linear_viscosity || foreach(copyto!, η_previous, (stokes.viscosity.η, stokes.viscosity.ηv))
         compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        errη = linear_viscosity ? zero(ϵ) : max(
+                viscosity_residual(stokes.viscosity.η, η_previous[1], viscosity_relaxation),
+                viscosity_residual(stokes.viscosity.ηv, η_previous[2], viscosity_relaxation),
+            )
         update_stress_halo!(stokes, dim, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
@@ -256,7 +264,7 @@ function _solve_DYREL!(
             errPt0 = errPt + eps()
         end
         errV_rel = ntuple(d -> min(errV[d] / errV0[d], errV[d]), dim)
-        err = maximum((errV_rel..., min(errPt / errPt0, errPt)))
+        err = maximum((errV_rel..., min(errPt / errPt0, errPt), errη))
         itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
 
         if verbose_PH && igg.me == 0
@@ -264,7 +272,7 @@ function _solve_DYREL!(
                 ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e, η=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0, errη)
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
@@ -585,6 +593,20 @@ end
 # freedom quantities. `global_grid_size` counts vertices, so a direction of `n` cells contributes
 # its `n - 1` interior faces, or all `n` of them when it is periodic and the two boundary faces
 # collapse onto a single unknown.
+# Viscosity residual of a nonlinear rheology: the RMS of |h(τ) - η| / η over the selected points,
+# recovered from the relaxed update η_new = η + ν (h(τ) - η). The momentum and continuity
+# residuals use the stress of the previous viscosity, so they alone can be small while η is
+# still far from the viscosity its stress implies.
+function viscosity_residual(η_new, η_old, ν)
+    sum_sq = sum_mpi((a, b) -> abs2((a - b) / b), η_new, η_old)
+    return sqrt(sum_sq / sum_mpi(_ -> 1.0, η_old)) / ν
+end
+
+function viscosity_residual(η_new, η_old, ν, mask)
+    sum_sq = sum_mpi((m, a, b) -> m ? abs2((a - b) / b) : zero(a), mask, η_new, η_old)
+    return sqrt(sum_sq / max(sum_mpi(m -> m ? 1.0 : 0.0, mask), 1)) / ν
+end
+
 function velocity_dofs(::Val{N}, periodic::NTuple{N, Bool}) where {N}
     global_size = global_grid_size(Val(N))
     return ntuple(Val(N)) do d

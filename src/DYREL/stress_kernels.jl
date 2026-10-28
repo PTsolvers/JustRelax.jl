@@ -280,10 +280,91 @@ function compute_stress_DYREL!(
         dt;
         Pf = nothing,
         ϕ = nothing,
+        stress_buffers = nothing,
     )
 
     ni = size(phase_ratios.vertex)
-    @parallel (@idx ni) cld.(ni, (32, 4, 1)) (32, 4, 1) compute_stress_DYREL!(
+    # The tensile-cap return mapping is register-heavy; compiled into the main pass it slows
+    # every point down. A trial pass flags the yielding points, and a second pass with the
+    # full return mapping updates only those.
+    if any(r -> has_tensile_cap(r.CompositeRheology[1].elements), rheology)
+        buffers = isnothing(stress_buffers) ? stress_pass_buffers(stokes, phase_ratios) : stress_buffers
+        _compute_stress_DYREL3D!(Val(:trial), buffers.flags, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ)
+        # The yielding points are sparse and scattered; compacting them into dense lists keeps
+        # whole warps busy with the return mapping instead of a few lanes per warp.
+        compact_stress_points!(buffers)
+        points = CartesianIndices(ni)
+        for (k, location) in enumerate((Val((:center,)), Val((:yz,)), Val((:xz,)), Val((:xy,))))
+            n = Int(buffers.offsets_host[k, end])
+            iszero(n) && continue
+            list = (view(buffers.list, 1:n, k), points, nothing, nothing)
+            _compute_stress_DYREL3D!(Val(:list), list, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, location, (n, 1, 1))
+        end
+    else
+        _compute_stress_DYREL3D!(Val(:full), ntuple(_ -> nothing, Val(4)), stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ)
+    end
+    return nothing
+end
+
+const STRESS_PASS_CHUNK = 64
+
+# Buffers of the two-pass 3D stress update, per location (center, yz, xz, xy): the trial-pass
+# flags, the flagged points' linear indices compacted into the columns of `list`, and
+# `offsets[k, c]`, the number of location-`k` points flagged before chunk `c` of
+# `STRESS_PASS_CHUNK` linear indices. The prefix sum over chunks runs on the host copy
+# `offsets_host`, whose last column holds the per-location totals.
+function stress_pass_buffers(stokes, phase_ratios)
+    ni = size(phase_ratios.vertex)
+    n = prod(ni)
+    flags = ntuple(_ -> fill!(similar(stokes.P, Bool, ni), false), Val(4))
+    offsets = similar(stokes.P, Int32, 4, cld(n, STRESS_PASS_CHUNK) + 1)
+    list = similar(stokes.P, Int32, n, 4)
+    return (; flags, offsets, offsets_host = zeros(Int32, size(offsets)), list)
+end
+
+function compact_stress_points!(buffers)
+    (; flags, offsets, offsets_host, list) = buffers
+    nchunks = size(offsets, 2) - 1
+    @parallel (1:nchunks) count_stress_points!(offsets, flags)
+    copyto!(offsets_host, offsets)
+    offsets_host[:, 1] .= 0
+    cumsum!(offsets_host, offsets_host; dims = 2)
+    copyto!(offsets, offsets_host)
+    @parallel (1:nchunks) scatter_stress_points!(list, offsets, flags)
+    return nothing
+end
+
+@inline stress_chunk(c, n) = ((c - 1) * STRESS_PASS_CHUNK + 1):min(c * STRESS_PASS_CHUNK, n)
+
+@parallel_indices (c) function count_stress_points!(offsets, flags)
+    chunk = stress_chunk(c, length(flags[1]))
+    Base.Cartesian.@nexprs 4 k -> begin
+        m = zero(eltype(offsets))
+        for l in chunk
+            m += flags[k][l]
+        end
+        offsets[k, c + 1] = m
+    end
+    return nothing
+end
+
+@parallel_indices (c) function scatter_stress_points!(list, offsets, flags)
+    chunk = stress_chunk(c, length(flags[1]))
+    Base.Cartesian.@nexprs 4 k -> begin
+        m = offsets[k, c]
+        for l in chunk
+            if flags[k][l]
+                m += one(m)
+                list[m, k] = l
+            end
+        end
+    end
+    return nothing
+end
+
+function _compute_stress_DYREL3D!(mode, flags, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, locations = Val((:center, :yz, :xz, :xy)), ni = size(phase_ratios.vertex))
+    nthreads = ni[2] == 1 ? (128, 1, 1) : (32, 4, 1)
+    @parallel (@idx ni) cld.(ni, nthreads) nthreads compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
@@ -311,11 +392,31 @@ function compute_stress_DYREL!(
         dt,
         periodic_dims(stokes),
         ϕ,
+        mode,
+        flags,
+        locations,
     )
     return nothing
 end
 
-@parallel_indices (I...) function compute_stress_DYREL!(
+# `mode`: `Val(:full)` updates every point; `Val(:trial)` updates the points whose trial
+# state does not reach a tensile cap and flags the others; `Val(:list)` updates a list of
+# points with the full return mapping.
+@inline stress_cap_mode(::Val{:trial}) = Val(:trial)
+@inline stress_cap_mode(mode) = Val(:full)
+@inline function keep_stress!(::Val{:trial}, flag, λ, I...)
+    yielding = isnan(λ)
+    flag[I...] = yielding
+    return !yielding
+end
+@inline keep_stress!(mode, flag, λ, I...) = true
+@inline updates_location(::Val{L}, location::Symbol) where {L} = location in L
+# `Val(:list)` launches one thread per entry of `flags[1]`, a list of linear indices into the
+# `CartesianIndices` `flags[2]`.
+@inline stress_point(::Val{:list}, flags, I) = Tuple(flags[2][flags[1][I[1]]])
+@inline stress_point(mode, flags, I) = I
+
+@parallel_indices (J...) function compute_stress_DYREL!(
         τ_c,
         τ_shear,
         τ_o_c,
@@ -343,8 +444,12 @@ end
         dt,
         periodic,
         ϕ,
+        mode,
+        flags,
+        locations,
     )
 
+    I = stress_point(mode, flags, J)
     ni = size(P)
     # The cell stencil of a vertex wraps across a periodic seam instead of degenerating onto the
     # cells on one side of it, so both copies of the seam plane interpolate the same material.
@@ -354,7 +459,7 @@ end
     Base.@propagate_inbounds @inline av_xy(A) = _av_xy(A, I...)
 
     ## yz
-    if all(I .≤ size(εij[1]))
+    if updates_location(locations, :yz) && all(I .≤ size(εij[1]))
         # interpolate to ith vertex
         ηij = harm_clamped_yz(η, Ic...)
         Pij = av_clamped_yz(P, Ic...)
@@ -380,16 +485,18 @@ end
         ratio = @inbounds phase_yz[I...]
 
         # compute local stress
-        _, _, _, τyz_I, _, _, _, _, _, εyz_pl, _, _, _, λ_I, = valid_stress(ϕ, Val(:yz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
+        _, _, _, τyz_I, _, _, _, _, _, εyz_pl, _, _, _, λ_I, = valid_stress(ϕ, Val(:yz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij, stress_cap_mode(mode)) : empty_stress_solution(ε)
 
         # update arrays
-        τ_shear[1][I...] = τyz_I
-        εij_pl[1][I...] = εyz_pl
-        λv[1][I...] = λ_I
+        if keep_stress!(mode, flags[2], λ_I, I...)
+            τ_shear[1][I...] = τyz_I
+            εij_pl[1][I...] = εyz_pl
+            λv[1][I...] = λ_I
+        end
     end
 
     ## xz
-    if all(I .≤ size(εij[2]))
+    if updates_location(locations, :xz) && all(I .≤ size(εij[2]))
         ηij = harm_clamped_xz(η, Ic...)
         Pij = av_clamped_xz(P, Ic...)
         Pfij = sample_Pf(Pf, av_clamped_xz, Pij, Ic...)
@@ -413,15 +520,17 @@ end
         λvij = λv[2][I...]
         ratio = @inbounds phase_xz[I...]
 
-        _, _, _, _, τxz_I, _, _, _, _, _, εxz_pl, _, _, λ_I, = valid_stress(ϕ, Val(:xz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
+        _, _, _, _, τxz_I, _, _, _, _, _, εxz_pl, _, _, λ_I, = valid_stress(ϕ, Val(:xz), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij, stress_cap_mode(mode)) : empty_stress_solution(ε)
 
-        τ_shear[2][I...] = τxz_I
-        εij_pl[2][I...] = εxz_pl
-        λv[2][I...] = λ_I
+        if keep_stress!(mode, flags[3], λ_I, I...)
+            τ_shear[2][I...] = τxz_I
+            εij_pl[2][I...] = εxz_pl
+            λv[2][I...] = λ_I
+        end
     end
 
     ## xy
-    if all(I .≤ size(εij[3]))
+    if updates_location(locations, :xy) && all(I .≤ size(εij[3]))
         ηij = harm_clamped_xy(η, Ic...)
         Pij = av_clamped_xy(P, Ic...)
         Pfij = sample_Pf(Pf, av_clamped_xy, Pij, Ic...)
@@ -445,15 +554,17 @@ end
         λvij = λv[3][I...]
         ratio = @inbounds phase_xy[I...]
 
-        _, _, _, _, _, τxy_I, _, _, _, _, _, εxy_pl, _, λ_I, = valid_stress(ϕ, Val(:xy), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij) : empty_stress_solution(ε)
+        _, _, _, _, _, τxy_I, _, _, _, _, _, εxy_pl, _, λ_I, = valid_stress(ϕ, Val(:xy), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij, stress_cap_mode(mode)) : empty_stress_solution(ε)
 
-        τ_shear[3][I...] = τxy_I
-        εij_pl[3][I...] = εxy_pl
-        λv[3][I...] = λ_I
+        if keep_stress!(mode, flags[4], λ_I, I...)
+            τ_shear[3][I...] = τxy_I
+            εij_pl[3][I...] = εxy_pl
+            λv[3][I...] = λ_I
+        end
     end
 
     ## center
-    if all(I .≤ ni)
+    if updates_location(locations, :center) && all(I .≤ ni)
         ε = (
             εii[1][I...],
             εii[2][I...],
@@ -478,16 +589,18 @@ end
         ratio = @inbounds phase_ratios_center[I...]
 
         τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, εxx_pl, εyy_pl, εzz_pl, _, _, _, τII_I, λ_I, ΔPψ_I, ηvep_I, ε_vol_pl_I =
-            valid_stress(ϕ, Val(:center), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij) : empty_stress_solution(ε)
+            valid_stress(ϕ, Val(:center), I...) ? compute_local_stress(ε, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij, stress_cap_mode(mode)) : empty_stress_solution(ε)
 
-        τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
-        τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
-        εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
-        ε_vol_pl[I...] = ε_vol_pl_I
-        τII[I...] = τII_I
-        η_vep[I...] = ηvep_I
-        λ[I...] = λ_I
-        ΔPψ[I...] = ΔPψ_I
+        if keep_stress!(mode, flags[1], λ_I, I...)
+            τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
+            τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
+            εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
+            ε_vol_pl[I...] = ε_vol_pl_I
+            τII[I...] = τII_I
+            η_vep[I...] = ηvep_I
+            λ[I...] = λ_I
+            ΔPψ[I...] = ΔPψ_I
+        end
     end
 
     return nothing
@@ -739,8 +852,12 @@ end
 @inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII) =
     compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, zero(P))
 
-# `Pf` is the fluid pressure entering the yield function and flow potential.
-@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, Pf) where {N}
+@inline compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, Pf) =
+    compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio, dt, EII, Pf, Val(:full))
+
+# `Pf` is the fluid pressure entering the yield function and flow potential. `cap_mode` is
+# `Val(:full)`, or `Val(:trial)` to skip the tensile-cap return mapping (see `plastic_correction`).
+@generated function compute_local_stress(εij, τij_o, η, P, λ, λ_relaxation, rheology, phase_ratio::SVector{N}, dt, EII, Pf, cap_mode) where {N}
     return quote
         @inline
         # iterate over phases
@@ -755,17 +872,19 @@ end
                 G = get_shear_modulus(rheology[phase])
                 Kb = get_bulk_modulus(rheology[phase])
                 ratio_I .* _compute_local_stress(
-                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, Pf
+                    εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology[phase], dt, EII, Pf, cap_mode
                 )
             end
         end
-        # sum contributions from all phases
-        v = reduce(.+, v_phases)
+        # sum contributions from all phases; unrolled, because `reduce` passes the tuples to a
+        # non-inlined fold through GPU local memory
+        v = v_phases[1]
+        Base.@nexprs $(N - 1) phase -> v = v .+ v_phases[phase + 1]
         return v # this returns (τ_ij...), (εij_pl...), τII, λ, ΔPψ, ηvep
     end
 end
 
-@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII, Pf = zero(P))
+@inline function _compute_local_stress(εij, τij_o, η, P, G, Kb, λ, λ_relaxation, rheology, dt, EII, Pf = zero(P), cap_mode = Val(:full))
     # Only is_pl and η_reg are still needed locally; F + gradients come from GeoParams.
     # EII=0 here matches the existing DYREL pattern (no EII-softening in the inner loop).
     ispl, _, _, _, _, η_reg = plastic_params(rheology, EII)
@@ -788,7 +907,7 @@ end
     τII = second_invariant(τij)
 
     λ, dQdτ, dQdP = plastic_correction(
-        (rheology,), 1, τij, P, EII, η_ve, Kb * dt, η_reg, λ, λ_relaxation, ispl; Pf
+        (rheology,), 1, τij, P, EII, η_ve, Kb * dt, η_reg, λ, λ_relaxation, ispl; Pf, cap_mode
     )
     ε_vol_pl = -λ * dQdP
 
@@ -823,9 +942,9 @@ end
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt; Pf = nothing)
+function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt; Pf = nothing, stress_buffers = nothing)
     if ndims(stokes.P) == 3
-        return compute_stress_DYREL!(Val(3), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, ϕ)
+        return compute_stress_DYREL!(Val(3), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, ϕ, stress_buffers)
     end
 
     ni = size(phase_ratios.vertex)

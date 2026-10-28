@@ -619,7 +619,7 @@ over no phase at all would make the harmonic mean `Inf`, which then spreads thro
     return iszero(sum(corrected)) ? ratio : corrected
 end
 
-function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+@inline function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
     elseif ratio[air_phase] ≈ 1

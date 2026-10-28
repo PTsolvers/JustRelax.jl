@@ -33,6 +33,15 @@ end
 
 const TA = PTArray(backend)
 
+# Internal kernels must come from the module initialized for the selected backend.
+const JR2K = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+    Base.get_extension(JustRelax, :JustRelaxAMDGPUExt).JustRelax2D
+elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
+    Base.get_extension(JustRelax, :JustRelaxCUDAExt).JustRelax2D
+else
+    JustRelax.JustRelax2D
+end
+
 @parallel_indices (i, j) function init_inclusion!(phases, xc, yc)
     inside = (xc[i] - 0.5)^2 + (yc[j] - 0.5)^2 ≤ 0.1^2
     @index phases[1, i, j] = inside ? 0.0 : 1.0
@@ -104,7 +113,7 @@ function shear_thinning_inclusion(igg; variational)
     end
     # stress from η and h(τ) from that stress, unrelaxed
     η = Array(stokes.viscosity.η)
-    JustRelax2D.compute_stress_viscosity_DYREL!(
+    JR2K.compute_stress_viscosity_DYREL!(
         stokes, @zeros(ni...), @zeros(ni...), rheology, phase_ratios, 1.0, dt, 1.0, args, cutoff, false,
     )
     return η, Array(stokes.viscosity.η)

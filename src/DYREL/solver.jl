@@ -48,6 +48,12 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   adjoint solve to the next; the forward DYREL state is not modified.
 - `adjoint_ϵ`: Convergence tolerance of the adjoint solve. Default: the `ϵ` of `dyrel`.
 - `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: the `rel_drop` passed.
+- `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
+  a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
+  `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR` and `pressure_relaxation`, e.g.
+  `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
+  given are those of the forward solve. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
+  `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
@@ -136,6 +142,7 @@ fraction vanishes are eliminated rather than solved with air properties.
   Default: `false`.
 - `adjoint_ϵ`, `adjoint_rel_drop`: Tolerance and `rel_drop` of the adjoint solve, as for
   `solve_DYREL!`.
+- `adjoint_kwargs`: Iteration controls of the adjoint solve, as for `solve_DYREL!`. Default: `(;)`.
 - `observation`: Objective of the adjoint solve, a box or a weighted field, as for `solve_DYREL!`. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law
@@ -188,6 +195,7 @@ function _solve_DYREL!(
         adjoint = false,
         observation = nothing,
         gradients = (;),
+        adjoint_kwargs = (;),
         η_multiplier = nothing,
         kwargs...,
     ) where {N}
@@ -480,21 +488,20 @@ function _solve_DYREL!(
             igg;
             λ_relaxation_DR,
             λ_relaxation_PH,
-            pressure_relaxation,
             free_surface,
-            iterMax_PH,
-            iterMax_DR,
-            total_iterMax,
-            nout,
-            rel_drop = rel_drop_adjoint,
-            verbose_PH,
-            verbose_DR,
             observation,
             gradients,
             viscosity_cutoff,
             linear_viscosity,
             update_material,
-            kwargs...,
+            adjoint_solver_options(
+                (;
+                    pressure_relaxation, iterMax_PH, iterMax_DR, total_iterMax, nout,
+                    rel_drop = rel_drop_adjoint, verbose_PH, verbose_DR,
+                ),
+                adjoint_kwargs,
+                kwargs,
+            )...,
         )
     end
 

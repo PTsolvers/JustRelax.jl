@@ -37,6 +37,7 @@ function _solve_VariationalDYREL!(
         adjoint = false,
         observation = nothing,
         gradients = (;),
+        adjoint_kwargs = (;),
         η_multiplier = nothing,
         kwargs...,
     ) where {N}
@@ -386,20 +387,19 @@ function _solve_VariationalDYREL!(
             air_phase,
             λ_relaxation_DR,
             λ_relaxation_PH,
-            pressure_relaxation,
             free_surface,
-            iterMax_PH,
-            iterMax_DR,
-            total_iterMax,
-            nout,
-            rel_drop = rel_drop_adjoint,
-            verbose_PH,
-            verbose_DR,
             observation,
             gradients,
             viscosity_cutoff,
             linear_viscosity,
-            kwargs...,
+            adjoint_solver_options(
+                (;
+                    pressure_relaxation, iterMax_PH, iterMax_DR, total_iterMax, nout,
+                    rel_drop = rel_drop_adjoint, verbose_PH, verbose_DR,
+                ),
+                adjoint_kwargs,
+                kwargs,
+            )...,
         )
     end
 

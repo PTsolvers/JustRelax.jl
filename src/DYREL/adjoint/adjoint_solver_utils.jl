@@ -13,6 +13,31 @@ function initialize_adjoint_iteration!(adjoint, ni)
     return nothing
 end
 
+const ADJOINT_SOLVER_OPTIONS = (
+    :ϵ, :rel_drop, :iterMax, :iterMax_PH, :iterMax_DR, :total_iterMax, :nout,
+    :verbose_PH, :verbose_DR, :pressure_relaxation,
+)
+
+# Iteration controls of the adjoint solve: those of the forward solve, overridden by
+# `adjoint_kwargs`. `kwargs` are the remaining keywords of the forward call.
+function adjoint_solver_options(forward::NamedTuple, adjoint_kwargs, kwargs)
+    adjoint_kwargs isa NamedTuple ||
+        throw(ArgumentError("`adjoint_kwargs` must be a NamedTuple, got $(typeof(adjoint_kwargs))"))
+    unknown = filter(∉(ADJOINT_SOLVER_OPTIONS), keys(adjoint_kwargs))
+    isempty(unknown) || throw(
+        ArgumentError("unknown adjoint solver option(s) $unknown; supported: $ADJOINT_SOLVER_OPTIONS")
+    )
+    options = (; kwargs...)
+    for (name, alias) in ((:ϵ, :adjoint_ϵ), (:rel_drop, :adjoint_rel_drop))
+        haskey(adjoint_kwargs, name) && !isnothing(get(options, alias, nothing)) &&
+            throw(ArgumentError("give either `adjoint_kwargs.$name` or `$alias`, not both"))
+    end
+    iterMax_DR = get(adjoint_kwargs, :iterMax_DR, get(adjoint_kwargs, :iterMax, forward.iterMax_DR))
+    ϵ = haskey(adjoint_kwargs, :ϵ) ? (; adjoint_ϵ = adjoint_kwargs.ϵ) : (;)
+    overrides = Base.structdiff(adjoint_kwargs, NamedTuple{(:ϵ, :iterMax)})
+    return merge(forward, options, overrides, (; iterMax_DR), ϵ)
+end
+
 # The adjoint iterates on the consistent tangent of the converged forward state, whose smallest
 # eigenvalue can lie far from the one the forward damping was tuned to (a yielding plastic
 # tangent is much softer). Re-estimate the damping every `nout` iterations as the forward

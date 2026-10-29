@@ -59,7 +59,7 @@ function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
         solves = 1, λ_start = :previous, adjoint_ϵ = nothing, activation_volume = nothing,
-        compressibility = nothing, update_material = true,
+        compressibility = nothing, update_material = true, adjoint_kwargs = (;),
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -96,6 +96,7 @@ function sinking_block(
     solver_kwargs = (;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
         nout = 50, linear_viscosity, adjoint, observation, gradients, adjoint_ϵ,
+        adjoint_kwargs,
     )
     if variational
         ϕ = RockRatio(backend, ni)
@@ -288,6 +289,25 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test loose.J == tight.J
         @test loose.gradient != tight.gradient
         @test loose.gradient ≈ tight.gradient rtol = 1.0e-2
+        options = @suppress sinking_block(
+            igg; observation, variational, adjoint = true, adjoint_kwargs = (; ϵ = 1.0e-3),
+        )
+        @test options.gradient == loose.gradient
+    end
+
+    @testset "adjoint solver options" begin
+        forward = (; iterMax_DR = 10, nout = 100, rel_drop = 1.0e-2, verbose_PH = true)
+        options(adjoint_kwargs; kwargs...) =
+            JustRelax2D.adjoint_solver_options(forward, adjoint_kwargs, kwargs)
+        @test options((;)) == forward
+        @test options((; nout = 10, ϵ = 1.0e-6)) ==
+            (; forward..., nout = 10, adjoint_ϵ = 1.0e-6)
+        @test options((; iterMax = 5)).iterMax_DR == 5
+        @test options((;); adjoint_rel_drop = 0.1).adjoint_rel_drop == 0.1
+        @test_throws ArgumentError options((; viscosity_cutoff = (1, 2)))
+        @test_throws ArgumentError options((; ϵ = 1.0e-6); adjoint_ϵ = 1.0e-6)
+        @test options((; ϵ = 1.0e-6); adjoint_ϵ = nothing).adjoint_ϵ == 1.0e-6
+        @test_throws ArgumentError options([:nout => 10])
     end
 
     # Starting from the previous time step's λ changes the iteration, not the result, and the λ

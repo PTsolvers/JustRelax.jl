@@ -2,12 +2,9 @@
 #
 # A dense block sinks through a viscoelastic-plastic matrix in background shear. With friction
 # angle ϕ = 20°, dilation angle Ψ = 0° and weak regularization η_vp = 1e-2, most of the matrix
-# yields. The forward solve converges, but the damped adjoint iteration diverges: the consistent
-# plastic tangent of non-associated flow is non-symmetric and can be indefinite. The adjoint
-# operator itself is the exact transpose of the forward one (see
-# `test/test_adjoint_dot_product.jl`), so this is a convergence limit of the adjoint iteration,
-# not a wrong derivative. Associated flow (Ψ = ϕ) or stronger regularization (η_vp = 0.1)
-# converges for the same setup.
+# yields, and the consistent plastic tangent of non-associated flow is non-symmetric. The
+# adjoint once diverged here; it now converges, in about 3–4× the iterations of associated flow
+# (Ψ = ϕ) or of stronger regularization (η_vp = 0.1), which the script runs for comparison.
 #
 # Run with
 #     JULIA_JUSTRELAX_BACKEND=CPU julia --project=miniapps --startup-file=no -t 1 \

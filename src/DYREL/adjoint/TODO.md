@@ -113,15 +113,16 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
     Also the purely viscous shear-thinning shear band (n = 1/3, `viscosity_cutoff = (-Inf, Inf)`):
     `ShearBand2D_PowerLaw_DYREL.jl` stays at err = 5.09 for 50,000 iterations, while the standard
     DYREL solver converges on the same problem in 4,400.
-18. ⬜ **Adjoint iteration diverges for strongly non-associated plasticity.** Drucker–Prager with
-    ϕ = 20°, Ψ = 0°, η_vp = 1e-2 and ~85 % of cells yielded: the forward converges, the adjoint
-    residual grows ×100 per 50 iterations in both solvers. Associated flow (Ψ = ϕ) or
-    η_vp = 0.1 converges. The operator itself is the exact transpose (dot-product test), so this
-    is the damped iteration on a non-symmetric, possibly indefinite consistent tangent, not a
-    derivative bug. Options: a step-size estimate from the adjoint operator, or an error message
-    that names the cause instead of NaN. Reproducer:
-    `miniapps/Adjoint2D/NonAssociatedPlasticity2D_adjoint.jl` (diverges at Ψ = 0°, converges at
-    Ψ = ϕ and at η_vp = 0.1).
+18. ✅ **Adjoint iteration diverged for strongly non-associated plasticity.** Drucker–Prager with
+    ϕ = 20°, Ψ = 0°, η_vp = 1e-2 and ~90 % of cells yielded: the adjoint residual grew ×100 per
+    50 iterations in both solvers. No longer reproducible, most likely since the adaptive adjoint
+    damping (11). Re-measured 2026-10-29 with `miniapps/Adjoint2D/NonAssociatedPlasticity2D_adjoint.jl`
+    at 16² (and a variational copy), adjoint iterations, standard / variational: non-associated
+    2,850 / 2,450, associated (Ψ = ϕ) 750 / 800, non-associated with η_vp = 0.1 600 / 600. Tried
+    and reverted: holding the pressure couplings (∂τ/∂P, ρg(P), η(P)) of the inner Schur
+    correction at the outer pass's λV, as the forward holds its outer pressure. The result is
+    the same, but the adjoint then inherits the forward's slow outer iteration: 6,350 / 4,950,
+    30,700 / 30,350 and 1,950 / 1,450 iterations.
 
 19. ✅ **GeoParams' `PowerlawViscous` with n > 1 is shear-thickening.** GeoParams computes
     τII = ε0 η0 (εII/ε0)^n (its docstring says τⁿ = 2 η0 ε̇/ε̇0, the shear-thinning form), so a

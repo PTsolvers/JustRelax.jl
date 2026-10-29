@@ -157,11 +157,11 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
       pullbacks stay on Enzyme. Stages: standard solver with linear viscosity (measure here
       first), nonlinear viscosity, variational solver, tests. About 3–4 days. Bounded by the
       stress pullback's share of an iteration (54–83 %).
-    - ⬜ Hand-written transposes of the linear momentum and continuity residuals (the momentum
-      pullback costs 5× its forward kernel). ~20–25 % of a viscoelastic iteration.
-    - ⬜ Skip the buoyancy pullback for pressure-independent density (~10 %).
+    - ✅ Skip the buoyancy pullback for a constant density (`ConstantDensityTrait`, as the
+      forward `update_ρg!`): 0.57 ms → 0 per iteration at 128², 1 thread.
     - ⬜ Thread/GPU scaling: 4 threads give only 1.5× per iteration (colored launches); mostly
-      solved by the two stencil items.
+      solved by the stress-tangent item. The momentum and continuity pullbacks stay colored
+      Enzyme launches.
     - ✅ Warm start from the previous step's λ; a separate adjoint tolerance (`adjoint_ϵ`,
       `adjoint_rel_drop`); merged per-iteration zeroing (`PERFORMANCE.md` 6–8).
 

@@ -125,6 +125,8 @@ annotated `Duplicated` as a temporary Enzyme workaround (see `ReadOnlyShadow`).
 function enzyme_compute_ρg!(
         ρg, adjoint, phases, rheology, args, ni; air_phase::Integer = 0
     )
+    # the forward does not update ρg for a constant density (`update_ρg!`), so ρg(P) has no derivative
+    isconstant(rheology) isa ConstantDensityTrait && return nothing
     args_without_P, P = split_pressure_arg(args)
     isnothing(P) && return nothing
     enzyme_reverse_pointwise!(

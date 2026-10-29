@@ -110,6 +110,9 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
     the first 50 iterations, before the first step-size update, whether the initial η is 1, 10
     or 100. Sticky air plus a power law: NaN or "Kaboom" with or without the free-surface term,
     also with background shear. A forward-solver issue; the tests avoid both setups.
+    Also the purely viscous shear-thinning shear band (n = 1/3, `viscosity_cutoff = (-Inf, Inf)`):
+    `ShearBand2D_PowerLaw_DYREL.jl` stays at err = 5.09 for 50,000 iterations, while the standard
+    DYREL solver converges on the same problem in 4,400.
 18. ⬜ **Adjoint iteration diverges for strongly non-associated plasticity.** Drucker–Prager with
     ϕ = 20°, Ψ = 0°, η_vp = 1e-2 and ~85 % of cells yielded: the forward converges, the adjoint
     residual grows ×100 per 50 iterations in both solvers. Associated flow (Ψ = ϕ) or
@@ -120,12 +123,19 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
     `miniapps/Adjoint2D/NonAssociatedPlasticity2D_adjoint.jl` (diverges at Ψ = 0°, converges at
     Ψ = ϕ and at η_vp = 0.1).
 
-19. ⬜ **GeoParams' `PowerlawViscous` with n > 1 is shear-thickening.** GeoParams defines
-    τII = η0 (εII/ε0)^n, so a shear-thinning stress exponent 3 needs `n = 1/3`. Every power-law
-    miniapp and test here uses `n = 3` (e.g. `ShearBand2D_PowerLaw*.jl`, the adjoint shear-band
-    miniapps, `test_enzyme_parallelstencil.jl`), i.e. shear thickening. That is a positive
-    viscosity feedback: the adjoint step size shrinks with 1/(1 − F) and errors for F ≥ 1.
-    Decide whether the miniapps meant shear thinning and fix them, or document the convention.
+19. ✅ **GeoParams' `PowerlawViscous` with n > 1 is shear-thickening.** GeoParams computes
+    τII = ε0 η0 (εII/ε0)^n (its docstring says τⁿ = 2 η0 ε̇/ε̇0, the shear-thinning form), so a
+    shear-thinning stress exponent 3 needs `n = 1/3`. The five power-law miniapps used `n = 3`
+    while meaning shear thinning; they now use `n = 1 / 3` (`ShearBand2D_PowerLaw*.jl`, the two
+    adjoint shear-band miniapps, `SinkingBlock2D_VE_PowerLaw_ViscositySensitivity.jl`). The
+    tests keep n = 2 or 3: they check derivatives, which hold either way, and shear thinning is
+    covered by `test_dyrel_viscosity_residual.jl` (n = 1/3) and the implicit-viscosity check
+    in `test_adjoint_dot_product.jl` (`DislocationCreep`, n = 3). The docstring mismatch is
+    for GeoParams upstream. Checked with the APT `ShearBand2D_PowerLaw.jl` at 64²: n = 3 gives
+    an almost uniform strain rate, n = 1/3 X-shaped bands with ~25× strain-rate contrast. The
+    APT, standard-DYREL and sinking-block miniapps converge with n = 1/3; the two variational
+    shear-band miniapps (`ShearBand2D_PowerLaw_DYREL.jl`, `ShearBand2D_PowerLaw_ViscositySensitivity.jl`)
+    do not (err stays at 5.09), see 17.
 
 ## P3 — Performance
 

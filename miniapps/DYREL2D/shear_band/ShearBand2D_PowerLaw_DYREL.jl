@@ -80,8 +80,9 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     εbg = 1
 
     # Physical properties using GeoParams ----------------
-    visc_bg = PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0e0)
-    visc_inc = PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0e0)
+    # GeoParams' power law is τII = ε0 η0 (εII/ε0)^n: n = 1/3 is a shear-thinning stress exponent of 3
+    visc_bg = PowerlawViscous(; η0 = 1.0e2, n = 1 / 3, ε0 = 1.0e0)
+    visc_inc = PowerlawViscous(; η0 = 1.0e-1, n = 1 / 3, ε0 = 1.0e0)
 
     rheology = (
         # Low density phase

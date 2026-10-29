@@ -84,6 +84,7 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
         phase_ratios.vertex, PTArray(backend).(xvi)..., radius
     )
 
+    # GeoParams' power law is τII = ε0 η0 (εII/ε0)^n: n = 1/3 is a shear-thinning stress exponent of 3
     rheology = (
         SetMaterialParams(;
             Phase = 1,
@@ -91,7 +92,7 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology(
                 (
-                    PowerlawViscous(; η0 = 1.0e2, n = 3, ε0 = 1.0),
+                    PowerlawViscous(; η0 = 1.0e2, n = 1 / 3, ε0 = 1.0),
                 )
             ),
         ),
@@ -101,7 +102,7 @@ function shear_band_normal_dyrel_viscosity_sensitivity(
             Gravity = ConstantGravity(; g = 0.0),
             CompositeRheology = CompositeRheology(
                 (
-                    PowerlawViscous(; η0 = 1.0e-1, n = 3, ε0 = 1.0),
+                    PowerlawViscous(; η0 = 1.0e-1, n = 1 / 3, ε0 = 1.0),
                 )
             ),
         ),

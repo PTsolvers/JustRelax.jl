@@ -126,8 +126,9 @@ function sinking_block2D_VE_powerlaw_viscosity_sensitivity(
     gravity = 1.0
     G = 0.1
     elasticity = ConstantElasticity(; G = G, Kb = 5G)
+    # GeoParams' power law is τII = ε0 η0 (εII/ε0)^n: n = 1/3 is a shear-thinning stress exponent of 3
     matrix_viscosity = PowerlawViscous(;
-        η0 = η_mantle * exp(viscosity_perturbation), n = 3.0, ε0 = 1.0,
+        η0 = η_mantle * exp(viscosity_perturbation), n = 1 / 3, ε0 = 1.0,
     )
     rheology = (
         SetMaterialParams(;

@@ -51,7 +51,8 @@ observed_sum(field, mask) =
 # Compressible sinking block: a finite bulk modulus makes the pressure unique, so a pressure
 # objective is well posed. Returns J, the adjoint dJ/d`parameter` of the block (phase 2), and the
 # viscosity left in `stokes` after the solve. `solves` time steps run on the same arrays; before
-# each, λ is kept (`λ_start = :previous`), zeroed (`:zero`) or poisoned with NaN (`:nan`).
+# each, λ is kept (`λ_start = :previous`), scaled by 1000 (`:scaled`), zeroed (`:zero`) or
+# poisoned with NaN (`:nan`).
 # With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead. With a
 # `compressibility` β the density is ρ (1 + β P); `update_material` goes to the standard solver.
 function sinking_block(
@@ -187,9 +188,12 @@ function plastic_shear(
     )
 end
 
-set_adjoint_start!(adjoint, λ_start) = λ_start === :previous || foreach(
-    A -> fill!(A, λ_start === :zero ? 0.0 : NaN), (adjoint.λV.Vx, adjoint.λV.Vy, adjoint.λP)
-)
+function set_adjoint_start!(adjoint, λ_start)
+    λ = (adjoint.λV.Vx, adjoint.λV.Vy, adjoint.λP)
+    λ_start === :scaled && foreach(A -> A .*= 1.0e3, λ)
+    λ_start in (:zero, :nan) && foreach(A -> fill!(A, λ_start === :zero ? 0.0 : NaN), λ)
+    return nothing
+end
 
 central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
 
@@ -290,13 +294,31 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     # of a failed solve is replaced by zero.
     @testset "adjoint start, $(variational ? "variational" : "standard") $field" for variational in (false, true), field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        warm, cold, poisoned = map((:previous, :zero, :nan)) do λ_start
+        warm, scaled, cold, poisoned = map((:previous, :scaled, :zero, :nan)) do λ_start
             @suppress sinking_block(
                 igg; observation, variational, adjoint = true, solves = 2, λ_start,
             ).gradient
         end
         @test warm ≈ cold rtol = 1.0e-6
+        @test scaled ≈ cold rtol = 1.0e-6
         @test poisoned ≈ cold rtol = 1.0e-6
+    end
+
+    # The initial λ is scaled to the multiple that minimizes the affine residual b + L λ.
+    @testset "scaled adjoint start" begin
+        stokes_ad = AdjointStokesArrays(backend, (6, 5))
+        λ = (stokes_ad.λV.Vx, stokes_ad.λV.Vy)
+        b = map(A -> fill!(similar(A), -1.0), λ)
+        residuals = map(copy, b)
+        evaluate!() = foreach((r, b, λ) -> r .= b .+ 2 .* λ, residuals, b, λ)
+        masks = (nothing, nothing)
+        foreach(A -> fill!(A, 0.0), (λ..., stokes_ad.λP))
+        @test isnothing(JustRelax2D.scale_adjoint_start!(evaluate!, stokes_ad, residuals, masks))
+        foreach(A -> fill!(A, 1.0e3), (λ..., stokes_ad.λP))
+        α = JustRelax2D.scale_adjoint_start!(evaluate!, stokes_ad, residuals, masks)
+        @test α ≈ 5.0e-4
+        @test all(≈(0.5), Array(stokes_ad.λV.Vx))
+        @test all(≈(0.5), Array(stokes_ad.λP))
     end
 
     # Sensitivities of an unconverged adjoint state are not returned.

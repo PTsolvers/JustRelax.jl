@@ -114,6 +114,29 @@ function reset_nonfinite_adjoint!(adjoint)
     return nothing
 end
 
+# λ is kept from the previous adjoint solve, whose objective may differ (an observation that
+# follows the phases) or be scaled differently, so its residual can far exceed that of λ = 0.
+# The momentum residual is affine in λ, r(αλ) = b + α (r(λ) − b) with b the objective's seed,
+# so start from the multiple αλ that minimizes it, which is never worse than λ = 0 or λ.
+# `residuals` hold b on entry; `evaluate_residual!()` puts r(λ) into them. Returns α, or
+# `nothing` for λ = 0.
+function scale_adjoint_start!(evaluate_residual!, stokes_ad, residuals, masks)
+    λ = (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP)
+    all(A -> iszero(norm_mpi(A)), λ) && return nothing
+    b = map(copy, residuals)
+    evaluate_residual!()
+    # ⟨b, d⟩ and ⟨d, d⟩ with d = r(λ) − b, over the momentum rows of the system
+    bd = sum(map((m, b, r) -> masked_dot_mpi(m, b, r .- b), masks, b, residuals))
+    dd = sum(map((m, b, r) -> masked_dot_mpi(m, r .- b, r .- b), masks, b, residuals))
+    α = -bd / dd
+    isfinite(α) || return nothing
+    foreach(A -> A .*= α, λ)
+    return α
+end
+
+masked_dot_mpi(::Nothing, A, B) = sum_mpi((a, b) -> a * b, A, B)
+masked_dot_mpi(mask, A, B) = sum_mpi((m, a, b) -> m ? a * b : zero(a * b), mask, A, B)
+
 # A pressure objective seeds only the continuity adjoint, so its momentum residual at λ = 0 is
 # zero. Measure it instead against the momentum residual a cold start reaches after its first
 # outer pass: λV = 0 and λP from the pressure seed, which `stokes_ad.P` holds on entry.

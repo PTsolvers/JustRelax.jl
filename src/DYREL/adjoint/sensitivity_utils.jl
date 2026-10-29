@@ -194,6 +194,17 @@ end
 
 @inline _has_parameter_paths(parameters) = any(paths -> !isempty(paths), parameters)
 
+# Parameters that reach J only through ρg, or through η with `linear_viscosity`: with
+# `update_material = false` the forward takes those fields from the caller.
+function prescribed_field_parameters(rheology, names, linear_viscosity)
+    return filter(names) do name
+        any(rheology) do material
+            !isempty(_buoyancy_parameter_paths(material, name)) ||
+                linear_viscosity && !isempty(_viscosity_parameter_paths(material, name))
+        end
+    end
+end
+
 function material_parameter_is_used(material, parameter)
     return !isempty(_density_parameter_paths(material, parameter)) ||
         !isempty(_gravity_parameter_paths(material, parameter)) ||

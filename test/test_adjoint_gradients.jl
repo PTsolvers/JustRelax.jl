@@ -52,11 +52,13 @@ observed_sum(field, mask) =
 # objective is well posed. Returns J, the adjoint dJ/d`parameter` of the block (phase 2), and the
 # viscosity left in `stokes` after the solve. `solves` time steps run on the same arrays; before
 # each, λ is kept (`λ_start = :previous`), zeroed (`:zero`) or poisoned with NaN (`:nan`).
-# With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead.
+# With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead. With a
+# `compressibility` β the density is ρ (1 + β P); `update_material` goes to the standard solver.
 function sinking_block(
         igg; observation, variational = false, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
         solves = 1, λ_start = :previous, adjoint_ϵ = nothing, activation_volume = nothing,
+        compressibility = nothing, update_material = true,
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -66,7 +68,8 @@ function sinking_block(
         DislocationCreep(; n = 1.0, r = 0.0, A = 0.5 / η, E = 0.0, V = activation_volume)
     material(phase, ρ, η) = SetMaterialParams(;
         Phase = phase,
-        Density = ConstantDensity(; ρ),
+        Density = isnothing(compressibility) ? ConstantDensity(; ρ) :
+            PT_Density(; ρ0 = ρ, β = compressibility, α = 0.0, T0 = 0.0),
         Elasticity = elasticity,
         CompositeRheology = CompositeRheology((viscous(η), elasticity)),
         Gravity = ConstantGravity(; g = 1.0),
@@ -110,7 +113,7 @@ function sinking_block(
             set_adjoint_start!(stokes_ad, λ_start)
             solve_DYREL!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid,
-                dt, igg; solver_kwargs..., η_multiplier,
+                dt, igg; solver_kwargs..., η_multiplier, update_material,
             )
         end
     end
@@ -215,6 +218,24 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         ).gradient
         fd = central_difference(0.5, 1.0e-3) do η_block
             @suppress sinking_block(igg; observation, η_block).J
+        end
+        @test adjoint_gradient ≈ fd rtol = 1.0e-6
+    end
+
+    # With `update_material = false` the forward keeps the caller's ρg, so the adjoint must not
+    # differentiate ρg(P) although the density depends on pressure. `sinking_block` computes η
+    # from the rheology, so the η gradient holds; the solver warns that it assumes this.
+    @testset "viscosity, fixed buoyancy" begin
+        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        case = (; observation, compressibility = 0.5, update_material = false)
+        # `@test_logs` inside `@suppress`, which would otherwise swallow the warning
+        adjoint_gradient = @suppress(
+            @test_logs (:warn, r"update_material = false: the gradients of η") match_mode = :any sinking_block(
+                igg; case..., adjoint = true, parameter = :η, η_block = 0.5,
+            )
+        ).gradient
+        fd = central_difference(0.5, 1.0e-3) do η_block
+            @suppress sinking_block(igg; case..., η_block).J
         end
         @test adjoint_gradient ≈ fd rtol = 1.0e-6
     end

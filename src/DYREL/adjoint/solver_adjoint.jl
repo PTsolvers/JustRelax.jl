@@ -31,6 +31,7 @@ function solve_DYREL_adjoint!(
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
         linear_viscosity = false,
+        update_material = true,
         adjoint_ϵ = nothing,
         adjoint_rel_drop = nothing,
         kwargs...,
@@ -114,7 +115,7 @@ function solve_DYREL_adjoint!(
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni,
                 dt, λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-                constitutive_scratch,
+                constitutive_scratch; update_material,
             )
             momentum_norms()
         end
@@ -132,7 +133,7 @@ function solve_DYREL_adjoint!(
         adjoint_residual!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
             λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-            constitutive_scratch,
+            constitutive_scratch; update_material,
         )
 
         # Residual check
@@ -191,7 +192,7 @@ function solve_DYREL_adjoint!(
             adjoint_residual!(
                 stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
                 λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-                constitutive_scratch,
+                constitutive_scratch; update_material,
             )
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
@@ -256,15 +257,16 @@ end
 
 # One reverse sweep through the final forward equations: momentum residual, the separate stress
 # kernel with its local implicit viscosity correction, strain rate and continuity residual, then
-# boundary conditions. The relaxed forward viscosity update is not differentiated.
+# boundary conditions. The relaxed forward viscosity update is not differentiated, and neither
+# is ρg(P) when the forward keeps ρg fixed (`update_material = false`).
 function adjoint_residual!(
         stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
         λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-        constitutive_scratch,
+        constitutive_scratch; update_material = true,
     )
     enzyme_compute_PH_residual_V!(
         stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
-        free_surface_dt = dt * free_surface,
+        free_surface_dt = dt * free_surface, update_material,
     )
     enzyme_compute_stress_DRYEL!(
         stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, args,

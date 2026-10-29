@@ -93,21 +93,22 @@ end
 
 """
     enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args; update_material = true
     )
 
 `adjoint.R.Rx` and `adjoint.R.Ry` seed the momentum-residual outputs. The resulting
 reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
 `adjoint.dρgx`, and `adjoint.ρ`; the buoyancy derivative is additionally propagated through
-the pressure-dependent density into `adjoint.P`. The adjoint solver requires
-`args.P === stokes.P`.
+the pressure-dependent density into `adjoint.P`, unless `update_material = false`, for which
+the forward keeps ρg fixed. The adjoint solver requires `args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0
+        stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0,
+        update_material = true,
     )
     zero_buoyancy_adjoint!(adjoint)
     enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni; free_surface_dt)
-    enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni)
+    update_material && enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni)
     return nothing
 end
 

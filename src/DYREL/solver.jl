@@ -54,7 +54,12 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   observed field (see `observation_mask`). `field` is `:Vx`, `:Vy` or `:P`. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law
-  parameters. Linear and nonlinear viscosity are supported. Default: `(;)`.
+  parameters. Linear and nonlinear viscosity are supported. With `update_material = false`
+  the density-law parameters, and the viscosity-law parameters with `linear_viscosity = true`,
+  assume that the caller computed ρg and η from `rheology`; a warning says so. For a
+  pressure-dependent density they then hold only approximately, since the adjoint evaluates
+  the density law at the converged pressure. For fields prescribed otherwise, only the field
+  sensitivities `stokes_ad.ρ` and `stokes_ad.viscosity` are meaningful. Default: `(;)`.
 - `η_multiplier`: Optional cell-wise viscosity scaling, given as a named tuple
   `(; center, vertex)` of arrays matching `stokes.viscosity.η` and `.ηv`. Applied right after
   the rheology-driven `compute_viscosity!` and before the DYREL coefficients are built, so
@@ -63,7 +68,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   refresh overwrites it.
   Default: `nothing`.
 - `update_material`: Recompute viscosity and buoyancy from `rheology`. Set to `false` when
-  those fields are prescribed by the caller. Default: `true`.
+  those fields are prescribed by the caller; the adjoint then also treats ρg as independent
+  of the pressure. Default: `true`.
 
 Options may be passed either as plain keywords or bundled as a single
 `kwargs = (; ...)` NamedTuple.
@@ -189,6 +195,15 @@ function _solve_DYREL!(
     adjoint && isnothing(stokes_ad) &&
         throw(ArgumentError("adjoint = true requires AdjointStokesArrays as the second argument"))
     adjoint && check_adjoint_support(Val(N), igg)
+    if adjoint && !update_material
+        names = prescribed_field_parameters(rheology, keys(gradients), linear_viscosity)
+        isempty(names) || @warn(
+            "update_material = false: the gradients of $(join(names, ", ")) assume that ρg " *
+                "and η were computed from `rheology`; for fields prescribed otherwise, use " *
+                "the field sensitivities `stokes_ad.ρ` and `stokes_ad.viscosity`",
+            maxlog = 1,
+        )
+    end
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
@@ -478,6 +493,7 @@ function _solve_DYREL!(
             gradients,
             viscosity_cutoff,
             linear_viscosity,
+            update_material,
             kwargs...,
         )
     end

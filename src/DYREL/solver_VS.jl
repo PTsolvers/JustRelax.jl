@@ -209,8 +209,8 @@ function _solve_VariationalDYREL!(
             )
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
         end
-        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
+        isnan(err) && error("NaN detected in outer loop")
+        err > 1.0e10 && itPH > 1 && error("Kaboom! Error > 1e10 in outer loop")
         if err_converged < ϵ && itPH > 1
             converged = true
             break
@@ -293,7 +293,7 @@ function _solve_VariationalDYREL!(
                 # P is fixed within a pass, so the outer Pspan is still current here.
                 errV = ntuple(d -> masked_norm_mpi(maskRi[d], Di[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
                 err_vel = maximum(errV)
-                isnan(err_vel) && igg.me == 0 && error("NaN detected in inner loop")
+                isnan(err_vel) && error("NaN detected in inner loop")
 
                 push!(err_evo_tot, err_vel)
                 push!(err_evo_V, err_vel)

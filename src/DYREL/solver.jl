@@ -266,8 +266,8 @@ function _solve_DYREL!(
             )
             @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e %1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt, errPt / errPt0)
         end
-        igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
-        igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
+        isnan(err) && error("NaN detected in outer loop")
+        err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
         if err < ϵ
             converged = true
             break
@@ -336,7 +336,7 @@ function _solve_DYREL!(
 
                 errV_ratio = ntuple(d -> errV[d] / errV00[d], dim)
                 err = maximum(errV_ratio)
-                isnan(err) && igg.me == 0 && error("NaN detected in inner loop")
+                isnan(err) && error("NaN detected in inner loop")
 
                 push!(err_evo_tot, err)
                 push!(err_evo_V, maximum(errV_ratio))

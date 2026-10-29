@@ -556,6 +556,15 @@ function volumetric_compliance_total(ηb, mask)
     return sum_mpi((ηbᵢ, valid) -> valid ? volumetric_compliance(ηbᵢ) : zero(ηbᵢ), ηb, mask)
 end
 
+# The uniform volumetric correction assumes a uniform pressure shift exerts no force, which holds
+# only in a closed domain. A traction-free surface, at the box top or at an embedded rock–void
+# interface, is pushed by the shift, so there the mode couples to the velocities and the
+# correction δ = ΣRP / compliance drives the pressure without bound.
+function volumetric_mode_closed(ϕ::JustRelax.RockRatio, flow_bcs)
+    flow_bcs.free_surface && return false
+    return iszero(sum_mpi(x -> x < 1, ϕ.center))
+end
+
 # Variational counterpart: a uniform shift of the retained pressures moves each residual by
 # `ϕ.center / ηb`, because the continuity residual is weighted by the rock fraction.
 function volumetric_compliance_total(ηb, ϕ::JustRelax.RockRatio, mask)

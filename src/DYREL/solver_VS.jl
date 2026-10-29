@@ -139,6 +139,7 @@ function _solve_VariationalDYREL!(
     θc = dyrel.P_num
     anderson = iszero(anderson_PH) ? nothing : anderson_history(stokes.P, anderson_PH, maskP)
     itAA, err_PH_prev = 0, Inf
+    volumetric_mode = volumetric_mode_closed(ϕ, flow_bcs)
 
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
@@ -328,7 +329,7 @@ function _solve_VariationalDYREL!(
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
         # Both the refresh and the relaxation are skipped where the mode carries no correction.
-        compliance = volumetric_compliance_total(dyrel.ηb, ϕ, maskP)
+        compliance = volumetric_mode ? volumetric_compliance_total(dyrel.ηb, ϕ, maskP) : zero(eltype(dyrel.ηb))
         if !iszero(compliance)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
             relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)

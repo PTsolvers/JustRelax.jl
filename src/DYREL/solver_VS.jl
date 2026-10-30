@@ -78,13 +78,16 @@ function _solve_VariationalDYREL!(
     # set the residual scale; the continuity residual is not trimmed. Trimming mask, residual and
     # preconditioner diagonal identically keeps them index-aligned. A periodic axis has no
     # boundary row to exclude -- every row of it, the seam included, is a genuine unknown -- so it
-    # is left whole.
-    norm_trim(A) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - 1)), dim)...]
-    maskRi = ntuple(d -> norm_trim(maskV[d]), dim)
-    Ri = ntuple(d -> norm_trim(residuals[d]), dim)
-    R0i = ntuple(d -> norm_trim(fields.R0[d]), dim)
-    dVi = ntuple(d -> norm_trim(fields.dV[d]), dim)
-    Di = ntuple(d -> norm_trim(fields.D[d]), dim)
+    # is left whole. At a rank seam a transverse edge row is a cell whose other copy the neighbor
+    # keeps, but an edge row along direction `d` is a face both ranks hold: only the rank below
+    # keeps it, or no rank would count it.
+    on_last_rank = ntuple(k -> igg.coords[k] == igg.dims[k] - 1, dim)
+    norm_trim(A, d) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - (k != d || on_last_rank[k]))), dim)...]
+    maskRi = ntuple(d -> norm_trim(maskV[d], d), dim)
+    Ri = ntuple(d -> norm_trim(residuals[d], d), dim)
+    R0i = ntuple(d -> norm_trim(fields.R0[d], d), dim)
+    dVi = ntuple(d -> norm_trim(fields.dV[d], d), dim)
+    Di = ntuple(d -> norm_trim(fields.D[d], d), dim)
     # Divisors that turn the masked L2 norms into RMS values: the number of entries actually
     # summed. The global grid DOF count would instead scale the residual by the rock fraction,
     # which — unlike the boundary trim — does not tend to 1 as the resolution grows, so ϵ would

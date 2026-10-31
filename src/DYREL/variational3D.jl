@@ -12,11 +12,11 @@
 end
 
 function compute_variational_kinematics3D!(stokes, dyrel, rheology, phases, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
-    @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)
+    @parallel_async (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)
     if do_strain_rate
-        @parallel (@idx ni .+ 1) compute_strain_rate!(stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di.center)
+        @parallel_async (@idx ni .+ 1) compute_strain_rate!(stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di.center)
     end
-    @parallel (@idx ni) variational_RP3D!(stokes.R.RP, stokes.P, stokes.P0, stokes.∇V, stokes.Q, dyrel.ηb, ϕ, rheology, phases.center, ΔT, melt_fraction, dt)
+    @parallel_async (@idx ni) variational_RP3D!(stokes.R.RP, stokes.P, stokes.P0, stokes.∇V, stokes.Q, dyrel.ηb, ϕ, rheology, phases.center, ΔT, melt_fraction, dt)
     return nothing
 end
 

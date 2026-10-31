@@ -156,7 +156,7 @@ function compute_∇V_strain_rate_RP!(
         stokes, dyrel, rheology, phase_ratios, _di, ni, dt, do_strain_rate = true;
         ΔT = nothing, melt_fraction = nothing, kwargs...,
     )
-    @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
+    @parallel_async (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,
         stokes.R.RP,

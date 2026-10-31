@@ -260,12 +260,12 @@ function _solve_VariationalDYREL!(
             # kernel reads them, matching the non-variational solver
             update_variational_stress_halo!(stokes, dim, linear_viscosity)
             @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
-            N == 3 && update_halo!(θc)
+            N == 3 && update_halo_synced!(θc)
 
             # Velocity residual + damped pseudo-transient velocity update (fused, masked). The face
             # fraction enters only through `variational_face_mass` inside `D`; the damping
             # recurrence itself carries no ϕ factor.
-            @parallel (@idx ni) nblocks nthreads compute_DR_residual_update_V!(
+            @parallel_async (@idx ni) nblocks nthreads compute_DR_residual_update_V!(
                 residuals...,
                 @velocity(stokes)...,
                 fields.dVdτ...,
@@ -282,8 +282,8 @@ function _solve_VariationalDYREL!(
                 _di.vertex,
                 dt * free_surface,
             )
-            flow_bcs!(stokes, flow_bcs)
-            update_halo!(@velocity(stokes)...)
+            _flow_bcs!(flow_bcs, @velocity(stokes), true)
+            update_halo_synced!(@velocity(stokes)...)
 
             # Residual check
             if iszero(iter % nout)
@@ -340,7 +340,7 @@ function _solve_VariationalDYREL!(
             @. stokes.P -= anderson.f
             anderson_pressure_update!(stokes.P, anderson, itAA)
         end
-        N == 3 && update_halo!(stokes.P)
+        N == 3 && update_halo_synced!(stokes.P)
 
         iter > total_iterMax && break
     end
@@ -398,12 +398,12 @@ end
 @inline dyrel_vertex_λ_tuple(stokes, ::Val{3}) = dyrel_vertex_λ(stokes, Val(3))
 
 function update_variational_stress_halo!(stokes, ::Val{2}, linear_viscosity)
-    update_halo!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-    linear_viscosity || update_halo!(stokes.viscosity.ηv)
+    update_halo_synced!(stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
+    linear_viscosity || update_halo_synced!(stokes.viscosity.ηv)
     return nothing
 end
 function update_variational_stress_halo!(stokes, ::Val{3}, linear_viscosity)
-    update_halo!(@stress(stokes)..., stokes.ΔPψ)
-    linear_viscosity || update_halo!(stokes.viscosity.η)
+    update_halo_synced!(@stress(stokes)..., stokes.ΔPψ)
+    linear_viscosity || update_halo_synced!(stokes.viscosity.η)
     return nothing
 end

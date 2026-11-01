@@ -1,12 +1,23 @@
-compute_stress_DYREL!(stokes, rheology, phase_ratios, λ_relaxation, dt; Pf = nothing) =
-    compute_stress_DYREL!(Val(ndims(stokes.P)), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf)
+compute_stress_DYREL!(stokes, rheology, phase_ratios, λ_relaxation, dt; Pf = nothing, η_inv = nothing, diagnostics = Val(true)) =
+    compute_stress_DYREL!(Val(ndims(stokes.P)), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, η_inv, diagnostics)
 
 compute_stress_viscosity_DYREL!(
-    stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+    stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity;
+    η_inv = nothing, diagnostics = Val(true),
 ) =
     compute_stress_viscosity_DYREL!(
-    Val(ndims(stokes.P)), stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+    Val(ndims(stokes.P)), stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity;
+    η_inv, diagnostics,
 )
+
+# Reciprocal center viscosity read by the harmonic means at vertices and edges. The solvers keep a
+# buffer of it current across iterations; a standalone call computes it on the spot.
+@inline inverse_viscosity(η, ::Nothing) = inv.(η)
+@inline inverse_viscosity(η, η_inv) = η_inv
+
+# `diagnostics = Val(false)` skips the stores of ε_pl, ε_vol_pl, τII and η_vep, which the DYREL
+# iterations do not read, and with them the arithmetic only those outputs need.
+@inline stores_diagnostics(::Val{D}) where {D} = D
 
 @inline dyrel_vertex_λ(stokes, ::Val{2}) = stokes.λv
 @inline dyrel_vertex_λ(stokes, ::Val{3}) = (stokes.λv_yz, stokes.λv_xz, stokes.λv_xy)
@@ -21,6 +32,7 @@ function compute_stress_DYREL!(
         λ_relaxation,
         dt;
         Pf = nothing,
+        η_inv = nothing,
     )
 
     ni = size(phase_ratios.vertex)
@@ -128,11 +140,12 @@ end
 # Same as `compute_stress_DYREL!` but, unless `linear_viscosity`, also refreshes the creep
 # viscosities η (center) / ηv (vertex) from the freshly-computed stress. In 2D the update reuses
 # the in-register τ: every point reads only its own viscosity, so this is race-free and needs no
-# halo. In 3D the edge points average the neighboring center viscosities, so the refresh runs
-# as a second kernel.
+# halo. In 3D the edge points average the neighboring center viscosities through `η_inv`, which
+# the kernel does not write; it is refreshed from the new η once the kernel has finished.
 function compute_stress_viscosity_DYREL!(
         ::Val{2},
-        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity
+        stokes, θc, γ_eff, rheology, phase_ratios, λ_relaxation, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity;
+        η_inv = nothing, diagnostics = Val(true),
     )
     ni = size(phase_ratios.vertex)
     @parallel_async (@idx ni) compute_stress_viscosity_DYREL!(
@@ -156,7 +169,7 @@ function compute_stress_viscosity_DYREL!(
         θc, stokes.R.RP, γ_eff,                             # small pressure correction θc = γ_eff·RP + ΔPψ
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
         viscosity_relaxation, args, viscosity_cutoff, linear_viscosity,
-        periodic_dims(stokes),
+        periodic_dims(stokes), diagnostics,
     )
     return nothing
 end
@@ -199,7 +212,7 @@ end
         θc, RP, γ_eff,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
         ν, visc_args, cutoff, linear_viscosity,
-        periodic,
+        periodic, diagnostics,
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -224,7 +237,7 @@ end
 
         # update arrays
         τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
-        ε_pl[3][I...] = εxy_pl
+        stores_diagnostics(diagnostics) && (ε_pl[3][I...] = εxy_pl)
         λv[I...] = λ_I
 
         # fused τII-viscosity update at the vertex (reuses in-register stress)
@@ -248,10 +261,12 @@ end
                 compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EII, Pfij)
             # update arrays
             τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
-            ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
-            ε_vol_pl[I...] = ε_vol_pl_I
-            τII[I...] = τII_I
-            η_vep[I...] = ηvep_I
+            if stores_diagnostics(diagnostics)
+                ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
+                ε_vol_pl[I...] = ε_vol_pl_I
+                τII[I...] = τII_I
+                η_vep[I...] = ηvep_I
+            end
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
 
@@ -282,15 +297,18 @@ function compute_stress_DYREL!(
         Pf = nothing,
         ϕ = nothing,
         stress_buffers = nothing,
+        η_inv = nothing,
+        diagnostics = Val(true),
     )
 
     ni = size(phase_ratios.vertex)
+    η_inv = inverse_viscosity(stokes.viscosity.η, η_inv)
     # The tensile-cap return mapping is register-heavy; compiled into the main pass it slows
     # every point down. A trial pass flags the yielding points, and a second pass with the
     # full return mapping updates only those.
     if any(r -> has_tensile_cap(r.CompositeRheology[1].elements), rheology)
         buffers = isnothing(stress_buffers) ? stress_pass_buffers(stokes, phase_ratios) : stress_buffers
-        _compute_stress_DYREL3D!(Val(:trial), buffers.flags, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ)
+        _compute_stress_DYREL3D!(Val(:trial), buffers.flags, stokes, η_inv, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, diagnostics)
         # The yielding points are sparse and scattered; compacting them into dense lists keeps
         # whole warps busy with the return mapping instead of a few lanes per warp.
         compact_stress_points!(buffers)
@@ -299,10 +317,10 @@ function compute_stress_DYREL!(
             n = Int(buffers.offsets_host[k, end])
             iszero(n) && continue
             list = (view(buffers.list, 1:n, k), points, nothing, nothing)
-            _compute_stress_DYREL3D!(Val(:list), list, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, location, (n, 1, 1))
+            _compute_stress_DYREL3D!(Val(:list), list, stokes, η_inv, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, diagnostics, location, (n, 1, 1))
         end
     else
-        _compute_stress_DYREL3D!(Val(:full), ntuple(_ -> nothing, Val(4)), stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ)
+        _compute_stress_DYREL3D!(Val(:full), ntuple(_ -> nothing, Val(4)), stokes, η_inv, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, diagnostics)
     end
     return nothing
 end
@@ -363,7 +381,7 @@ end
     return nothing
 end
 
-function _compute_stress_DYREL3D!(mode, flags, stokes, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, locations = Val((:center, :yz, :xz, :xy)), ni = size(phase_ratios.vertex))
+function _compute_stress_DYREL3D!(mode, flags, stokes, η_inv, rheology, phase_ratios, λ_relaxation, dt, Pf, ϕ, diagnostics, locations = Val((:center, :yz, :xz, :xy)), ni = size(phase_ratios.vertex))
     nthreads = ni[2] == 1 ? (128, 1, 1) : (32, 4, 1)
     @parallel_async (@idx ni) cld.(ni, nthreads) nthreads compute_stress_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
@@ -382,6 +400,7 @@ function _compute_stress_DYREL3D!(mode, flags, stokes, rheology, phase_ratios, �
         stokes.λ,
         dyrel_vertex_λ(stokes, Val(3)),
         stokes.viscosity.η,
+        η_inv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         phase_ratios.center,
@@ -396,6 +415,7 @@ function _compute_stress_DYREL3D!(mode, flags, stokes, rheology, phase_ratios, �
         mode,
         flags,
         locations,
+        diagnostics,
     )
     return nothing
 end
@@ -434,6 +454,7 @@ end
         λ,
         λv,
         η,
+        η_inv,
         η_vep,
         ΔPψ,
         phase_ratios_center,
@@ -448,6 +469,7 @@ end
         mode,
         flags,
         locations,
+        diagnostics,
     )
 
     I = stress_point(mode, flags, J)
@@ -463,7 +485,7 @@ end
         ## yz
         if updates_location(locations, :yz) && all(I .≤ size(εij[1]))
             # interpolate to ith vertex
-            ηij = harm_clamped_yz(η, Ic...)
+            ηij = harm_inv_clamped_yz(η_inv, Ic...)
             Pij = av_clamped_yz(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_yz, Pij, Ic...)
             EIIv_ij = av_clamped_yz(EII_pl, Ic...)
@@ -492,14 +514,14 @@ end
             # update arrays
             if keep_stress!(mode, flags[2], λ_I, I...)
                 τ_shear[1][I...] = τyz_I
-                εij_pl[1][I...] = εyz_pl
+                stores_diagnostics(diagnostics) && (εij_pl[1][I...] = εyz_pl)
                 λv[1][I...] = λ_I
             end
         end
 
         ## xz
         if updates_location(locations, :xz) && all(I .≤ size(εij[2]))
-            ηij = harm_clamped_xz(η, Ic...)
+            ηij = harm_inv_clamped_xz(η_inv, Ic...)
             Pij = av_clamped_xz(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_xz, Pij, Ic...)
             EIIv_ij = av_clamped_xz(EII_pl, Ic...)
@@ -526,14 +548,14 @@ end
 
             if keep_stress!(mode, flags[3], λ_I, I...)
                 τ_shear[2][I...] = τxz_I
-                εij_pl[2][I...] = εxz_pl
+                stores_diagnostics(diagnostics) && (εij_pl[2][I...] = εxz_pl)
                 λv[2][I...] = λ_I
             end
         end
 
         ## xy
         if updates_location(locations, :xy) && all(I .≤ size(εij[3]))
-            ηij = harm_clamped_xy(η, Ic...)
+            ηij = harm_inv_clamped_xy(η_inv, Ic...)
             Pij = av_clamped_xy(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_xy, Pij, Ic...)
             EIIv_ij = av_clamped_xy(EII_pl, Ic...)
@@ -560,7 +582,7 @@ end
 
             if keep_stress!(mode, flags[4], λ_I, I...)
                 τ_shear[3][I...] = τxy_I
-                εij_pl[3][I...] = εxy_pl
+                stores_diagnostics(diagnostics) && (εij_pl[3][I...] = εxy_pl)
                 λv[3][I...] = λ_I
             end
         end
@@ -596,10 +618,12 @@ end
             if keep_stress!(mode, flags[1], λ_I, I...)
                 τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
                 τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
-                εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
-                ε_vol_pl[I...] = ε_vol_pl_I
-                τII[I...] = τII_I
-                η_vep[I...] = ηvep_I
+                if stores_diagnostics(diagnostics)
+                    εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
+                    ε_vol_pl[I...] = ε_vol_pl_I
+                    τII[I...] = τII_I
+                    η_vep[I...] = ηvep_I
+                end
                 λ[I...] = λ_I
                 ΔPψ[I...] = ΔPψ_I
             end
@@ -621,10 +645,13 @@ function compute_stress_viscosity_DYREL!(
         viscosity_relaxation,
         args,
         viscosity_cutoff,
-        linear_viscosity,
+        linear_viscosity;
+        η_inv = nothing,
+        diagnostics = Val(true),
     )
 
     ni = size(phase_ratios.vertex)
+    η_inv = inverse_viscosity(stokes.viscosity.η, η_inv)
     @parallel_async (@idx ni) compute_stress_viscosity_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
@@ -642,6 +669,7 @@ function compute_stress_viscosity_DYREL!(
         stokes.λ,
         dyrel_vertex_λ(stokes, Val(3)),
         stokes.viscosity.η,
+        η_inv,
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         θc,
@@ -654,27 +682,14 @@ function compute_stress_viscosity_DYREL!(
         rheology,
         λ_relaxation,
         dt,
-        periodic_dims(stokes),
-    )
-    # A separate pass: the edge points of the stress kernel read the neighboring center
-    # viscosities, which must not change while that kernel runs.
-    linear_viscosity || @parallel_async (@idx size(stokes.P)) update_τII_viscosity_DYREL!(
-        stokes.viscosity.η,
-        @tensor_center(stokes.τ)...,
-        phase_ratios.center,
-        rheology,
-        args,
         viscosity_relaxation,
+        args,
         viscosity_cutoff,
+        linear_viscosity,
+        periodic_dims(stokes),
+        diagnostics,
     )
-    return nothing
-end
-
-@parallel_indices (I...) function update_τII_viscosity_DYREL!(η, τxx, τyy, τzz, τyz, τxz, τxy, phase_ratios, rheology, args, ν, cutoff)
-    @inbounds η[I...] = _update_τII_viscosity(
-        τxx[I...], τyy[I...], τzz[I...], τyz[I...], τxz[I...], τxy[I...],
-        phase_ratios[I...], rheology, local_viscosity_args(args, I...), η[I...], ν, cutoff
-    )
+    linear_viscosity || (@. η_inv = inv(stokes.viscosity.η))
     return nothing
 end
 
@@ -695,6 +710,7 @@ end
         λ,
         λv,
         η,
+        η_inv,
         η_vep,
         ΔPψ,
         θc,
@@ -707,7 +723,12 @@ end
         rheology,
         λ_relaxation,
         dt,
+        ν,
+        visc_args,
+        cutoff,
+        linear_viscosity,
         periodic,
+        diagnostics,
     )
 
     ni = size(P)
@@ -721,7 +742,7 @@ end
     @inbounds begin
         ## yz
         if all(I .≤ size(εij[1]))
-            ηij = harm_clamped_yz(η, Ic...)
+            ηij = harm_inv_clamped_yz(η_inv, Ic...)
             Pij = av_clamped_yz(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_yz, Pij, Ic...)
             EIIv_ij = av_clamped_yz(EII_pl, Ic...)
@@ -747,13 +768,13 @@ end
             _, _, _, τyz_I, _, _, _, _, _, εyz_pl, _, _, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
 
             τ_shear[1][I...] = τyz_I
-            εij_pl[1][I...] = εyz_pl
+            stores_diagnostics(diagnostics) && (εij_pl[1][I...] = εyz_pl)
             λv[1][I...] = λ_I
         end
 
         ## xz
         if all(I .≤ size(εij[2]))
-            ηij = harm_clamped_xz(η, Ic...)
+            ηij = harm_inv_clamped_xz(η_inv, Ic...)
             Pij = av_clamped_xz(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_xz, Pij, Ic...)
             EIIv_ij = av_clamped_xz(EII_pl, Ic...)
@@ -779,13 +800,13 @@ end
             _, _, _, _, τxz_I, _, _, _, _, _, εxz_pl, _, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
 
             τ_shear[2][I...] = τxz_I
-            εij_pl[2][I...] = εxz_pl
+            stores_diagnostics(diagnostics) && (εij_pl[2][I...] = εxz_pl)
             λv[2][I...] = λ_I
         end
 
         ## xy
         if all(I .≤ size(εij[3]))
-            ηij = harm_clamped_xy(η, Ic...)
+            ηij = harm_inv_clamped_xy(η_inv, Ic...)
             Pij = av_clamped_xy(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped_xy, Pij, Ic...)
             EIIv_ij = av_clamped_xy(EII_pl, Ic...)
@@ -811,7 +832,7 @@ end
             _, _, _, _, _, τxy_I, _, _, _, _, _, εxy_pl, _, λ_I, = compute_local_stress(ε, τij_o, ηij, Pij, λvij, λ_relaxation, rheology, ratio, dt, EIIv_ij, Pfij)
 
             τ_shear[3][I...] = τxy_I
-            εij_pl[3][I...] = εxy_pl
+            stores_diagnostics(diagnostics) && (εij_pl[3][I...] = εxy_pl)
             λv[3][I...] = λ_I
         end
 
@@ -845,14 +866,23 @@ end
 
             τ_c[1][I...], τ_c[2][I...], τ_c[3][I...] = τxx_I, τyy_I, τzz_I
             τ_c[4][I...], τ_c[5][I...], τ_c[6][I...] = τyz_I, τxz_I, τxy_I
-            εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
-            ε_vol_pl[I...] = ε_vol_pl_I
-            τII[I...] = τII_I
-            η_vep[I...] = ηvep_I
+            if stores_diagnostics(diagnostics)
+                εii_pl[1][I...], εii_pl[2][I...], εii_pl[3][I...] = εxx_pl, εyy_pl, εzz_pl
+                ε_vol_pl[I...] = ε_vol_pl_I
+                τII[I...] = τII_I
+                η_vep[I...] = ηvep_I
+            end
             λ[I...] = λ_I
             ΔPψ[I...] = ΔPψ_I
 
             θc[I...] = γ_eff[I...] * RP[I...] + ΔPψ_I
+
+            # the edges above read η_inv, never η, so the center can overwrite η in place
+            if !linear_viscosity
+                η[I...] = _update_τII_viscosity(
+                    τxx_I, τyy_I, τzz_I, τyz_I, τxz_I, τxy_I, ratio, rheology, local_viscosity_args(visc_args, I...), ηij, ν, cutoff
+                )
+            end
         end
     end
 
@@ -907,10 +937,9 @@ end
     inv_2Gdt = inv_Gdt / 2
     εij_eff = @. εij + τij_o * inv_2Gdt
 
-    εII = second_invariant(εij_eff)
-
-    # early return if there is no deformation
-    iszero(εII) && !has_tensile_cap(rheology.CompositeRheology[1].elements) &&
+    # early return if there is no deformation; εII is zero exactly when its square is, so
+    # skip the square root
+    iszero(GeoParams.doubledot(εij_eff, εij_eff) / 2) && !has_tensile_cap(rheology.CompositeRheology[1].elements) &&
         return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
 
     # trial stress
@@ -953,9 +982,9 @@ end
 
 ## VARIATIONAL STOKES STRESS KERNELS
 
-function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt; Pf = nothing, stress_buffers = nothing)
+function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt; Pf = nothing, stress_buffers = nothing, η_inv = nothing, diagnostics = Val(true))
     if ndims(stokes.P) == 3
-        return compute_stress_DYREL!(Val(3), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, ϕ, stress_buffers)
+        return compute_stress_DYREL!(Val(3), stokes, rheology, phase_ratios, λ_relaxation, dt; Pf, ϕ, stress_buffers, η_inv, diagnostics)
     end
 
     ni = size(phase_ratios.vertex)
@@ -974,11 +1003,12 @@ function compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ::JustRelax.Roc
         stokes.λ,
         stokes.λv,
         stokes.viscosity.η,
+        inverse_viscosity(stokes.viscosity.η, η_inv),
         stokes.viscosity.η_vep,
         stokes.ΔPψ,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios.center, phase_ratios.vertex, λ_relaxation, dt,
-        periodic_dims(stokes),
+        periodic_dims(stokes), diagnostics,
     )
     return nothing
 end
@@ -998,11 +1028,12 @@ end
         λ,
         λv,
         η,
+        η_inv,
         η_vep,
         ΔPψ,
         ϕ::JustRelax.RockRatio,
         rheology, phase_ratios_center, phase_ratios_vertex, λ_relaxation, dt,
-        periodic,
+        periodic, diagnostics,
     )
 
     Base.@propagate_inbounds @inline av(A) = sum(JustRelax2D._gather(A, I...)) / 4
@@ -1019,7 +1050,7 @@ end
             τij_o = τ_ov[1][I...], τ_ov[2][I...], τ_ov[3][I...]
             εij = av_clamped(ε[1], Ic...), av_clamped(ε[2], Ic...), ε[3][I...]
             λvij = λv[I...]
-            ηij = harm_clamped(η, Ic...)
+            ηij = harm_inv_clamped(η_inv, Ic...)
             Pij = av_clamped(P, Ic...)
             Pfij = sample_Pf(Pf, av_clamped, Pij, Ic...)
             EIIvij = av_clamped(EII_pl, Ic...)
@@ -1030,7 +1061,7 @@ end
 
             # update arrays
             τ_v[1][I...], τ_v[2][I...], τ_v[3][I...] = τxx_I, τyy_I, τxy_I
-            ε_pl[3][I...] = εxy_pl
+            stores_diagnostics(diagnostics) && (ε_pl[3][I...] = εxy_pl)
             λv[I...] = λ_I
 
         else
@@ -1056,10 +1087,12 @@ end
                     compute_local_stress(εij, τij_o, ηij, Pij, λij, λ_relaxation, rheology, ratio, dt, EIIij, Pfij)
                 # update arrays
                 τ[1][I...], τ[2][I...], τ[3][I...] = τxx_I, τyy_I, τxy_I
-                ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
-                ε_vol_pl[I...] = ε_vol_pl_I
-                τII[I...] = τII_I
-                η_vep[I...] = ηvep_I
+                if stores_diagnostics(diagnostics)
+                    ε_pl[1][I...], ε_pl[2][I...] = εxx_pl, εyy_pl
+                    ε_vol_pl[I...] = ε_vol_pl_I
+                    τII[I...] = τII_I
+                    η_vep[I...] = ηvep_I
+                end
                 λ[I...] = λ_I
                 ΔPψ[I...] = ΔPψ_I
 

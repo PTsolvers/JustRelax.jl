@@ -250,13 +250,11 @@ end
         # iterations (+15% at relλ = 0.2, +75% at 0.05 on the DPCap shear band).
         return converged ? x[3] : T(NaN), g, -Ap
     end
-    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
     F = compute_yieldfunction_phase(rheology, phase; P, τII = s, EII, Pf)
+    # Elastic points skip the flow gradients: every caller scales them by λ = 0.
+    (is_pl && !iszero(s) && F > 0) || return zero(T), ntuple(_ -> zero(T), Val(N)), zero(T)
+    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
     volume = isinf(Kdt) ? zero(T) : Kdt * Fp * Qp
-    λ = if is_pl && !iszero(s) && F > 0
-        (1 - relλ) * λold + relλ * F / (η + ηvp + volume)
-    else
-        zero(T)
-    end
+    λ = (1 - relλ) * λold + relλ * F / (η + ηvp + volume)
     return λ, g, Qp
 end

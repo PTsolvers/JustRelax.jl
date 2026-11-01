@@ -145,6 +145,8 @@ function _solve_VariationalDYREL!(
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
     compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
     DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
+    # reciprocal viscosity for the harmonic means of the stress kernel, refreshed with η
+    η_inv = inv.(stokes.viscosity.η)
 
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
@@ -157,11 +159,12 @@ function _solve_VariationalDYREL!(
         # deviatoric stress, then a separate τII-viscosity refresh. The stress kernel derives the
         # vertex viscosity as harm_clamped(η) — the same convention as the APT variational stress
         # kernel; a stored ηv would disagree at the free-surface interface and under-move it.
-        compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P), stress_buffers)
+        compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_PH, dt; Pf = fluid_pressure(args, stokes.P), stress_buffers, η_inv)
         if !linear_viscosity
             update_viscosity_τII!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
         end
         N == 3 && update_variational_stress_halo!(stokes, dim, linear_viscosity)
+        linear_viscosity || (@. η_inv = inv(stokes.viscosity.η))
 
         # compute velocity residuals (pressure residual stokes.R.RP already computed above;
         # free-surface stabilization via dt * free_surface)
@@ -251,14 +254,23 @@ function _solve_VariationalDYREL!(
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, true; args...)
 
             # deviatoric stress (vertex viscosity via harm_clamped(η)) + separate τII-viscosity
-            # refresh, then assemble the small pressure correction θc = γ_eff·RP + ΔPψ
-            compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf = fluid_pressure(args, stokes.P), stress_buffers)
+            # refresh, then assemble the small pressure correction θc = γ_eff·RP + ΔPψ. `err_vel`
+            # changes only on residual checks, so the loop can only end on one of those or on its
+            # last iteration; the diagnostics are stored there. Two calls with a literal `Val` keep
+            # the keyword call statically dispatched.
+            Pf = fluid_pressure(args, stokes.P)
+            if iszero(iter % nout) || itPT > iterMax_DR
+                compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf, stress_buffers, η_inv, diagnostics = Val(true))
+            else
+                compute_stress_DYREL!(stokes, rheology, phase_ratios, ϕ, λ_relaxation_DR, dt; Pf, stress_buffers, η_inv, diagnostics = Val(false))
+            end
             if !linear_viscosity
                 update_viscosity_τII!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; relaxation = viscosity_relaxation, air_phase = air_phase)
             end
             # exchange vertex-stress halos (+ vertex viscosity, refreshed above) before the momentum
             # kernel reads them, matching the non-variational solver
             update_variational_stress_halo!(stokes, dim, linear_viscosity)
+            linear_viscosity || (@. η_inv = inv(stokes.viscosity.η))
             @. θc = dyrel.γ_eff * stokes.R.RP + stokes.ΔPψ
             N == 3 && update_halo_synced!(θc)
 

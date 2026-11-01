@@ -211,6 +211,8 @@ function _solve_DYREL!(
         apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], grid.di.center, dt)
         update_dτV_α_β!(dyrel)
     end
+    # reciprocal viscosity for the 3D edge harmonic means; the stress kernel keeps it current
+    η_inv = inv.(stokes.viscosity.η)
 
     # Powell-Hestenes iterations
     for itPH in 1:Int(iterMax_PH)
@@ -222,7 +224,7 @@ function _solve_DYREL!(
         compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
         # compute deviatoric stress, refresh τII viscosity, and assemble θc = γ_eff·RP + ΔPψ in one pass
-        compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+        compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_PH, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity; η_inv)
         update_stress_halo!(stokes, dim, linear_viscosity)
         free_surface_stress_bcs!(stokes, flow_bcs, dim)
         # update_halo!(stokes.λv)
@@ -295,8 +297,15 @@ function _solve_DYREL!(
             # compute divergence, deviatoric strain rate and pressure residual in one pass
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, _di, ni, dt, true; args...)
 
-            # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass
-            compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity)
+            # Deviatoric stress, τII viscosity refresh, and θc = γ_eff·RP + ΔPψ assembly in one pass.
+            # `err` changes only on residual checks, so the loop can only end on one of those or on
+            # its last iteration; the diagnostics (and η_vep for the free surface) are stored there.
+            # Two calls with a literal `Val` keep the keyword call statically dispatched.
+            if iszero(iter % nout) || itPT > iterMax_DR || flow_bcs.free_surface
+                compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity; η_inv, diagnostics = Val(true))
+            else
+                compute_stress_viscosity_DYREL!(stokes, θc, dyrel.γ_eff, rheology, phase_ratios, λ_relaxation_DR, dt, viscosity_relaxation, args, viscosity_cutoff, linear_viscosity; η_inv, diagnostics = Val(false))
+            end
             update_stress_halo!(stokes, dim, linear_viscosity)
             free_surface_stress_bcs!(stokes, flow_bcs, dim)
 

@@ -652,7 +652,10 @@ function compute_stress_viscosity_DYREL!(
 
     ni = size(phase_ratios.vertex)
     η_inv = inverse_viscosity(stokes.viscosity.η, η_inv)
-    @parallel_async (@idx ni) compute_stress_viscosity_DYREL!(
+    # small blocks: with plasticity the kernel needs ~140 registers, so 256-thread blocks fit
+    # only one per multiprocessor
+    nthreads = ni[2] == 1 ? (128, 1, 1) : (32, 4, 1)
+    @parallel_async (@idx ni) cld.(ni, nthreads) nthreads compute_stress_viscosity_DYREL!(
         (stokes.τ.xx, stokes.τ.yy, stokes.τ.zz, stokes.τ.yz_c, stokes.τ.xz_c, stokes.τ.xy_c),  # centers
         (stokes.τ.yz, stokes.τ.xz, stokes.τ.xy), # shear stresses
         (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.zz, stokes.τ_o.yz_c, stokes.τ_o.xz_c, stokes.τ_o.xy_c),    # centers
@@ -937,9 +940,8 @@ end
     inv_2Gdt = inv_Gdt / 2
     εij_eff = @. εij + τij_o * inv_2Gdt
 
-    # early return if there is no deformation; εII is zero exactly when its square is, so
-    # skip the square root
-    iszero(GeoParams.doubledot(εij_eff, εij_eff) / 2) && !has_tensile_cap(rheology.CompositeRheology[1].elements) &&
+    # early return if there is no deformation
+    all(iszero, εij_eff) && !has_tensile_cap(rheology.CompositeRheology[1].elements) &&
         return (zero_tuple(εij)..., zero_tuple(εij)..., 0.0, 0.0, 0.0, η, 0.0)
 
     # trial stress

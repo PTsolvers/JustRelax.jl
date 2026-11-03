@@ -32,13 +32,18 @@ end
 
     fn = get_viscosity_fn(fn_viscosity)
 
-    fn(stokes, args, rheology, cutoff, fn_viscosity; relaxation = relaxation)
+    fn(stokes, args, rheology, cutoff; relaxation = relaxation)
 
     return nothing
 end
 
 @inline get_viscosity_fn(::typeof(compute_viscosity_εII)) = compute_viscosity_εII!
 @inline get_viscosity_fn(::typeof(compute_viscosity_τII)) = compute_viscosity_τII!
+
+# raw (staggered-grid, unaveraged) strain- or stress-rate tensor selected by
+# `fn_viscosity`, for kernels that gather their own vertex/edge averages
+@inline select_tensor(stokes, ::typeof(compute_viscosity_εII)) = @strain(stokes)
+@inline select_tensor(stokes, ::typeof(compute_viscosity_τII)) = @stress(stokes)
 
 # with phase ratios
 
@@ -107,19 +112,43 @@ end
 
 ## 2D KERNELS
 
+"""
+    compute_viscosity_τII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **deviatoric
+stress** (`τII`), evaluating `rheology` (a single `GeoParams.MaterialParams`, or one per
+phase when `phase_ratios` is given) at each cell and relaxing towards the new value with
+factor `relaxation` (`1.0` = no damping). `cutoff = (ηmin, ηmax)` clamps the result.
+`air_phase` (multi-phase form only) excludes that phase from the update.
+
+See also [`compute_viscosity_εII!`](@ref) for the strain-rate-invariant convention, and
+[`compute_viscosity!`](@ref) for the rheology-driven default (εII).
+"""
 function compute_viscosity_τII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_τII)
 end
 
+"""
+    compute_viscosity_εII!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place from the second invariant of the **strain rate**
+(`εII`); otherwise identical to [`compute_viscosity_τII!`](@ref).
+"""
 function compute_viscosity_εII!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
     return compute_viscosity!(backend(stokes), stokes, relaxation, args, rheology, cutoff, compute_viscosity_εII)
 end
 
-# generic fallback
+"""
+    compute_viscosity!(stokes::StokesArrays, [phase_ratios,] args, rheology, cutoff; air_phase=0, relaxation=1.0)
+
+Update `stokes.viscosity.η` in place by evaluating `rheology` at the strain-rate invariant
+(equivalent to [`compute_viscosity_εII!`](@ref); see there for the arguments, and
+[`compute_viscosity_τII!`](@ref) for the stress-invariant alternative).
+"""
 function compute_viscosity!(
         stokes::JustRelax.StokesArrays, args, rheology, cutoff; relaxation = 1.0e0
     )
@@ -134,7 +163,7 @@ end
 function _compute_viscosity!(stokes::JustRelax.StokesArrays, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
     ni = size(stokes.viscosity.η)
     @parallel (@idx ni) compute_viscosity_kernel!(
-        stokes.viscosity.η, ν, @strain(stokes)..., args, rheology, cutoff, fn_viscosity
+        stokes.viscosity.η, ν, select_tensor(stokes, fn_viscosity)..., args, rheology, cutoff, fn_viscosity
     )
     return nothing
 end
@@ -148,16 +177,18 @@ end
 
     @inbounds begin
         # cache
-        A = Axx[I...], Ayy[I...], Axyv[I...]
+        Aii = Axx[I...], Ayy[I...]
+        Axy = gather(Axyv)
 
         # we need strain rate not to be zero, otherwise we get NaNs
-        AII_0 = allzero(A...) * eps()
+        AII_0 = allzero(Aii...) * eps()
 
         # argument fields at local index
         args_ij = local_viscosity_args(args, I...)
 
-        # compute second invariant of strain rate tensor
-        AII = second_invariant(AII_0 + A[1], -AII_0 + A[2], A[3])
+        # compute second invariant of strain rate tensor: mean-of-squares over the
+        # 4 vertices surrounding cell center I, as in the 3D kernel
+        AII = second_invariant(AII_0 + Aii[1], -AII_0 + Aii[2], Axy)
 
         # compute and update stress viscosity
         ηi = fn_viscosity(rheology, AII, args_ij)
@@ -247,22 +278,6 @@ function compute_viscosity!(
     return nothing
 end
 
-
-function compute_viscosity!(
-        ::CPUBackendTrait,
-        stokes::JustRelax.StokesArrays,
-        ν,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        fn_viscosity::F
-    ) where {F}
-    _compute_viscosity!(stokes, ν, args, rheology, air_phase, cutoff, fn_viscosity)
-
-    return nothing
-end
-
 function compute_viscosity!(
         ::CPUBackendTrait,
         stokes::JustRelax.StokesArrays,
@@ -322,45 +337,6 @@ function _compute_viscosity!(
     return nothing
 end
 
-function _compute_viscosity!(
-        stokes::JustRelax.StokesArrays,
-        ν,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        fn_viscosity::F,
-        # do_vertices
-    ) where {F}
-    ni = size(stokes.viscosity.η)
-    @parallel (@idx ni) compute_viscosity_kernel!(
-        stokes.viscosity.η,
-        ν,
-        select_tensor_center(stokes, fn_viscosity)...,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        fn_viscosity,
-        local_viscosity_args,
-    )
-    # skip for 3D for now, may change in the future
-    length(ni) == 3 && return
-
-    @parallel (@idx ni .+ 1) compute_viscosity_kernel!(
-        stokes.viscosity.ηv,
-        ν,
-        select_tensor_vertex(stokes, fn_viscosity)...,
-        args,
-        rheology,
-        air_phase,
-        cutoff,
-        fn_viscosity,
-        local_viscosity_args_vertex,
-    )
-    return nothing
-end
-
 for fn in (:select_tensor_center, :select_tensor_vertex)
     @eval @inline $fn(stokes, fn_viscosity) = $fn(stokes, fn_viscosity, JustRelax.static_dims(stokes))
 end
@@ -397,12 +373,8 @@ end
         args_ij = fn_args(args, I...)
         # args_ij = local_viscosity_args(args, I...)
 
-        # local phase ratio
-        ratio_ij = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        if air_phase > 0
-            ratio_ij = correct_phase_ratio(air_phase, ratio_ij)
-        end
+        # local phase ratio, with the air dropped if requested
+        ratio_ij = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij = AII_0 + A[1], -AII_0 + A[2], A[3]
@@ -418,38 +390,38 @@ end
 end
 
 ## 3D KERNELS
-# @parallel_indices (I...) function compute_viscosity_kernel!(
-#         η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F1, fn_args::F2
-#     ) where {F1, F2}
+@parallel_indices (I...) function compute_viscosity_kernel!(
+        η, ν, Axx, Ayy, Azz, Ayzv, Axzv, Axyv, args, rheology, cutoff, fn_viscosity::F
+    ) where {F}
 
-#     # convenience closures
-#     Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
-#     Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
-#     Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
+    # convenience closures
+    Base.@propagate_inbounds @inline gather_yz(A) = _gather_yz(A, I...)
+    Base.@propagate_inbounds @inline gather_xz(A) = _gather_xz(A, I...)
+    Base.@propagate_inbounds @inline gather_xy(A) = _gather_xy(A, I...)
 
-#     @inbounds begin
-#         Aij_normal = Axx[I...], Ayy[I...], Azz[I...]
+    @inbounds begin
+        Aij_normal = Axx[I...], Ayy[I...], Azz[I...]
 
-#         # we need strain rate not to be zero, otherwise we get NaNs
-#         AII_0 = allzero(Aij_normal...) * eps()
+        # we need strain rate not to be zero, otherwise we get NaNs
+        AII_0 = allzero(Aij_normal...) * eps()
 
-#         # # argument fields at local index
-#         args_ijk = fn_args(args, I...)
+        # argument fields at local index
+        args_ijk = local_viscosity_args(args, I...)
 
-#         # compute second invariant of strain rate tensor
-#         Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
-#         Aij_shear = gather_yz(Ayzv), gather_xz(Axzv), gather_xy(Axyv)
-#         Aij = (Aij_normal..., Aij_shear...)
-#         AII = second_invariant(Aij...)
+        # compute second invariant of strain rate tensor
+        Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
+        Aij_shear = gather_yz(Ayzv), gather_xz(Axzv), gather_xy(Axyv)
+        Aij = (Aij_normal..., Aij_shear...)
+        AII = second_invariant(Aij...)
 
-#         # update stress and effective viscosity
-#         ηi = fn_viscosity(rheology, AII, args_ijk)
-#         ηi = continuation_linear(ηi, η[I...], ν)
-#         η[I...] = clamp(ηi, cutoff...)
-#     end
+        # update stress and effective viscosity
+        ηi = fn_viscosity(rheology, AII, args_ijk)
+        ηi = continuation_linear(ηi, η[I...], ν)
+        η[I...] = clamp(ηi, cutoff...)
+    end
 
-#     return nothing
-# end
+    return nothing
+end
 
 @parallel_indices (I...) function compute_viscosity_kernel!(
         η,
@@ -483,10 +455,8 @@ end
         # # argument fields at local index
         args_ijk = fn_args(args, I...)
 
-        # local phase ratio
-        ratio_ijk = @cell ratios_center[I...]
-        # remove phase ratio of the air if necessary & normalize ratios
-        ratio_ijk = correct_phase_ratio(air_phase, ratio_ijk)
+        # local phase ratio, with the air dropped if requested
+        ratio_ijk = viscosity_phase_ratio(air_phase, @cell(ratios_center[I...]))
 
         # compute second invariant of strain rate tensor
         Aij_normal = Aij_normal .+ (AII_0, -AII_0 * 0.5, -AII_0 * 0.5)
@@ -635,6 +605,20 @@ end
 #     end
 # end
 
+"""
+    viscosity_phase_ratio(air_phase, ratio)
+
+Phase ratio to average viscosity over, with `air_phase` dropped and the remaining
+phases renormalized. A cell holding nothing but air keeps its own ratio: averaging
+over no phase at all would make the harmonic mean `Inf`, which then spreads through
+`ητ` into neighbouring cells that do carry rock.
+"""
+@inline function viscosity_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
+    air_phase > 0 || return ratio
+    corrected = correct_phase_ratio(air_phase, ratio)
+    return iszero(sum(corrected)) ? ratio : corrected
+end
+
 function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
     if iszero(air_phase)
         return ratio
@@ -645,6 +629,7 @@ function correct_phase_ratio(air_phase, ratio::SVector{N, T}) where {N, T}
         # set air phase ratio to zero
         corrected_ratio = ratio .* mask
         # normalize phase ratios without air
-        return corrected_ratio ./ sum(corrected_ratio)
+        total = sum(corrected_ratio)
+        return iszero(total) ? zeros(SVector{N, T}) : corrected_ratio ./ total
     end
 end

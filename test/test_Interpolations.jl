@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test
@@ -11,19 +11,19 @@ using JustRelax, JustRelax.JustRelax2D
 import JustRelax.JustRelax2D: interp_Vx∂ρ∂x_on_Vy!, interp_Vx_on_Vy!
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 @testset "Interpolations" begin
-    if backend_JR == CPUBackend
+    if backend == CPUBackend
         # Set up mock data
         # Physical domain ------------------------------------
         ly = 1.0       # domain length in y
@@ -38,8 +38,8 @@ end
 
 
         # 2D case
-        stokes = StokesArrays(backend_JR, ni)
-        thermal = ThermalArrays(backend_JR, ni)
+        stokes = StokesArrays(backend, ni)
+        thermal = ThermalArrays(backend, ni)
         ρg = @ones(ni)
 
         stokes.viscosity.η .= 1
@@ -52,6 +52,21 @@ end
 
         center2vertex!(stokes.τ.xy, stokes.τ.xy_c)
         @test stokes.τ.xy[2, 2] == 1
+
+        @testset "vertex2center! periodic" begin
+            # Unique periodic x vertices: the east vertex of the last cell wraps to x index 1.
+            vertex = [1.0 2.0 3.0; 10.0 20.0 30.0]
+            center = zeros(2, 2)
+            vertex2center!(center, vertex; periodic_x = true)
+            @test center[1, 1] == (1 + 10 + 2 + 20) / 4
+            @test center[2, 1] == (10 + 1 + 20 + 2) / 4
+
+            # Duplicated periodic seam uses canonical x index 1, not a stale duplicate endpoint.
+            vertex_duplicate = [1.0 2.0 999.0; 10.0 20.0 888.0]
+            center_duplicate = zeros(2, 2)
+            vertex2center!(center_duplicate, vertex_duplicate; periodic_x = true)
+            @test center_duplicate[2, 1] == center[2, 1]
+        end
 
         Vx_v = @ones(ni .+ 1...)
         Vy_v = @ones(ni .+ 1...)

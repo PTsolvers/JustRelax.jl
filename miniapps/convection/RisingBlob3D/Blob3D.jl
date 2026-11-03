@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -30,21 +30,9 @@ else
 end
 
 # Load script dependencies
-using GeoParams, CairoMakie, CellArrays
+using GeoParams, CairoMakie
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[3]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z, sticky_air)
-    @all(P) = @all(ρg)
-    # @all(P) = abs(@all(ρg) * (@all_j(z) + sticky_air)) * <((@all_j(z) + sticky_air), 0.0)
-    return nothing
-end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, zc_anomaly, r_anomaly, sticky_air, top, bottom)
     ni = size(phases)
@@ -233,11 +221,14 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     min_xcell = 15
     particles = init_particles(backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...)
 
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
+    subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     grid_vxi = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Circular temperature anomaly--------------------------
     x_anomaly = lx * 0.5
@@ -292,7 +283,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
     ρg = @zeros(ni...), @zeros(ni...), @zeros(ni...) # ρg[1] is the buoyancy force in the x direction, ρg[2] is the buoyancy force in the y direction
     for _ in 1:5
         compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-        @parallel init_P!(stokes.P, ρg[3], xci[3], sticky_air)
+        compute_lithostatic_pressure!(stokes.P, ρg[3], di[3], igg)
     end
     compute_viscosity!(stokes, phase_ratios, args, rheology, cutoff_visc)
 
@@ -330,6 +321,8 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         fig
     end
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     local Vx_v, Vy_v
@@ -339,9 +332,7 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         Vz_v = @zeros(ni .+ 1...)
     end
 
-    dt₀ = similar(stokes.P)
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)]
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     @copy stokes.P0 stokes.P
     @copy thermal.Told thermal.T
@@ -375,6 +366,9 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         )
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff, igg) * 0.8
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # --------------------------------
 
         # Thermal solver ---------------
@@ -398,9 +392,16 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :, :] .= dt₀[2, :, :]
+        @views dt₀[end, :, :] .= dt₀[end - 1, :, :]
+        @views dt₀[:, 1, :] .= dt₀[:, 2, :]
+        @views dt₀[:, end, :] .= dt₀[:, end - 1, :]
+        @views dt₀[:, :, 1] .= dt₀[:, :, 2]
+        @views dt₀[:, :, end] .= dt₀[:, :, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -410,12 +411,19 @@ function main3D(igg; figdir = "output", nx = 64, ny = 64, nz = 64, do_vtk = fals
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
 
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1), 2:(end - 1)] .= T_buffer
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
+
+        particle2centroid!(thermal.T, pT, particles)
         # @views thermal.T[:, :, end] .= Tsurf
         # @views thermal.T[:, :, 1] .= Tbot
         thermal_bcs!(thermal, thermal_bc)

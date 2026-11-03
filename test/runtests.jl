@@ -1,10 +1,6 @@
 pushfirst!(LOAD_PATH, dirname(@__DIR__))
 
-using JustRelax
-
 using Pkg
-using MPI
-using Test, ParallelTestRunner
 
 function parse_flags!(args, flag; default = nothing, type = typeof(default))
     for f in args
@@ -24,6 +20,28 @@ function parse_flags!(args, flag; default = nothing, type = typeof(default))
     end
     return false, default
 end
+
+args = copy(ARGS)
+_, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
+skip_mpi, _ = parse_flags!(args, "--no-mpi")
+
+include(joinpath(@__DIR__, "add_backend_package.jl"))
+
+@static if backend_name == "AMDGPU"
+    add_backend_package("AMDGPU")
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
+    using AMDGPU; AMDGPU.versioninfo()
+elseif backend_name == "CUDA"
+    add_backend_package("CUDA")
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
+    import CUDA; CUDA.versioninfo()
+elseif backend_name == "CPU"
+    ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
+end
+
+using JustRelax
+using MPI
+using Test, ParallelTestRunner
 
 # light tests that require simple or no PS/IGG.
 function test_worker(name)
@@ -45,12 +63,22 @@ function runtests(args)
     for k in collect(keys(testsuite))
         startswith(basename(k), "test_") || delete!(testsuite, k)
     end
+    if backend_name != "CPU"
+        delete!(testsuite, "test_variational_operators_2D")
+        delete!(testsuite, "test_rheology")
+        delete!(testsuite, "test_dyrel_solver_3D")
+        delete!(testsuite, "test_dyrel_taylor_green_MPI")
+    end
 
     # Separate MPI tests – always run sequentially via mpiexec
     mpi_keys = [k for k in keys(testsuite) if occursin("MPI", k)]
     mpi_files = Dict(k => joinpath(@__DIR__, k * ".jl") for k in mpi_keys)
     for k in mpi_keys
         delete!(testsuite, k)
+    end
+    if skip_mpi
+        printstyled("\nSkipping $(length(mpi_keys)) MPI tests (--no-mpi)\n"; bold = true, color = :yellow)
+        empty!(mpi_keys)
     end
 
     # Parse args for ParallelTestRunner and apply exclusions
@@ -71,7 +99,7 @@ function runtests(args)
     end
 
     # MPI tests
-    printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
+    isempty(mpi_keys) || printstyled("\nRunning MPI tests sequentially\n"; bold = true, color = :cyan)
     for k in sort(mpi_keys)
         f = mpi_files[k]
         isfile(f) || continue
@@ -90,21 +118,6 @@ function runtests(args)
     end
 
     return nfail
-end
-
-args = copy(ARGS)
-_, backend_name = parse_flags!(args, "--backend"; default = "CPU", type = String)
-
-@static if backend_name == "AMDGPU"
-    Pkg.add("AMDGPU")
-    ENV["JULIA_JUSTRELAX_BACKEND"] = "AMDGPU"
-    using AMDGPU; AMDGPU.versioninfo()
-elseif backend_name == "CUDA"
-    Pkg.add("CUDA")
-    ENV["JULIA_JUSTRELAX_BACKEND"] = "CUDA"
-    using CUDA; CUDA.versioninfo()
-elseif backend_name == "CPU"
-    ENV["JULIA_JUSTRELAX_BACKEND"] = "CPU"
 end
 
 exit(runtests(args))

@@ -1,9 +1,11 @@
 # Using the APT method with auto tuned damping coefficients
 
 > [!WARNING]
-> This solver is still work-in-progress/experimental. In the current state, only 2D Stokes is supported. Variational Stokes and 3D version coming up soon.
+> This solver is experimental. Standard and variational DYREL support 2D and 3D.
+> The 3D variational path requires a uniform, nonperiodic grid. See also
+> [variational Stokes](./variational_stokes.md).
 
-Instead of using the Accelerated Pseudo-Transient where the damping coefficients are constant throughout the PT iterations (as in [Räss et al, 2022](https://gmd.copernicus.org/articles/15/5757/2022/)), we can use a self-tuning version of the APT method based on the approached described in [Duretz et al, 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
+Instead of using the Accelerated Pseudo-Transient method, where the damping coefficients are constant throughout the PT iterations (as in [Räss et al., 2022](https://gmd.copernicus.org/articles/15/5757/2022/)), we can use a self-tuning version of the APT method based on the approach described in [Duretz et al., 2025](https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5641/).
 
 # Usage
 
@@ -18,8 +20,21 @@ by this one
 dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; ϵ=1e-6)
 ```
 
+The `global_penalty` constructor keyword selects how DYREL scales its numerical
+pressure penalty. It defaults to `true`, using mean finite viscosity across the
+domain (and MPI ranks when MPI is initialized). Set `global_penalty = false` to
+scale the penalty with local viscosity:
+
+```julia
+dyrel = DYREL(backend, stokes, rheology, phase_ratios, di, dt; global_penalty = false)
+```
+
+This switch applies to standard and variational DYREL. In the variational solver,
+the rock-fraction correction remains applied to the penalty in both modes.
+
 > [!NOTE]
-> Note that the `DYREL` arrays need effective viscosity of the model, so it needs to be instantiatef *after* having a effective viscosity guess.
+> Note that the `DYREL` arrays need the effective viscosity of the model, so
+> `DYREL` must be instantiated *after* an effective-viscosity guess is available.
 
 2. The last change requires changing the solver function call to the following:
 ```julia
@@ -54,18 +69,121 @@ where the solver keyword arguments are:
 - `nout` $\rightarrow$ damping coefficients are re-computed every `nout` iterations.
 - `rel_drop` $\rightarrow$ the tolerance for the inner dynamic relaxation loop is $error(P^n) \text{rel_drop}$ where $n$ is the inner Powell-Hesteness iteration counter.
 - `λ_relaxation_PH` $\rightarrow$ relaxation coefficient for the plastic multiplier ($\cdot\lambda$) during the inner Powell-Hesteness loop. `λ_relaxation_PH=1` means no relaxation.
-- `λ_relaxation_DR` $\rightarrow$ relaxation coefficient for the plastic multiplier ($\cdot\lambda$) during the innes Dynamic Relaxation loop. `λ_relaxation_DR=1` means no relaxation.
-- `verbose_PH` $\rightarrow$ # print solver metrics during  inner Powell-Hesteness loop.
-- `verbose_DR` $\rightarrow$ # print solver metrics during  innes Dynamic Relaxation loop.
+- `λ_relaxation_DR` $\rightarrow$ relaxation coefficient for the plastic multiplier ($\cdot\lambda$) during the inner Dynamic Relaxation loop. `λ_relaxation_DR=1` means no relaxation.
+- `verbose_PH` $\rightarrow$ print solver metrics during the inner Powell--Hestenes loop.
+- `verbose_DR` $\rightarrow$ print solver metrics during the inner Dynamic Relaxation loop.
 - `viscosity_relaxation` $\rightarrow$ relaxation coefficient for the viscosity. `viscosity_relaxation=1` means no relaxation.
 - `linear_viscosity` $\rightarrow$ if the rheology is linear (viscosity will not be updated during the solver iterations).
 - `viscosity_cutoff` $\rightarrow$ viscosity is clamped so that $\text{viscosity_cutoff}_1 \leq \eta \leq \text{viscosity_cutoff}_2$.
-- `free_surface` $\rightarrow$ include the 2D density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+- `free_surface` $\rightarrow$ include the density-gradient free-surface stabilization in both the momentum residual and the self-tuned vertical pseudo-transient coefficients. The default is `false`.
+- `anderson_PH` $\rightarrow$ depth $m$ of the Anderson acceleration of the Powell--Hestenes pressure update. The default `0` takes the plain update.
 
 When `free_surface=true`, DYREL adds the local diagonal
 $-\Delta t\,\partial_y(\rho g_y)$ to `Dy` and to the corresponding Gershgorin
 row bound whenever the pseudo-transient coefficients are refreshed. The same
 term is used by the Powell--Hestenes and dynamic-relaxation residual kernels.
+
+## Anderson acceleration of the Powell--Hestenes loop
+
+The Powell--Hestenes loop updates the pressure as a fixed-point iteration,
+$P_{k+1} = P_k + f_k$ with $f_k = \omega\,\gamma_\mathrm{eff}\,R_P(P_k)$, where
+$\omega$ is `pressure_relaxation`. With a pressure-dependent yield function
+(Drucker--Prager with $\phi > 0$) the plastic return reads the pressure that this
+loop updates once per pass, and the loop converges only linearly: plastic time
+steps can need tens of passes where elastic ones need a few.
+
+`anderson_PH = m` replaces the plain step by type-II Anderson acceleration
+([Walker & Ni, 2011](https://doi.org/10.1137/10078356X)) over the last $m$
+passes. With the differences $\Delta X = [P_j - P_{j-1}]$ and
+$\Delta F = [f_j - f_{j-1}]$,
+
+```math
+\theta = \arg\min_\theta \lVert f_k - \Delta F\,\theta \rVert_2,
+\qquad
+P_{k+1} = P_k + f_k - (\Delta X + \Delta F)\,\theta .
+```
+
+The step vanishes with $R_P$, so the converged solution is the one of the plain
+update; only the path to it changes. The history restarts at every solver call
+and whenever the Powell--Hestenes error grows from one pass to the next, so the
+pass after such a growth takes the plain step. In `solve_VariationalDYREL!` the
+acceleration mixes the whole pressure update of a pass, including the
+volumetric-mode relaxation, and its inner products run over the active pressure
+cells only.
+
+The acceleration pays off for plastic models: `anderson_PH = 3` is a good
+starting point, and the plastic DYREL miniapps use it. For viscous or elastic
+models the plain update already converges in a few passes, so keep the default.
+Each level of depth stores two extra pressure-sized arrays.
+
+```julia
+solve_DYREL!(
+    stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+    anderson_PH = 3,
+)
+```
+
+## Variational DYREL
+
+Free surfaces represented by a `RockRatio` use the dedicated 2D/3D entry point
+`solve_VariationalDYREL!`. It combines DYREL's Powell--Hestenes and dynamic
+relaxation iteration with the volume-weighted operator of Larionov, Batty, and
+Bridson (2017): center fractions weight pressure and normal stress, vertex
+fractions weight shear stress, and face fractions weight momentum rows.
+
+```julia
+ϕ = RockRatio(backend, ni)
+update_rock_ratio!(ϕ, phase_ratios, air_phase)
+dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-6)
+
+solve_VariationalDYREL!(
+    stokes, ρg, dyrel, flow_bcs, phase_ratios, ϕ,
+    rheology, args, grid, dt, igg;
+    air_phase = air_phase,
+    linear_viscosity = true,
+    free_surface = true,
+    pressure_relaxation = 0.5,
+    verbose_PH = false,
+    verbose_DR = false,
+)
+```
+
+The constructor and solver must receive the same `RockRatio`. Zero-volume
+pressure and velocity rows are eliminated, positive sliver faces use a bounded
+face mass, and changing the mask between calls resets the dynamic-relaxation
+history. `air_phase` excludes the air phase from material averages, while
+`pressure_relaxation` damps the Powell--Hestenes pressure update; its default is
+`1`. The solver accepts either a `Geometry{2}`, a `Geometry{3}`, or a legacy uniform-spacing tuple,
+and takes its options either as the plain keywords above or bundled as a single
+`kwargs = (; ...)` NamedTuple.
+The 3D variational path requires a uniform, nonperiodic grid. Its shear stresses
+live on `yz`, `xz`, and `xy` edges. The Gershgorin diagonal and row bound use
+the Maxwell viscosity `η / (1 + η / (G * dt))` at cell centers and each shear
+edge, with the phase ratios and harmonic creep-viscosity averages used by the
+stress update. Bulk elasticity enters through `ηb = Kb * dt` and `γ_eff`.
+
+Standard `solve_DYREL!` remains available for unweighted problems.
+
+`solve_VariationalDYREL!` also accepts `surface_pressure = Pload`, either a real
+scalar or a cell-centered real field on the same backend as `stokes.P`.
+Positive pressure compresses the embedded rock–air interface. Both the outer
+PH residual and the inner DR update include the same prescribed load. It is
+independent of the `free_surface` stabilization keyword and requires
+`flow_bcs.free_surface = false`. See
+[Prescribed surface pressure](./variational_stokes.md#Prescribed-surface-pressure)
+for the mask operator, prescribed-field extension, and update lifecycle.
+
+A velocity row whose preconditioner diagonal comes out zero is decoupled from
+its neighbours and is preconditioned with the identity. A diagonal that comes
+out negative or non-finite is not: it means the free-surface term is large
+enough to invert the row, or that a degenerate phase sample produced a
+non-finite viscosity, and it is propagated as `NaN` so the solve reports a
+failure rather than continuing with an arbitrary substitute. Reaching it with
+`free_surface = true` indicates the timestep is too large for the density
+contrast at the surface.
+
+See [variational Stokes](./variational_stokes.md) for marker-chain ordering,
+mask construction, and the mathematical reference.
 
 # Examples
 

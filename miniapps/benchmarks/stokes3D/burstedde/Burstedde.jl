@@ -5,7 +5,7 @@ using Statistics: mean
 #   C. Burstedde, G. Stadler, L. Alisic, L. C. Wilcox, E. Tan, M. Gurnis, and O. Ghattas.
 #   Large-scale adaptive mantle convection simulation. Geophysical Journal International, 2013
 
-include("vizBurstedde.jl")
+include(joinpath(@__DIR__, "vizBurstedde.jl"))
 
 @parallel_indices (i, j, k) function _viscosity!(η, x, y, z, β)
     η[i, j, k] = exp(1 - β * (x[i] * (1 - x[i]) + y[j] * (1 - y[j]) + z[k] * (1 - z[k])))

@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -33,22 +33,11 @@ end
 using GeoParams, CairoMakie
 
 
-include("Subduction3D_rheology.jl")
-include("Subduction3D_setup.jl")
+include(joinpath(@__DIR__, "Subduction3D_rheology.jl"))
+include(joinpath(@__DIR__, "Subduction3D_setup.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
-import ParallelStencil.INDICES
-const idx_k = INDICES[3]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -104,8 +93,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
     # Buoyancy forces
     ρg = ntuple(_ -> @zeros(ni...), Val(3))
     compute_ρg!(ρg[end], phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel (@idx ni) init_P!(stokes.P, ρg[3], xci[3])
-    # stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[end]).* di[end], dims=3), dims=3), dims=3))
+    compute_lithostatic_pressure!(stokes.P, ρg[3], di[3], igg)
     # Rheology
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     viscosity_cutoff = nondimensionalize((1.0e18, 1.0e24) .* (Pa * s), CharDim)
@@ -210,7 +198,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
             if do_vtk
                 velocity2vertex!(Vx_v, Vy_v, Vz_v, @velocity(stokes)...)
                 data_v = (;
-                    phase_vertex = [argmax(p) for p in Array(phase_ratios.vertex)],
+                    phase_vertex = [argmax(p) for p in to_cpu(phase_ratios.vertex)],
                 )
                 data_c = (;
                     P = dimensionalize_and_strip(Array(stokes.P), Pa, CharDim),
@@ -218,7 +206,7 @@ function main3D(li, origin, phases_GMG, igg; nx = 16, ny = 16, nz = 16, figdir =
                     τII = dimensionalize_and_strip(Array(stokes.τ.II), Pa, CharDim),
                     εII = dimensionalize_and_strip(Array(stokes.ε.II), s^-1, CharDim),
                     η = dimensionalize_and_strip(Array(stokes.viscosity.η), Pa * s, CharDim),
-                    phase_center = [argmax(p) for p in Array(phase_ratios.center)],
+                    phase_center = [argmax(p) for p in to_cpu(phase_ratios.center)],
                 )
                 velocity_v = (
                     dimensionalize_and_strip(Array(Vx_v), cm / yr, CharDim),

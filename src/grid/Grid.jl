@@ -91,7 +91,6 @@ function lazy_grid_MPI(
     xci = ntuple(Val(N)) do i
         Base.@_inline_meta
         rank_origin = f_g[i](1, di[i], ni[i])
-
         local_origin = rank_origin + origin[i]
         rank_end = f_g[i](ni[i], di[i], ni[i])
         local_end = rank_end + origin[i]

@@ -47,7 +47,6 @@ function Geometry(
     else
         geometry_nonMPI(ni, li, origin)
     end
-
     di = (; center = di, vertex = di, velocity = ntuple(_ -> di, Val(nDim)))
     _di = (;
         center = map(x -> inv.(x), di.center),

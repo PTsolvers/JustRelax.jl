@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -34,16 +34,10 @@ using GeoParams, GLMakie
 
 
 # Load file with all the rheology configurations
-include("Subduction2D_setup.jl")
-include("Subduction2D_rheology.jl")
+include(joinpath(@__DIR__, "Subduction2D_setup.jl"))
+include(joinpath(@__DIR__, "Subduction2D_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
-
-import ParallelStencil.INDICES
-const idx_k = INDICES[2]
-macro all_k(A)
-    return esc(:($A[$idx_k]))
-end
 
 function copyinn_x!(A, B)
     @parallel function f_x(A, B)
@@ -54,11 +48,6 @@ function copyinn_x!(A, B)
     return @parallel f_x(A, B)
 end
 
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_k(z)) * <(@all_k(z), 0.0)
-    return nothing
-end
 ## END OF HELPER FUNCTION ------------------------------------------------------------
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
@@ -156,12 +145,12 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     τxx_v = @zeros(ni .+ 1...)
     τyy_v = @zeros(ni .+ 1...)
+
+    dt₀ = similar(thermal.T)
 
     # Time loop
     t, it = 0.0, 0
@@ -169,8 +158,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
     while it < 1000 # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
 
         # interpolate stress back to the grid
@@ -192,6 +180,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 dt,
                 igg;
                 kwargs = (;
+                    air_phase = air_phase,
                     iterMax = 150.0e3,
                     free_surface = true,
                     nout = 5.0e3,
@@ -235,9 +224,14 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -246,6 +240,15 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         advection_MQS!(particles, RungeKutta4(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Advect and apply the free-surface geometry before replenishing
+        # particles.  Filtering first prevents phase-ratio updates from seeing
+        # cells that were just emptied by the marker chain.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(
+            pPhases, chain, particles, origin, di, air_phase, (pT, unwrap(pτ)...)
+        )
+
         # check if we need to inject particles
         # need stresses on the vertices for injection purposes
         center2vertex!(τxx_v, stokes.τ.xx)
@@ -254,12 +257,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             particles,
             pPhases,
             particle_args_reduced,
-            (T_buffer, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
+            (thermal.T, τxx_v, τyy_v, stokes.τ.xy, stokes.ω.xy)
         )
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
@@ -282,7 +281,7 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
                 )
                 data_c = (;
                     P = Array(stokes.P),
-                    T = Array(T_buffer),
+                    T = Array(thermal.T[2:(end - 1), 2:(end - 1)]),
                     η_vep = Array(η_vep),
                     η = Array(η),
                 )

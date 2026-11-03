@@ -10,7 +10,7 @@ hero:
   actions:
     - theme: brand
       text: Getting Started
-      link: /man/installation
+      link: /man/diffusion2D_periodic
     - theme: alt
       text: API Reference 📚
       link: /man/listfunctions
@@ -41,7 +41,7 @@ features:
     link: man/Blankenbach
 
   - icon: 🧩
-    title: Extensibility
+    title: Extensibility/Community
     details: Provides a natural repository for contributions of new solvers for use by the larger community.
     link: /man/contributing
 ---

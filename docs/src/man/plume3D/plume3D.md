@@ -16,7 +16,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
-    CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend
 end
@@ -343,7 +343,7 @@ data_c = (;
     τII = Array(stokes.τ.II),
     εII = Array(stokes.ε.II),
     η = Array(log10.(stokes.viscosity.η_vep)),
-    phase = [argmax(p) for p in Array(phase_ratios.center)],
+    phase = [argmax(p) for p in to_cpu(phase_ratios.center)],
 )
 velocity_v = (
     Array(Vx_v),

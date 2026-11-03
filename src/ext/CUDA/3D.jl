@@ -9,13 +9,24 @@ using CellArrays
 using ParallelStencil, ParallelStencil.FiniteDifferences3D
 using ImplicitGlobalGrid
 using GeoParams, LinearAlgebra, Printf
-using MPI
 using Statistics
+using MPI
 
 import JustRelax.JustRelax3D as JR3D
 
+# `CUDABackend` names JustRelax's backend tag, which the public constructors dispatch on.
+# CUDA.jl exports a KernelAbstractions backend under the same name; the explicit import
+# below shadows it. JustPIC types carry that other one as their backend parameter, so
+# their signatures spell it `CUDA.CUDABackend`.
 import JustRelax:
-    IGG, BackendTrait, CPUBackendTrait, CUDABackendTrait, backend, CPUBackend, Geometry
+    IGG,
+    BackendTrait,
+    CPUBackendTrait,
+    CUDABackendTrait,
+    backend,
+    CPUBackend,
+    CUDABackend,
+    Geometry
 import JustRelax:
     AbstractBoundaryConditions,
     TemperatureBoundaryConditions,
@@ -25,34 +36,68 @@ import JustRelax:
     AbstractDirichletBoundaryCondition,
     apply_dirichlet,
     apply_dirichlet!,
-    isdirichlet
+    isdirichlet,
+    periodic_dims,
+    flow_bcs_of,
+    check_periodic_bcs,
+    reject_periodic_bcs
 
-import JustRelax: normal_stress, shear_stress, shear_vorticity, unwrap
+import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress, unwrap
+import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
 __init__() = @init_parallel_stencil(CUDA, Float64, 3)
 
 include("../../common.jl")
+include("../../DYREL/variational3D.jl")
 include("../../stokes/Stokes3D.jl")
+include("../../variational_stokes/Stokes3D.jl")
+include("../../DYREL/solver.jl")
+include("../../DYREL/solver_VS.jl")
 
 # Types
 function JR3D.StokesArrays(::Type{CUDABackend}, ni::NTuple{N, Integer}) where {N}
     return StokesArrays(ni)
 end
 
-function JR3D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0) where {N}
-    return DYREL(ni; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR3D.StokesArrays(
+        ::Type{CUDABackend}, ni::NTuple{N, Integer}, bcs::JustRelax.AbstractFlowBoundaryConditions
+    ) where {N}
+    return StokesArrays(ni, bcs)
 end
 
-function JR3D.DYREL(::Type{CUDABackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR3D.DYREL(::Type{CUDABackend}, ni::NTuple{N, Integer}, periodic::NTuple{N, Bool} = ntuple(_ -> false, Val(N)); ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true) where {N}
+    return DYREL(ni, periodic; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
-function JR3D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0)
-    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact)
+function JR3D.DYREL(::Type{CUDABackend}, nx::Integer, ny::Integer, nz::Integer; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true)
+    return DYREL((nx, ny, nz); ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
 end
 
+function JR3D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; ϵ = 1.0e-6, ϵ_vel = 1.0e-6, CFL = 0.99, c_fact = 0.5, γfact = 20.0, global_penalty = true)
+    return DYREL(stokes, rheology, phase_ratios, di, dt; ϵ = ϵ, ϵ_vel = ϵ_vel, CFL = CFL, c_fact = c_fact, γfact = γfact, global_penalty = global_penalty)
+end
+
+function JR3D.update_α_β!(βVx::CuArray, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+    return update_α_β!(βVx, βVy, βVz, αVx, αVy, αVz, dτVx, dτVy, dτVz, cVx, cVy, cVz)
+end
+
+function JR3D.update_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_α_β!(dyrel)
+end
+
+function JR3D.update_dτV_α_β!(dτVx::CuArray, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+    return update_dτV_α_β!(dτVx, dτVy, dτVz, βVx, βVy, βVz, αVx, αVy, αVz, cVx, cVy, cVz, λmaxVx, λmaxVy, λmaxVz, CFL_v)
+end
+
+function JR3D.update_dτV_α_β!(dyrel::JustRelax.DYREL{<:CuArray})
+    return update_dτV_α_β!(dyrel)
+end
+
+function JR3D.apply_free_surface_diagonal!(Dz::CuArray, λmaxVz::CuArray, ρgz::CuArray, di_center, dt)
+    return apply_free_surface_diagonal!(Dz, λmaxVz, ρgz, di_center, dt)
+end
 
 function JR3D.ThermalArrays(::Type{CUDABackend}, ni::NTuple{N, Number}) where {N}
     return ThermalArrays(ni...)
@@ -266,10 +311,6 @@ function JR3D.compute_viscosity!(
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
 end
 
-function JR3D.compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
-    return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
-end
-
 function compute_viscosity!(::CUDABackendTrait, stokes, ν, args, rheology, cutoff, fn_viscosity::F) where {F}
     return _compute_viscosity!(stokes, ν, args, rheology, cutoff, fn_viscosity)
 end
@@ -278,10 +319,6 @@ function compute_viscosity!(
         ::CUDABackendTrait, stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity::F
     ) where {F}
     return _compute_viscosity!(stokes, ν, phase_ratios, args, rheology, air_phase, cutoff, fn_viscosity)
-end
-
-function compute_viscosity!(η, ν, εII::CuArray, args, rheology, cutoff)
-    return compute_viscosity!(η, ν, εII, args, rheology, cutoff)
 end
 
 ## Stress
@@ -310,14 +347,19 @@ function JR3D.compute_ρg!(ρg::Union{CuArray, NTuple{N, CuArray}}, rheology, ar
     return compute_ρg!(ρg, rheology, args)
 end
 function JR3D.compute_ρg!(
-        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios::JustPIC.PhaseRatios, rheology, args
+        ρg::Union{CuArray, NTuple{N, CuArray}},
+        phase_ratios::JustPIC.PhaseRatios,
+        rheology,
+        args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 function JR3D.compute_ρg!(
-        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios, rheology, args
+        ρg::Union{CuArray, NTuple{N, CuArray}}, phase_ratios, rheology, args;
+        air_phase::Integer = 0,
     ) where {N}
-    return compute_ρg!(ρg, phase_ratios, rheology, args)
+    return compute_ρg!(ρg, phase_ratios, rheology, args; air_phase)
 end
 
 ## Melt fraction
@@ -365,9 +407,16 @@ function shear2center!(::CUDABackendTrait, A::JustRelax.SymmetricTensor)
 end
 
 function JR3D.vertex2center!(
-        center::T, vertex::T; ghost_x::Bool = false, ghost_y::Bool = false, ghost_z::Bool = false
+        center::T,
+        vertex::T;
+        ghost_x::Bool = false,
+        ghost_y::Bool = false,
+        ghost_z::Bool = false,
+        periodic_x::Bool = false,
+        periodic_y::Bool = false,
+        periodic_z::Bool = false,
     ) where {T <: CuArray}
-    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z)
+    return vertex2center!(center, vertex; ghost_x, ghost_y, ghost_z, periodic_x, periodic_y, periodic_z)
 end
 
 function JR3D.center2vertex!(vertex::T, center::T) where {T <: CuArray}
@@ -418,6 +467,26 @@ function JR3D.solve_VariationalStokes!(::CUDABackendTrait, stokes, args...; kwar
     return _solve_VS!(stokes, args...; kwargs...)
 end
 
+function JR3D.compute_viscosity!(::CUDABackendTrait, stokes, ν, phases, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn::F) where {F}
+    return _compute_viscosity!(stokes, ν, phases, ϕ, args, rheology, air_phase, cutoff, fn)
+end
+
+function compute_viscosity!(::CUDABackendTrait, stokes, ν, phases, ϕ::JustRelax.RockRatio, args, rheology, air_phase, cutoff, fn::F) where {F}
+    return _compute_viscosity!(stokes, ν, phases, ϕ, args, rheology, air_phase, cutoff, fn)
+end
+
+function JR3D.solve_VariationalDYREL!(::CUDABackendTrait, stokes, args...; kwargs)
+    return _solve_VariationalDYREL!(stokes, args...; kwargs...)
+end
+
+function JR3D.DYREL(::Type{CUDABackend}, stokes::JustRelax.StokesArrays, rheology, phase_ratios, ϕ::JustRelax.RockRatio, di, dt; kwargs...)
+    return DYREL(stokes, rheology, phase_ratios, ϕ, di, dt; kwargs...)
+end
+
+function JR3D.solve_DYREL!(::CUDABackendTrait, stokes, args...; kwargs)
+    return _solve_DYREL!(stokes, args...; kwargs...)
+end
+
 function JR3D.heatdiffusion_PT!(::CUDABackendTrait, thermal, args...; kwargs)
     return _heatdiffusion_PT!(thermal, args...; kwargs...)
 end
@@ -429,14 +498,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDA.CUDABackend},
+        dt₀,
         phases::JustPIC.PhaseRatios,
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     )
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -445,14 +515,15 @@ end
 
 function JR3D.subgrid_characteristic_time!(
         subgrid_arrays,
-        particles,
-        dt₀::CuArray,
+        particles::Particles{CUDA.CUDABackend},
+        dt₀,
         phases::AbstractArray{Int, N},
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
     ) where {N}
     ni = size(stokes.P)
+    size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
         dt₀, phases, rheology, thermal.T, stokes.P, particles.di.vertex
     )
@@ -463,7 +534,7 @@ end
 
 function JR3D.compute_shear_heating!(::CUDABackendTrait, thermal, stokes, rheology, dt)
     ni = size(thermal.shear_heating)
-    @parallel (ni) compute_shear_heating_kernel!(
+    @parallel (@idx ni) compute_shear_heating_kernel!(
         thermal.shear_heating,
         @tensor_center(stokes.τ),
         @tensor_center(stokes.τ_o),
@@ -513,18 +584,12 @@ end
 # stress rotation on particles
 
 function JR3D.rotate_stress_particles!(
-        τ::NTuple, ω::NTuple, particles::Particles{CUDABackend}, dt; method::Symbol = :matrix
+        τ::NTuple, ω::NTuple, particles::Particles{CUDA.CUDABackend}, dt; method = nothing
     )
-    fn = if method === :matrix
-        rotate_stress_particles_rotation_matrix!
-
-    elseif method === :jaumann
-        rotate_stress_particles_jaumann!
-
-    else
-        error("Unknown method: $method. Valid methods are :matrix and :jaumann")
-    end
-    @parallel (@idx size(particles.index)) fn(τ..., ω..., particles.index, dt)
+    warn_rotation_method(method)
+    @parallel (@idx size(particles.index)) rotate_stress_particles_GeoParams!(
+        τ..., ω..., particles.index, dt
+    )
 
     return nothing
 end
@@ -539,14 +604,14 @@ function JR3D.update_rock_ratio!(
 end
 
 function JR3D.stress2grid!(
-        stokes, τ_particles::JustRelax.StressParticles{CUDABackend}, particles
+        stokes, τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, particles
     )
     stress2grid!(stokes, τ_particles, particles)
     return nothing
 end
 
 function JR3D.rotate_stress!(
-        τ_particles::JustRelax.StressParticles{CUDABackend}, stokes, particles, dt
+        τ_particles::JustRelax.StressParticles{CUDA.CUDABackend}, stokes, particles, dt
     )
     rotate_stress!(τ_particles, stokes, particles, dt)
     return nothing
@@ -555,7 +620,7 @@ end
 # Phase ratios with arrays
 
 function JR3D.update_phase_ratios_3D!(
-        phase_ratios::JustPIC.PhaseRatios{CUDABackend, T},
+        phase_ratios::JustPIC.PhaseRatios{CUDA.CUDABackend, T},
         phase_arrays::NTuple{N, CuArray{U, 3}},
         xci,
         xvi

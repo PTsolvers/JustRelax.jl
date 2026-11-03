@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -11,15 +11,15 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using ParallelStencil
 import ImplicitGlobalGrid
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 function run_pvtk_MPI()

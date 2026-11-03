@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax3D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -32,7 +32,7 @@ end
 # Load script dependencies
 # const backend = CPUBackend
 
-using Printf, GeoParams, CairoMakie, CellArrays
+using Printf, GeoParams, CairoMakie
 
 # const backend_JP = JustPIC.CPU
 
@@ -177,7 +177,7 @@ function main(igg; nx = 64, ny = 64, nz = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
 
-    pc = [argmax(p) for p in Array(phase_ratios.center)]
+    pc = [argmax(p) for p in to_cpu(phase_ratios.center)]
     while t < tmax
         # Stokes solver ----------------
         solve!(

@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -34,18 +34,6 @@ import JustPIC.GridGeometryUtils as GGU
 
 using GeoParams
 using CairoMakie
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
-end
 
 function init_phases!(phases, particles)
     ni = size(phases)
@@ -167,7 +155,7 @@ function main(igg, nx, ny)
     ρg = @zeros(ni...), @zeros(ni...)
     args = (; T = thermal.T, P = stokes.P, dt = Inf)
     compute_ρg!(ρg, phase_ratios, rheology, (T = thermal.T, P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf); air_phase = air_phase)
 
     # Boundary conditions
@@ -200,6 +188,7 @@ function main(igg, nx, ny)
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
@@ -214,12 +203,13 @@ function main(igg, nx, ny)
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (), ())
 
-        # advect marker chain
+        # Filter against the new surface before injection.
         semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (), ())
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

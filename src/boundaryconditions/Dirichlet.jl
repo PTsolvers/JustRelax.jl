@@ -33,6 +33,8 @@ Adapt.@adapt_structure ConstantArray
 
 Base.getindex(A::ConstantArray, ::Vararg{Int, N}) where {N} = A.val
 Base.setindex!(::ConstantArray, ::Any, ::Vararg{Int, N}) where {N} = nothing
+# Broadcast as the scalar it holds, so whole-array masking works on any backend.
+Base.broadcastable(A::ConstantArray) = A.val
 function Base.show(io::IO, ::MIME"text/plain", A::ConstantArray{T}) where {T}
     println(io, "ConstantArray{$T}:")
     return println(io, "  ", A.val)

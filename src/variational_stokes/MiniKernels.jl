@@ -17,14 +17,43 @@ Base.@propagate_inbounds @inline _d_ya(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) 
 Base.@propagate_inbounds @inline _d_za(A::T, ϕ::T, _dz, I::Vararg{Integer, N}) where {N, T} =
     (-center(A, ϕ, I...) + top(A, ϕ, I...)) * _dz
 
-Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, I::Vararg{Integer, N}) where {N, T} =
+Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, I::Vararg{Integer, 2}) where {T} =
     (-front(A, ϕ, I...) + next(A, ϕ, I...)) * _dx
 
-Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) where {N, T} =
+Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, I::Vararg{Integer, 2}) where {T} =
     (-right(A, ϕ, I...) + next(A, ϕ, I...)) * _dy
 
-Base.@propagate_inbounds @inline _d_zi(A::T, ϕ::T, _dz, I::Vararg{Integer, N}) where {N, T} =
-    (-top(A, ϕ, I...) + next(A, ϕ, I...)) * _dz
+# In 3D the forward neighbour of a `_d_xi`/`_d_yi`/`_d_zi` stencil is the diagonal corner
+# `next`, and the near point is offset in the other two directions, as in the unmasked 3D
+# methods in `src/MiniKernels.jl`.
+Base.@propagate_inbounds @inline _d_xi(A::T, ϕ::T, _dx, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i, j + 1, k + 1) + next(A, ϕ, i, j, k)) * _dx
+
+Base.@propagate_inbounds @inline _d_yi(A::T, ϕ::T, _dy, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i + 1, j, k + 1) + next(A, ϕ, i, j, k)) * _dy
+
+Base.@propagate_inbounds @inline _d_zi(A::T, ϕ::T, _dz, i::I, j::I, k::I) where {T, I <: Integer} =
+    (-center(A, ϕ, i + 1, j + 1, k) + next(A, ϕ, i, j, k)) * _dz
+
+# Masked counterparts of `_d_xa_wrap` / `_av_xa_wrap` and friends: the forward neighbour along a
+# direction that may wrap, with both the field and its volume fraction taken at that neighbour.
+# `A` and `ϕ` are the same shape here (both cell-centred), so they wrap together. They agree with
+# the unwrapped versions wherever the forward neighbour is in range.
+Base.@propagate_inbounds @inline _masked_next_wrap(
+    A::T, ϕ::T, ::Val{d}, I::NTuple{N, Integer}
+) where {T, N, d} = _next_wrap(A, Val(d), I) * _next_wrap(ϕ, Val(d), I)
+
+Base.@propagate_inbounds @inline _d_xa_wrap(A::T, ϕ::T, _dx, I::Vararg{Integer, N}) where {N, T} =
+    (-center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(1), I)) * _dx
+
+Base.@propagate_inbounds @inline _d_ya_wrap(A::T, ϕ::T, _dy, I::Vararg{Integer, N}) where {N, T} =
+    (-center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(2), I)) * _dy
+
+Base.@propagate_inbounds @inline _av_xa_wrap(A::T, ϕ::T, I::Vararg{Integer, N}) where {N, T} =
+    (center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(1), I)) * 0.5
+
+Base.@propagate_inbounds @inline _av_ya_wrap(A::T, ϕ::T, I::Vararg{Integer, N}) where {N, T} =
+    (center(A, ϕ, I...) + _masked_next_wrap(A, ϕ, Val(2), I)) * 0.5
 
 # averages 2D
 Base.@propagate_inbounds @inline _av(A::T, ϕ::T, i, j) where {T <: T2} =
@@ -61,14 +90,6 @@ Base.@propagate_inbounds @inline _av_ya(A::T, ϕ::T, I::Vararg{Integer, 3}) wher
 Base.@propagate_inbounds @inline _av_za(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
     (center(A, ϕ, I...) + top(A, ϕ, I...)) * 0.5
 
-Base.@propagate_inbounds @inline _av_xi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (front(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_yi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (right(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
-
-Base.@propagate_inbounds @inline _av_zi(A::T, ϕ::T, I::Vararg{Integer, 3}) where {T <: T3} =
-    (top(A, ϕ, I...) + next(A, ϕ, I...)) * 0.5
 
 ## Because mymaskedsum(::generator) does not work inside CUDA kernels...
 Base.@propagate_inbounds @inline mymaskedsum(A::AbstractArray, ϕ::AbstractArray, ranges::Vararg{T, N}) where {T, N} =

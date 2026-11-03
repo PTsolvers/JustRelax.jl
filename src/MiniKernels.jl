@@ -57,6 +57,35 @@ Base.@propagate_inbounds @inline _d_zi(A, _dz, i::I, j::I, k::I) where {I <: Int
 Base.@propagate_inbounds @inline div(Ax, Ay, _dx, _dy, I::Vararg{Integer, 2}) =
     _d_xi(Ax, _dx, I...) + _d_yi(Ay, _dy, I...)
 
+# Neighbour of cell `i` in the direction the momentum row at `i` differences, on an array of `n`
+# cells. Momentum rows run to `i = n` only in a periodic direction, where that last row is the
+# seam face whose forward neighbour is the first cell; otherwise `i < n` and this is `i + 1`.
+Base.@propagate_inbounds @inline wrap_next(i::Integer, n::Integer) = ifelse(i == n, oneunit(i), i + oneunit(i))
+
+# Value of `A` at the forward neighbour of `I` along direction `d`, wrapping onto the first cell
+# when `I[d]` is the last one.
+Base.@propagate_inbounds @inline function _next_wrap(
+        A::AbstractArray{T, N}, ::Val{d}, I::NTuple{N, Integer}
+    ) where {T, N, d}
+    J = ntuple(n -> n == d ? wrap_next(I[n], size(A, n)) : I[n], Val(N))
+    return A[J...]
+end
+
+# Forward differences and averages of a cell-centred field along a direction that may wrap. They
+# agree with `_d_xa` / `_av_xa` and friends wherever the forward neighbour is in range.
+Base.@propagate_inbounds @inline _d_xa_wrap(A, _dx, I::Vararg{Integer, N}) where {N} =
+    (-A[I...] + _next_wrap(A, Val(1), I)) * _dx
+Base.@propagate_inbounds @inline _d_ya_wrap(A, _dy, I::Vararg{Integer, N}) where {N} =
+    (-A[I...] + _next_wrap(A, Val(2), I)) * _dy
+Base.@propagate_inbounds @inline _d_za_wrap(A, _dz, I::Vararg{Integer, 3}) =
+    (-A[I...] + _next_wrap(A, Val(3), I)) * _dz
+Base.@propagate_inbounds @inline _av_xa_wrap(A, I::Vararg{Integer, N}) where {N} =
+    (A[I...] + _next_wrap(A, Val(1), I)) * 0.5
+Base.@propagate_inbounds @inline _av_ya_wrap(A, I::Vararg{Integer, N}) where {N} =
+    (A[I...] + _next_wrap(A, Val(2), I)) * 0.5
+Base.@propagate_inbounds @inline _av_za_wrap(A, I::Vararg{Integer, 3}) =
+    (A[I...] + _next_wrap(A, Val(3), I)) * 0.5
+
 # averages
 Base.@propagate_inbounds @inline _av(A::T, i, j) where {T <: T2} =
     0.25 * mysum(A, (i + 1):(i + 2), (j + 1):(j + 2))

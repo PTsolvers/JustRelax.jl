@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -33,7 +33,7 @@ end
 using GeoParams, CairoMakie
 
 # Load file with all the rheology configurations
-include("Layered_rheology.jl")
+include(joinpath(@__DIR__, "Layered_rheology.jl"))
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
 
@@ -44,18 +44,6 @@ function copyinn_x!(A, B)
     end
 
     return @parallel f_x(A, B)
-end
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-# Initial pressure profile - not accurate
-@parallel function init_P!(P, ρg, z)
-    @all(P) = abs(@all(ρg) * @all_j(z)) * <(@all_j(z), 0.0)
-    return nothing
 end
 
 # Initial thermal profile
@@ -142,7 +130,10 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Elliptical temperature anomaly
     xc_anomaly = lx / 2    # origin of thermal anomaly
@@ -177,7 +168,7 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], phase_ratios, rheology, args)
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     # Rheology
@@ -221,22 +212,21 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         fig
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
 
     local Vx_v, Vy_v
     if do_vtk
         Vx_v = @zeros(ni .+ 1...)
         Vy_v = @zeros(ni .+ 1...)
     end
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     while t < nondimensionalize(5.0e6yr, CharDim) # run only for 5 Myrs
 
         # interpolate fields from particles to centroids
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         # ------------------------------
 
@@ -260,6 +250,9 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         )
         tensor_invariant!(stokes.ε)
         dt = compute_dt(stokes, di, dt_diff)
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # ------------------------------
 
         # Thermal solver ---------------
@@ -282,9 +275,14 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -294,9 +292,20 @@ function main2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", do_vtk = f
         # advect particles in memory
         move_particles!(particles, particle_args)
         # check if we need to inject particles
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
+        # vertex normal stresses for the injection (this solver does not update them)
+        center2vertex!(stokes.τ.xx_v, stokes.τ.xx)
+        center2vertex!(stokes.τ.yy_v, stokes.τ.yy)
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
 
         @show it += 1
         t += dt

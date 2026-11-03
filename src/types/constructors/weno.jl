@@ -1,8 +1,14 @@
+"""
+    WENO5(backend, method::Val, ni::NTuple)
+    WENO5(method::Val, ni::NTuple)
+
+Allocate a [`WENO5`](@ref) advection scheme state for a grid of size `ni`. `method` selects
+the smoothness-indicator variant: `Val(1)` for Jiang-Shu, `Val(2)` for the Z-variant.
+"""
 function WENO5(::Type{CPUBackend}, method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     return WENO5(method, tuple(ni...))
 end
 
-# Define the WENO5 constructor
 function WENO5(method::Val{T}, ni::NTuple{N, Integer}) where {N, T}
     d0L = 1 / 10
     d1L = 3 / 5

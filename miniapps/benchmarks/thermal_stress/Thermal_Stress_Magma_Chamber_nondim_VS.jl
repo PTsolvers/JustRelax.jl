@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -41,17 +41,6 @@ function copyinn_x!(A, B)
     end
 
     return @parallel f_x(A, B)
-end
-
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z, sticky_air)
-    @all(P) = abs(@all(ρg) * (@all_j(z) - sticky_air)) #* <(@all_j(z), 0.0)
-    return nothing
 end
 
 function init_phases!(phases, particles, xc_anomaly, yc_anomaly, r_anomaly, sticky_air, top, bottom)
@@ -278,7 +267,10 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
     grid_vxi = grid_vx, grid_vy = velocity_grids(xci, xvi, di)
     # temperature
     pT, pPhases = init_cell_arrays(particles, Val(2))
-    particle_args = (pT, pPhases)
+    # particle fields for the stress rotation
+    pτ = StressParticles(particles)
+    particle_args = (pT, pPhases, unwrap(pτ)...)
+    particle_args_reduced = (pT, unwrap(pτ)...)
 
     # Circular temperature anomaly -----------------------
     x_anomaly = lx * 0.5
@@ -393,6 +385,8 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         fig
     end
 
+    dt₀ = similar(thermal.T)
+
     # Time loop
     t, it = 0.0, 0
     local Vx_v, Vy_v
@@ -401,9 +395,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         Vy_v = @zeros(ni .+ 1...)
     end
 
-    T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
-    centroid2particle!(pT, T_buffer, particles)
+    centroid2particle!(pT, thermal.T, particles)
     @copy stokes.P0 stokes.P
     thermal.Told .= thermal.T
     P_init = deepcopy(stokes.P)
@@ -428,6 +420,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         dt,
         igg;
         kwargs = (;
+            air_phase = air_phase,
             iterMax = 100.0e3,
             free_surface = true,
             nout = 2.5e3,
@@ -455,6 +448,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             dt,
             igg;
             kwargs = (;
+                air_phase = air_phase,
                 iterMax = 100.0e3,
                 free_surface = true,
                 nout = 2.5e3,
@@ -466,6 +460,9 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         dt = compute_dt(stokes, di, dt_max, igg) * 0.95
+
+        # rotate stresses
+        rotate_stress!(pτ, stokes, particles, dt)
         # --------------------------------
 
         compute_shear_heating!(
@@ -496,9 +493,14 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
-            pT, T_buffer, thermal.ΔT, subgrid_arrays, particles, dt
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt
         )
         # ------------------------------
 
@@ -507,16 +509,28 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
+
+        # Enforce the new marker-chain surface before replenishing particles.
+        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase, (pT,))
+
         # check if we need to inject particles
         # inject_particles_phase!(particles, pPhases, (), ())
-        inject_particles_phase!(particles, pPhases, (pT,), (thermal.T,))
-
-        # advect marker chain
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+        # vertex normal stresses for the injection (this solver does not update them)
+        center2vertex!(stokes.τ.xx_v, stokes.τ.xx)
+        center2vertex!(stokes.τ.yy_v, stokes.τ.yy)
+        inject_particles_phase!(
+            particles,
+            pPhases,
+            particle_args_reduced,
+            (thermal.T, stress_fields(stokes, pτ)...),
+        )
 
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)
+
+        # interpolate stress back to the grid
+        stress2grid!(stokes, pτ, particles)
         compute_rock_fraction!(ϕ_R, chain, xvi, di)
 
         # Add thermal perturbation at regular intervals
@@ -526,8 +540,7 @@ function main2D(igg; εbg_0 = 0.0e0, linear_rheology = true, figdir = figdir, nx
             pulse_timer = 0.0e0
             println("Kaboom! Thermal pulse added at t = $(dimensionalize(t, yr, CharDim).val) yrs")
         end
-        particle2centroid!(T_buffer, pT, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
-        @views thermal.T[2:(end - 1), 2:(end - 1)] .= T_buffer
+        particle2centroid!(thermal.T, pT, particles)
         thermal_bcs!(thermal, thermal_bc)
         thermal.ΔT .= thermal.T .- thermal.Told
 

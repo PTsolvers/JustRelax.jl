@@ -1,61 +1,68 @@
 # Installation
 
-[JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) is a registered package and can be added as follows:
+JustRelax requires Julia 1.10 or later. Install the registered release from the Julia REPL:
 
 ```julia
-using Pkg; Pkg.add("JustRelax")
-```
-or
-```julia-repl
-julia> ]
-
-(@v1.xx) pkg> add JustRelax
-```
-
-!!! info "Install from a specific branch"
-    However, as the API is changing and not every new feature leads to a new release, one can also clone the main branch of the repository:
-    ```julia
-    add JustRelax#main
-    ```
-
-If you downloaded or cloned the repository manually, you need to instantiate the package to install all dependencies. Navigate to the directory where you have JustRelax.jl and run:
-```julia
-julia> ]
-(@v1.xx) pkg> instantiate
-```
-
-
-After installation, you can test the package by running the following commands:
-```julia-repl
+using Pkg
+Pkg.add("JustRelax")
 using JustRelax
-
-julia> ]
-
-(@v1.xx) pkg> test JustRelax
 ```
-The test will take a while, so grab a ☕️ or 🍵
 
-!!! info "Testing a development version of JustRelax"
-    If you plan on developing JustRelax.jl and/or modifying the source code, you can test your local version by running the testing framework again
-    ```julia
-    julia> ]
-    (@v1.xx) pkg> test JustRelax
-    ```
+To use the unreleased main branch instead:
 
-# Running the miniapps
-
-Available benchmarks and examples can be found in the `miniapps/` folder. These scripts are simple and easy to understand, providing a good basis for more complex applications. These miniapps have their own environment and dependencies, defined in `miniapps/Project.toml`, so they need to be instantiated separately. If you cloned the repository, navigate to `path/to/JustRelax.jl/` and run:
-```julia-repl
-julia> ]
-(@v1.xx) pkg> activate miniapps
-
-(@v1.xx) pkg> instantiate
-```
-After that, you can run any of the miniapps, for example:
 ```julia
-julia> using JustRelax
-
-julia> include("miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl")
+Pkg.add(url = "https://github.com/PTsolvers/JustRelax.jl", rev = "main")
 ```
 
-If JustRelax.jl is installed via the package manager, the dependencies that are exclusive to the miniapps should be added manually.
+See [Selecting the backend](@ref) for CPU and GPU setup, then follow the
+[Getting started example](./diffusion2D_periodic.md).
+
+## Working with a local checkout
+
+After cloning the repository, run these commands from its root directory.
+Activating the project ensures that Julia loads the local source and installs
+its dependencies into the correct environment:
+
+```sh
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+julia --project=. --startup-file=no -e 'using JustRelax; println("loaded")'
+```
+
+## Testing
+
+To test the installed package from Julia:
+
+```julia
+using Pkg
+Pkg.test("JustRelax")
+```
+
+To test a local checkout from its root directory:
+
+```sh
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
+```
+
+The full suite can take some time and includes MPI tests. See
+[Contributing](@ref) for focused tests and backend-specific commands.
+
+## Running the miniapps
+
+The `miniapps/` folder contains examples and benchmarks with a separate
+project environment. From the repository root, register the local checkout in
+that environment and install its dependencies:
+
+```sh
+julia --project=miniapps --startup-file=no -e 'using Pkg; Pkg.develop(path = "."); Pkg.instantiate()'
+```
+
+Then run an example in the same environment:
+
+```sh
+julia --project=miniapps --startup-file=no miniapps/benchmarks/stokes2D/shear_band/ShearBand2D.jl
+```
+
+Check the script's backend selection and resolution before running it; some
+miniapps require GPU hardware, MPI, or graphics support. Use a clone of the
+repository when working with these examples so their relative data and helper
+paths remain intact.

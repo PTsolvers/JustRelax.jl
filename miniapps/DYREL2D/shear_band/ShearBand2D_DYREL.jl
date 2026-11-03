@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -174,6 +174,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (;
+                anderson_PH = 3,
                 verbose_PH = true,
                 verbose_DR = false,
                 iterMax = 50.0e3,

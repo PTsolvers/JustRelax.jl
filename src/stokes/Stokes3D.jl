@@ -15,12 +15,62 @@ function update_τ_o!(stokes::JustRelax.StokesArrays)
 end
 
 ## 3D VISCO-ELASTIC STOKES SOLVER
+
+"""
+    solve!(stokes::StokesArrays, pt_stokes, grid, flow_bcs, ρg, phase_ratios, rheology, args, dt, igg; kwargs...)
+
+Solve the 3D viscoelastoplastic Stokes equations to pseudo-transient convergence, updating
+`stokes` (velocity, pressure, stress, viscosity) in place for one physical time step `dt`.
+This is the general, multi-phase call form used by most models; dispatch on the type of
+the sixth argument also accepts, for simpler/benchmark setups:
+- a single-phase `rheology::GeoParams.MaterialParams` in place of `phase_ratios`/`rheology`
+  (drop the `phase_ratios` argument), or
+- constant `K, G` (bulk and shear modulus) fields in place of `phase_ratios`/`rheology`/`args`,
+  for linear viscoelastic problems with no material rheology.
+`grid` may also be replaced by the grid spacing `di` alone (a `NTuple`/`NamedTuple`).
+
+# Arguments
+- `stokes`: solver state allocated with `StokesArrays`.
+- `pt_stokes`: pseudo-transient coefficients, e.g. from `PTStokesCoeffs`.
+- `grid`: the model `Geometry`.
+- `flow_bcs`: velocity/displacement boundary conditions.
+- `ρg`: buoyancy forcing `(ρgx, ρgy, ρgz)`.
+- `phase_ratios`: per-cell/per-node phase fractions (a `JustPIC.PhaseRatios`).
+- `rheology`: one `GeoParams.MaterialParams` per phase.
+- `args`: auxiliary fields (e.g. temperature `T`, pressure `P`) used by the constitutive updates.
+- `dt`: physical time step.
+- `igg`: the distributed-grid context (`IGG`).
+
+# Keyword arguments
+- `iterMax = 10e3`: maximum pseudo-transient iterations.
+- `nout = 500`: check convergence every `nout` iterations.
+- `viscosity_relaxation = 1e-2`: relaxation factor for nonlinear viscosity updates.
+- `viscosity_cutoff = (-Inf, Inf)`: clamp bounds for the effective viscosity.
+- `λ_relaxation = 0.2`: relaxation factor for the plastic multiplier.
+- `b_width = (4, 4, 4)`: halo width used when overlapping communication and computation.
+- `verbose = true`: print convergence progress.
+
+Dispatches on the CPU/CUDA/AMDGPU backend selected by `stokes`.
+"""
 function solve!(stokes::JustRelax.StokesArrays, args...; kwargs)
+    reject_periodic_bcs(flow_bcs_of(args), "the 3D `solve!` pseudo-transient solver")
+    reject_incompressible_cap(rheology_of(args), "the 3D `solve!` pseudo-transient solver")
     return solve!(backend(stokes), stokes, args...; kwargs)
 end
 
 # entry point for extensions
 solve!(::CPUBackendTrait, stokes, args...; kwargs) = _solve!(stokes, args...; kwargs...)
+
+# The 3D kernels take every derivative with `_di.center`, indexed by cell. On a nonuniform
+# grid that vector holds one spacing fewer than there are cells.
+function require_uniform_spacing(grid::Geometry{3}, solver)
+    grid._di.center isa NTuple{3, Number} || throw(
+        ArgumentError(
+            "$solver supports only uniform grids in 3D; build `grid` with `Geometry(ni, li; origin)`"
+        )
+    )
+    return nothing
+end
 
 function _solve!(
         stokes::JustRelax.StokesArrays,
@@ -47,6 +97,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η) = stokes.viscosity
@@ -229,6 +280,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -238,7 +290,7 @@ function _solve!(
 
     # errors
     err_it1 = 1.0
-    1.0
+    err = 1.0
     iter = 0
     cont = 0
     err_evo1 = Float64[]
@@ -255,8 +307,8 @@ function _solve!(
     θ = @zeros(ni...)
 
     # compute buoyancy forces and viscosity
-    compute_ρg!(ρg, phase_ratios, rheology, args)
-    compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
+    compute_ρg!(ρg, rheology, args)
+    compute_viscosity!(stokes, args, rheology, viscosity_cutoff)
 
     # convert displacement to velocity
     displacement2velocity!(stokes, dt, flow_bcs)
@@ -277,12 +329,12 @@ function _solve!(
                 stokes.Q,
                 ητ,
                 Kb,
+                G,
                 dt,
                 pt_stokes.r,
                 pt_stokes.θ_dτ,
-                args
             )
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
@@ -291,7 +343,6 @@ function _solve!(
 
             update_viscosity_τII!(
                 stokes,
-                phase_ratios,
                 args,
                 rheology,
                 viscosity_cutoff;
@@ -305,26 +356,20 @@ function _solve!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
+                stokes.ε_vol_pl,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 θ,
                 η,
-                @ones(ni...),
+                η_vep,
                 λ,
                 tupleize(rheology), # needs to be a tuple
                 dt,
                 pt_stokes.θ_dτ,
                 args,
             )
-
-            @parallel (@idx ni .+ 1) compute_τ_vertex!(
-                @shear(stokes.τ)...,
-                @shear(stokes.τ_o)...,
-                @shear(stokes.ε)...,
-                η_vep,
-                G,
-                dt,
-                pt_stokes.θ_dτ,
-            )
+            center2vertex!(@shear(stokes.τ)..., @shear_center(stokes.τ)...)
+            update_halo!(@shear(stokes.τ)...)
 
             @hide_communication b_width begin # communication/computation overlap
                 @parallel compute_V!(
@@ -400,7 +445,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays
@@ -409,6 +454,7 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))
@@ -474,6 +520,7 @@ function _solve!(
     di = grid.di
     _di = grid._di
     di = di isa NamedTuple ? di.center : di
+    require_uniform_spacing(grid, "`solve!`")
     _di = _di isa NamedTuple ? _di.center : _di
     ni = size(stokes.P)
     (; η, η_vep) = stokes.viscosity
@@ -530,7 +577,7 @@ function _solve!(
                 args,
             )
 
-            @parallel (@idx ni) compute_strain_rate!(
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
                 stokes.∇V, @strain(stokes)..., @velocity(stokes)..., _di
             )
 
@@ -546,9 +593,9 @@ function _solve!(
                 viscosity_cutoff;
                 relaxation = viscosity_relaxation,
             )
-            # update_stress!(stokes, θ, λ, phase_ratios, rheology, dt, pt_stokes.θ_dτ)
 
-            @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
+            # Fixed 256-thread blocks avoid heuristic rounding above the GPU kernel limit.
+            @parallel (@idx ni .+ 1) cld.(ni .+ 1, (32, 8, 1)) (32, 8, 1) update_stresses_center_vertex_ps!(
                 @strain(stokes),
                 @plastic_strain(stokes),
                 stokes.EII_pl,
@@ -560,6 +607,7 @@ function _solve!(
                 (stokes.τ_o.yz, stokes.τ_o.xz, stokes.τ_o.xy),
                 θ,
                 stokes.P,
+                fluid_pressure(args, stokes.P),
                 stokes.viscosity.η,
                 λ,
                 (λv_yz, λv_xz, λv_xy),
@@ -639,7 +687,7 @@ function _solve!(
 
     # compute vorticity
     @parallel (@idx ni .+ 1) compute_vorticity!(
-        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., _di
+        stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
     # Interpolate shear components to cell center arrays
@@ -649,6 +697,10 @@ function _solve!(
 
     # accumulate plastic strain tensor
     accumulate_tensor!(stokes.EII_pl, stokes.ε_pl, dt)
+    stokes.λ .= λ
+    stokes.λv_yz .= λv_yz
+    stokes.λv_xz .= λv_xz
+    stokes.λv_xy .= λv_xy
     accumulate_vol!(stokes.EVol_pl, stokes.ε_vol_pl, dt)
 
     @parallel (@idx ni .+ 1) multi_copy!(@tensor(stokes.τ_o), @tensor(stokes.τ))

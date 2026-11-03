@@ -1,7 +1,7 @@
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D
@@ -79,6 +79,27 @@ end
             @test typeof(
                 TemperatureBoundaryConditions(; no_flux = inactive)
             ).parameters[end] == 2
+
+            # omitted faces are filled with `false`
+            bcs = TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (top = 273.0, bot = 1573.0),
+                periodic = (left = true, right = true),
+            )
+            @test bcs.constant_value == (
+                front = false, back = false, left = false, right = false, top = 273.0, bot = 1573.0,
+            )
+            @test bcs.periodic == (
+                front = false, back = false, left = true, right = true, top = false, bot = false,
+            )
+            @test_throws "unknown 2D thermal boundary face `bottom`" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (top = 273.0, bottom = 1573.0),
+            )
+            @test_throws "unknown 2D thermal boundary face `front`" TemperatureBoundaryConditions(;
+                no_flux = inactive,
+                constant_value = (front = 273.0,),
+            )
         end
 
         @testset "VelocityBoundaryConditions" begin
@@ -533,6 +554,12 @@ end
             @test JustRelax.apply_dirichlet(A, bc, 5, 5) == 5
             @test JustRelax.isdirichlet(bc, 1, 1) === false
             @test JustRelax.isdirichlet(bc, 5, 5) === true
+
+            B = JustRelax.apply_dirichlet(A, bc)
+            @test all(B[4:7, 4:7] .== 5)
+            @test B[1, 1] == A[1, 1]
+            JustRelax.apply_dirichlet!(A, bc)
+            @test A == B
 
             bc2 = JustRelax.ConstantDirichletBoundaryCondition()
 

@@ -16,7 +16,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend_JR = @static if isCUDA
-    CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend  # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend
 end
@@ -27,7 +27,7 @@ For this benchmark we will use particles to track the advection of the material 
 using JustPIC
 
 const backend_JP = @static if isCUDA
-    CUDA.CUDABackend # Options: JustPIC.CPU, CUDABackend, AMDGPU.ROCBackend
+    CUDA.CUDABackend # Options: JustPIC.CPU, CUDA.CUDABackend, AMDGPU.ROCBackend
 else
     JustPIC.CPU
 end

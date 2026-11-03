@@ -5,6 +5,67 @@ from the community. Please feel free to open [Issues](https://github.com/PTsolve
 beneficial to get in contact with one of the principal developers first (see
 [AUTHORS.md](AUTHORS.md)).
 
+## Getting set up
+
+Load the package from the repository root:
+
+```sh
+julia --project=. -e 'using JustRelax'
+```
+
+Run the test suite. `Pkg.test` builds the test environment from the root `Project.toml`; the CPU backend is the default:
+
+```sh
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
+```
+
+Pass options through `test_args`:
+
+- Test names select files by prefix (`test_diffusion2D` also runs `test_diffusion2D_multiphase`). The slow `test_stokes_burstedde` and `test_VanKeken` run only when named.
+- `--backend=CUDA` or `--backend=AMDGPU` runs on the GPU (requires the hardware).
+- Files with `MPI` in their name run afterwards under `mpiexec -n 2`, whatever names are given; `--no-mpi` skips them.
+
+```sh
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test("JustRelax"; test_args=["test_diffusion2D", "--no-mpi"])'
+```
+
+Run a single test file directly when iterating on a focused change (files that use `Suppressor` need `Pkg.test`):
+
+```sh
+JULIA_JUSTRELAX_BACKEND=CPU julia --project=. --startup-file=no test/test_types.jl
+```
+
+Try out example/benchmark scripts using the `miniapps` environment, e.g.:
+
+```sh
+julia --project=miniapps miniapps/subduction/2D/Subduction2D.jl
+```
+
+## Code style
+
+Julia files are formatted with [Runic.jl](https://github.com/fredrikekre/Runic.jl), and CI checks formatting on every pull request:
+
+```sh
+git runic main              # show formatting differences
+git runic --inplace .       # apply formatting
+```
+
+Format only the files your change touches, and review the resulting diff before committing.
+
+Kernels should stay backend-agnostic (CPU/CUDA/AMDGPU) and dimension-agnostic (2D/3D) where possible — see `src/common.jl` for where shared solver code lives, and the module structure in `src/JustRelax_CPU.jl` and `ext/`.
+
+## Documentation
+
+If your change affects a public type or function, add or update its docstring, and build the docs locally to check it renders:
+
+```sh
+julia --project=docs docs/make.jl
+```
+
+## Pull requests
+
+Use a descriptive PR title beginning with the appropriate tag, such as `[BUGFIX]`, `[ADDITION]`, or `[DOC]`. Explain the motivation for the change, and include relevant tests, miniapp updates, and documentation updates alongside it. Note any API compatibility considerations.
+
 [JustRelax.jl](https://github.com/PTsolvers/JustRelax.jl) and its contributions are licensed under the MIT license. As a contributor, you certify that all your
 contributions are in conformance with the *Developer Certificate of Origin
 (Version 1.1)*, which is reproduced below.

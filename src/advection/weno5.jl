@@ -177,7 +177,7 @@ end
 
 ## WENO-5 ADVECTION
 """
-    WENO_advection!(u, Vxi, weno, di, ni, dt)
+    WENO_advection!(u, Vxi, weno, di, dt)
 
 Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) scheme for the solution of hyperbolic partial differential equations.
 
@@ -186,7 +186,6 @@ Perform the advection step of the Weighted Essentially Non-Oscillatory (WENO) sc
 - `Vxi`: velocity field.
 - `weno`: structure containing the WENO scheme parameters and temporary variables.
 - `di`: grid spacing.
-- `ni`: number of grid points.
 - `dt`: time step.
 
 # Description

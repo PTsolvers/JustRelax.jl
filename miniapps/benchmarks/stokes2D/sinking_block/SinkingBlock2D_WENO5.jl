@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -93,17 +93,6 @@ function init_phases!(phases::AbstractArray, xc, yc, r, x, y)
 end
 
 
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z)
-    @all(P) = @all(ρg) * abs(@all_j(z))
-    return nothing
-end
-
 # # --------------------------------------------------------------------------------
 # BEGIN MAIN SCRIPT
 # --------------------------------------------------------------------------------
@@ -153,7 +142,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # update_phase_ratios!(phase_ratios, particles, pPhases)
 
     phases = @zeros(ni...)
-    # phases = Float64.([argmax(p) for p in Array(phase_ratios.center)])
+    # phases = Float64.([argmax(p) for p in to_cpu(phase_ratios.center)])
     weno = WENO5(backend, Val(2), ni) # ni.+1 for Temp
     init_phases!(phases, xc_anomaly, abs(yc_anomaly), r_anomaly, xci[1], xci[2])
 
@@ -174,11 +163,11 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     # Buoyancy forces
     ρg = @zeros(ni...), @zeros(ni...)
     compute_ρg!(ρg[2], phase_ratios, rheology, (T = @ones(ni...), P = stokes.P))
-    @parallel init_P!(stokes.P, ρg[2], xci[2])
+    compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     # ----------------------------------------------------
 
     # Viscosity
-    args = (; dt = dt, ΔT = @zeros(ni...))
+    args = (; dt = dt, ΔT = @zeros(ni .+ 2...))
     η_cutoff = -Inf, Inf
     compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
     # ----------------------------------------------------
@@ -193,7 +182,7 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
     it = 0 # iteration counter
     while it < 50
         # Stokes solver ----------------
-        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔT = @zeros(ni...))
+        args = (; T = @ones(ni...), P = stokes.P, dt = dt, ΔT = @zeros(ni .+ 2...))
         solve!(
             stokes,
             pt_stokes,
@@ -240,10 +229,10 @@ function sinking_block2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2D", t
         ax5 = Axis(fig[3, 1]; aspect = DataAspect(), title = "Phase ratio Vy")
         ax6 = Axis(fig[3, 3]; aspect = DataAspect(), title = "Density")
 
-        pp_c = [argmax(p) for p in Array(phase_ratios.center)]
-        pp_v = [argmax(p) for p in Array(phase_ratios.vertex)]
-        pp_Vx = [argmax(p) for p in Array(phase_ratios.Vx)]
-        pp_Vy = [argmax(p) for p in Array(phase_ratios.Vy)]
+        pp_c = [argmax(p) for p in to_cpu(phase_ratios.center)]
+        pp_v = [argmax(p) for p in to_cpu(phase_ratios.vertex)]
+        pp_Vx = [argmax(p) for p in to_cpu(phase_ratios.Vx)]
+        pp_Vy = [argmax(p) for p in to_cpu(phase_ratios.Vy)]
 
         h1 = heatmap!(ax1, (xvi ./ 1.0e3)..., Array(velocity), colormap = :vikO)
         Colorbar(fig[1, 2], h1)

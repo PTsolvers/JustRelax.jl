@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -10,24 +10,24 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 import JustPIC.GridGeometryUtils as GGU
 
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -115,14 +115,14 @@ function ShearBand2D_DPCap()
         ),
     )
 
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     radius = 0.1
     origin_c = 0.5, 0.5
     circle = GGU.Circle(origin_c, radius)
     init_phases!(phase_ratios, xci, xvi, circle)
 
     # STOKES ---------------------------------------------
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_abs = 1.0e-6, ϵ_rel = 1.0e-6, CFL = 0.95 / √2.1)
 
     ρg = @zeros(ni...), @zeros(ni...)
@@ -134,13 +134,14 @@ function ShearBand2D_DPCap()
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.V.Vx .= PTArray(backend_JR)([ x * εbg_x for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.V.Vy .= PTArray(backend_JR)([-y * εbg_y for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.V.Vx .= PTArray(backend)([ x * εbg_x for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.V.Vy .= PTArray(backend)([-y * εbg_y for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs)
     update_halo!(@velocity(stokes)...)
 
     t, it = 0.0, 0
     local iters
+    τII = similar(stokes.τ.II)
 
     # ~25 Maxwell-time steps are needed before τII reaches the yield envelope
     while it < 10
@@ -162,6 +163,9 @@ function ShearBand2D_DPCap()
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
+        # τII as the stress update left it, before `tensor_invariant!` recomputes it
+        # from the vertex-averaged shear stress
+        copyto!(τII, stokes.τ.II)
         tensor_invariant!(stokes.ε)
         tensor_invariant!(stokes.ε_pl)
         tensor_invariant!(stokes.τ)
@@ -169,6 +173,14 @@ function ShearBand2D_DPCap()
         it += 1
         t += dt
     end
+
+    # Converged states satisfy F(τII, P) = η_vp λ̇ where plastic and F ≤ 0 elsewhere
+    # (Popov et al., 2025, Eq. 42); both phases share `pl`.
+    P, λ = Array(stokes.P), Array(stokes.λ)
+    F = map(Array(τII), P) do s, p
+        compute_yieldfunction(pl; P = p, τII = s, EII = 0.0, Pf = 0.0, perturbation_C = 1.0)
+    end
+    active = λ .> 0
 
     finalize_global_grid(; finalize_MPI = true)
 
@@ -180,6 +192,9 @@ function ShearBand2D_DPCap()
         Pmax = maximum(Array(stokes.P)),
         EVol_max = maximum(abs, Array(stokes.EVol_pl)),
         ε_vol_extrema = extrema(Array(stokes.ε_vol_pl)),
+        n_active = count(active),
+        consistency = maximum(abs, F[active] .- η_reg .* λ[active]) / C,
+        F_elastic = maximum(F[.!active]) / C,
     )
 end
 
@@ -198,5 +213,8 @@ end
         # ε_vol_pl = -λ * dQ/dP; with ψ > 0, dQ/dP < 0, so ε_vol_pl ≥ 0 (dilation)
         @test out.ε_vol_extrema[1] ≥ 0.0
         @test out.ε_vol_extrema[2] > 0.0
+        @test out.n_active > 0
+        @test out.consistency < 1.0e-6
+        @test out.F_elastic < 1.0e-6
     end
 end

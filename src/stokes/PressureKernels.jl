@@ -25,24 +25,38 @@ end
     return nothing
 end
 
+# `ΔT` shares the ghosted layout of `thermal.T`; the pressure kernels read cell `I` at `I .+ 1`.
+check_ghosted_ΔT(::Nothing, ni) = nothing
+function check_ghosted_ΔT(ΔT::AbstractArray, ni)
+    size(ΔT) == ni .+ 2 || throw(
+        DimensionMismatch(
+            "ΔT must include ghost nodes: expected size $(ni .+ 2) (as `thermal.ΔT`), got $(size(ΔT))"
+        )
+    )
+    return nothing
+end
+
 """
-   compute_P!(P, P0, RP, ∇V, Q, ΔT, η, rheology::NTuple{N,MaterialParams}, phase_ratio::C, dt, r, θ_dτ)
+    compute_P!(P, P0, RP, ∇V, Q, η, rheology::NTuple{N,MaterialParams}, phase_ratio, dt, r, θ_dτ; ΔT = nothing, melt_fraction = nothing)
 
 Compute the pressure field `P` and the residual `RP` for the compressible case. This function introduces thermal stresses after the implementation of Kiss et al. (2023).
 
 ## Arguments
 - `P`: pressure field
+- `P0`: pressure field at the previous time step
 - `RP`: residual field
 - `∇V`: divergence of the velocity field
 - `Q`: volumetric source/sink term which should have the properties of `dV/V_tot [m³/m³]` normalized per cell, default is zero.
-- `ΔT`: temperature difference on the cell center, to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters.
 - `η`: viscosity field
 - `rheology`: material parameters
 - `phase_ratio`: phase field
-- `melt_fraction`: melt fraction field, used for the thermal expansion coefficient if provided
 - `dt`: time step
 - `r`: relaxation parameter for the pressure update
 - `θ_dτ`: numerical parameter for the pressure update
+
+## Keyword Arguments
+- `ΔT`: temperature difference on the cell centers with ghost nodes, size `size(P) .+ 2` (as `thermal.ΔT`), to account for thermal stresses. The thermal expansivity `α` is computed from the material parameters. Default: `nothing`.
+- `melt_fraction`: melt fraction field, used for the thermal expansion coefficient if provided. Default: `nothing`.
 """
 function compute_P!(
         P,
@@ -78,6 +92,7 @@ function compute_P!(
         kwargs...,
     ) where {N}
     ni = size(P)
+    check_ghosted_ΔT(ΔT, ni)
     @parallel (@idx ni) compute_P_kernel!(
         P, P0, RP, ∇V, Q, η, rheology, phase_ratio.center, dt, r, θ_dτ, ΔT, melt_fraction
     )
@@ -146,7 +161,7 @@ end
     @inbounds G = fn_ratio(get_shear_modulus, rheology, phase_ratio_I)
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, phase_ratio_I)
     @inbounds RP[I...], P[I...] = _compute_P!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
     )
     return nothing
 end
@@ -170,7 +185,7 @@ end
     @inbounds G = fn_ratio(get_shear_modulus, rheology, @cell(phase_ratio[I...]))
     @inbounds α = fn_ratio(get_thermal_expansion, rheology, @cell(phase_ratio[I...]), (; ϕ = melt_fraction[I...]))
     @inbounds RP[I...], P[I...] = _compute_P!(
-        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[I...], α, η[I...], K, G, dt, r, θ_dτ
+        P[I...], P0[I...], ∇V[I...], Q[I...], ΔT[(I .+ 1)...], α, η[I...], K, G, dt, r, θ_dτ
     )
     return nothing
 end

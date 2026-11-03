@@ -3,7 +3,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 const CSCS_CI = haskey(ENV, "JULIA_CSCS_CI") ? parse(Bool, ENV["JULIA_CSCS_CI"]) : false
@@ -14,15 +14,15 @@ using JustRelax, JustRelax.JustRelax3D
 using JustRelax
 using ParallelStencil
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 3)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 3)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 3)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 
@@ -31,10 +31,10 @@ using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -136,7 +136,7 @@ function diffusion_3D(;
 
     ## Allocate arrays needed for every Thermal Diffusion
     # general thermal arrays
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     thermal.H .= 1.0e-6
     # physical parameters
     ρ = @fill(ρ0, ni...)
@@ -163,17 +163,17 @@ function diffusion_3D(;
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 20, 20, 1
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     pPhases, = init_cell_arrays(particles, Val(1))
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles, center_perturbation..., r)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # PT coefficients for thermal diffusion
     args = (; P = P, T = thermal.T)
-    pt_thermal = PTThermalCoeffs(backend_JR, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
+    pt_thermal = PTThermalCoeffs(backend, K, ρCp, dt, di, li; CFL = 0.75 / √3.1)
 
     t = 0.0
     it = 0
@@ -219,7 +219,7 @@ end
 
 if CSCS_CI != true
     @suppress begin
-        if backend_JR == CPUBackend
+        if backend == CPUBackend
             diffusion_3D()
         else
             println("This test is only for CPU CI yet")

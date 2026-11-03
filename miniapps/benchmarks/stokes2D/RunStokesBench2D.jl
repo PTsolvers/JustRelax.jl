@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -24,7 +24,7 @@ end
 
 # Load script dependencies
 using Printf, LinearAlgebra
-using MPI: MPI
+using JustRelax: MPI
 using CairoMakie
 
 

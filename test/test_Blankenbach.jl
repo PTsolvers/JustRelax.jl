@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     using AMDGPU
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    using CUDA
+    import CUDA
 end
 
 using Test, Suppressor
@@ -10,25 +10,25 @@ using GeoParams
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil, ParallelStencil.FiniteDifferences2D
 
-const backend_JR = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     @init_parallel_stencil(AMDGPU, Float64, 2)
-    AMDGPUBackend
+    JustRelax.AMDGPUBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
     @init_parallel_stencil(CUDA, Float64, 2)
-    CUDABackend
+    JustRelax.CUDABackend
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    CPUBackend
+    JustRelax.CPUBackend
 end
 
 using JustPIC
 # Threads is the default backend,
 # to run on a CUDA GPU load CUDA.jl (i.e. "using CUDA") at the beginning of the script,
 # and to run on an AMD GPU load AMDGPU.jl (i.e. "using AMDGPU") at the beginning of the script.
-const backend = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
+const backend_JP = @static if ENV["JULIA_JUSTRELAX_BACKEND"] === "AMDGPU"
     AMDGPU.ROCBackend
 elseif ENV["JULIA_JUSTRELAX_BACKEND"] === "CUDA"
-    CUDABackend
+    CUDA.CUDABackend
 else
     JustPIC.CPU
 end
@@ -98,25 +98,25 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     # Initialize particles -------------------------------
     nxcell, max_xcell, min_xcell = 24, 36, 12
     particles = init_particles(
-        backend, nxcell, max_xcell, min_xcell, grid.xi_vel...
+        backend_JP, nxcell, max_xcell, min_xcell, grid.xi_vel...
     )
     subgrid_arrays = SubgridDiffusionCellArrays(particles; loc = :center)
     # temperature
     pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
     particle_args = (pT, pT0, pPhases)
-    phase_ratios = PhaseRatios(backend, length(rheology), ni)
+    phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
     init_phases!(pPhases, particles)
     update_phase_ratios!(phase_ratios, particles, pPhases)
     # ----------------------------------------------------
 
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
-    stokes = StokesArrays(backend_JR, ni)
+    stokes = StokesArrays(backend, ni)
     pt_stokes = PTStokesCoeffs(li, di; ϵ_rel = 1.0e-4, CFL = 1 / √2.1)
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
-    thermal = ThermalArrays(backend_JR, ni)
+    thermal = ThermalArrays(backend, ni)
     @parallel (@idx (nx + 2, ny)) init_T!(thermal.T, xci[2])
     Tbot = -xvi[2][1] * (1273 - 273) / 1000.0e3 + 273.0e0
     Ttop = 273.0e0
@@ -146,7 +146,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
 
     # PT coefficients for thermal diffusion -------------
     pt_thermal = PTThermalCoeffs(
-        backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.99 / √2.1
+        backend, rheology, phase_ratios, args, dt, ni, di, li; ϵ = 1.0e-5, CFL = 0.99 / √2.1
     )
 
     # Boundary conditions -------------------------------
@@ -157,7 +157,7 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
     update_halo!(@velocity(stokes)...)
 
     T_buffer = thermal.T[2:(end - 1), 2:(end - 1)]
-    dt₀ = similar(stokes.P)
+    dt₀ = similar(thermal.T)
     centroid2particle!(pT, thermal.T, particles)
     pT0.data .= pT.data
 
@@ -221,6 +221,11 @@ function main2D(igg; ar = 1, nx = 32, ny = 32, nit = 10)
         subgrid_characteristic_time!(
             subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes
         )
+        # Populate the ghost cells before interpolating to particles.
+        @views dt₀[1, :] .= dt₀[2, :]
+        @views dt₀[end, :] .= dt₀[end - 1, :]
+        @views dt₀[:, 1] .= dt₀[:, 2]
+        @views dt₀[:, end] .= dt₀[:, end - 1]
         centroid2particle!(subgrid_arrays.dt₀, dt₀, particles)
         subgrid_diffusion_centroid!(
             pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, dt

@@ -9,7 +9,7 @@ using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
 using Pkg; Pkg.activate("miniapps")
 
 const backend = @static if isCUDA
-    CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
+    JustRelax.CUDABackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 else
     JustRelax.CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend
 end
@@ -46,17 +46,6 @@ end
 end
 
 # HELPER FUNCTIONS ---------------------------------------------------------------
-import ParallelStencil.INDICES
-const idx_j = INDICES[2]
-macro all_j(A)
-    return esc(:($A[$idx_j]))
-end
-
-@parallel function init_P!(P, ρg, z)
-    @all(P) = @all(ρg) * abs(@all_j(z))
-    return nothing
-end
-
 # Half-space-cooling model
 @parallel_indices (i, j) function init_T!(T, z, κ, Tm, Tp, Tmin, Tmax)
     yr = 3600 * 24 * 365.25
@@ -193,7 +182,7 @@ function thermal_convection2D(igg; ar = 8, ny = 16, nx = ny * 8, figdir = "figs2
     ρg = @zeros(ni...), @zeros(ni...)
     for _ in 1:1
         compute_ρg!(ρg[2], rheology, args)
-        @parallel init_P!(stokes.P, ρg[2], xci[2])
+        compute_lithostatic_pressure!(stokes.P, ρg[2], di[2], igg)
     end
 
     # Rheology

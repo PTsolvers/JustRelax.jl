@@ -78,19 +78,24 @@ function _solve_VariationalDYREL!(
     # set the residual scale; the continuity residual is not trimmed. Trimming mask, residual and
     # preconditioner diagonal identically keeps them index-aligned. A periodic axis has no
     # boundary row to exclude -- every row of it, the seam included, is a genuine unknown -- so it
-    # is left whole.
-    norm_trim(A) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - 1)), dim)...]
-    maskRi = ntuple(d -> norm_trim(maskV[d]), dim)
-    Ri = ntuple(d -> norm_trim(residuals[d]), dim)
-    R0i = ntuple(d -> norm_trim(fields.R0[d]), dim)
-    dVi = ntuple(d -> norm_trim(fields.dV[d]), dim)
-    Di = ntuple(d -> norm_trim(fields.D[d]), dim)
+    # is left whole. At a rank seam a transverse edge row is a cell whose other copy the neighbor
+    # keeps, but an edge row along direction `d` is a face both ranks hold: only the rank below
+    # keeps it, or no rank would count it.
+    on_last_rank = ntuple(k -> igg.coords[k] == igg.dims[k] - 1, dim)
+    norm_trim(A, d) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - (k != d || on_last_rank[k]))), dim)...]
+    maskRi = ntuple(d -> norm_trim(maskV[d], d), dim)
+    Ri = ntuple(d -> norm_trim(residuals[d], d), dim)
+    R0i = ntuple(d -> norm_trim(fields.R0[d], d), dim)
+    dVi = ntuple(d -> norm_trim(fields.dV[d], d), dim)
+    Di = ntuple(d -> norm_trim(fields.D[d], d), dim)
     # Divisors that turn the masked L2 norms into RMS values: the number of entries actually
     # summed. The global grid DOF count would instead scale the residual by the rock fraction,
     # which — unlike the boundary trim — does not tend to 1 as the resolution grows, so ϵ would
     # mean something different for every sticky-air thickness. ϕ is fixed for a solve, so are these.
     nV = ntuple(d -> max(sum_mpi(maskRi[d]), 1), dim)
-    nP = max(sum_mpi(maskP), 1)
+    # the continuity norm counts each overlap cell on its owner only
+    maskPi = maskP .& owned_cells(maskP)
+    nP = max(sum_mpi(maskPi), 1)
 
     # errors
     err = 1.0
@@ -184,7 +189,7 @@ function _solve_VariationalDYREL!(
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
         Vspan = nonzero_span(maximum(map(masked_value_scale, maskV, Vi)))
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
-        RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
+        RP_rms = masked_norm_mpi(maskPi, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt))
         itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
@@ -328,10 +333,10 @@ function _solve_VariationalDYREL!(
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
         # Both the refresh and the relaxation are skipped where the mode carries no correction.
-        compliance = volumetric_compliance_total(dyrel.ηb, ϕ, maskP)
+        compliance = volumetric_compliance_total(dyrel.ηb, ϕ, maskPi)
         if !iszero(compliance)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
-            relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
+            relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance; weight = maskPi)
         end
         # Anderson mixes the whole update of the pass, volumetric mode included
         if !isnothing(anderson)

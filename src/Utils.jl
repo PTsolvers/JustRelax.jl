@@ -756,6 +756,31 @@ function owned_cells(A::AbstractArray{<:Any, N}) where {N}
 end
 
 """
+    owned_cells(A, trim)
+
+Like `owned_cells(A)`, and also `false` on the outermost `trim[d]` entries of `A` along each
+direction `d` where this rank lies on the boundary of the global domain. A reduction weighted by
+it covers, on any number of ranks, the entries of the serial slice
+`A[(1 + trim[1]):(end - trim[1]), (1 + trim[2]):(end - trim[2]), …]`.
+"""
+function owned_cells(A::AbstractArray{<:Any, N}, trim::NTuple{N, Integer}) where {N}
+    owned = owned_cells(A)
+    initialized = ImplicitGlobalGrid.grid_is_initialized()
+    grid = initialized ? ImplicitGlobalGrid.global_grid() : nothing
+    for d in 1:N
+        iszero(trim[d]) && continue
+        ax = axes(A, d)
+        if !initialized || grid.neighbors[1, d] == MPI.PROC_NULL
+            selectdim(owned, d, first(ax):(first(ax) + trim[d] - 1)) .= false
+        end
+        if !initialized || grid.neighbors[2, d] == MPI.PROC_NULL
+            selectdim(owned, d, (last(ax) - trim[d] + 1):last(ax)) .= false
+        end
+    end
+    return owned
+end
+
+"""
     sum_mpi(A)
 
 Compute the sum of array `A` across all MPI processes.

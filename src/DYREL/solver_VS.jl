@@ -40,7 +40,6 @@ function _solve_VariationalDYREL!(
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
 
-    N == 3 && require_uniform_spacing(grid, "`solve_VariationalDYREL!`")
     N == 3 && reject_periodic_bcs(flow_bcs, "`solve_VariationalDYREL!` in 3D")
     dim = Val(N)
     _di = grid._di

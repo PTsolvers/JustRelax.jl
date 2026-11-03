@@ -516,11 +516,13 @@ end
 @inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff) =
     _compute_dt(@velocity(S), di, dt_diff, maximum)
 
+# The spacing `di` may differ between ranks (e.g. on a refined grid), so the time step is
+# reduced across ranks as well.
 @inline _compute_dt(S::JustRelax.StokesArrays, di, dt_diff, ::IGG) =
-    _compute_dt(@velocity(S), di, dt_diff, maximum_mpi)
+    minimum_mpi(_compute_dt(@velocity(S), di, dt_diff, maximum_mpi))
 
 @inline _compute_dt(S::JustRelax.StokesArrays, di, ::IGG) =
-    _compute_dt(@velocity(S), di, Inf, maximum_mpi)
+    minimum_mpi(_compute_dt(@velocity(S), di, Inf, maximum_mpi))
 
 @inline function _compute_dt(V::NTuple, di, dt_diff, max_fun::F) where {F <: Function}
     # n = inv(length(V) + 0.1)

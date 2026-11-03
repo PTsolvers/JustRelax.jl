@@ -280,14 +280,11 @@ function compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_rati
 end
 
 function mean_penalty_viscosity(η)
-    η_finite = η[.!isinf.(η)]
-    η_mean = mean(η_finite)
-    if MPI.Initialized()
-        η_sum = sum_mpi(η_finite)
-        η_count = MPI.Allreduce(length(η_finite), MPI.SUM, MPI.COMM_WORLD)
-        return η_sum / η_count
-    end
-    return η_mean
+    MPI.Initialized() || return mean(η[.!isinf.(η)])
+    # count every global cell once, so the penalty does not depend on the domain decomposition
+    weight = owned_cells(η) .& .!isinf.(η)
+    η_sum = sum_mpi((ηᵢ, w) -> w ? ηᵢ : zero(ηᵢ), η, weight)
+    return η_sum / sum_mpi(weight)
 end
 
 

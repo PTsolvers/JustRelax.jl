@@ -93,7 +93,9 @@ function _solve_VariationalDYREL!(
     # which — unlike the boundary trim — does not tend to 1 as the resolution grows, so ϵ would
     # mean something different for every sticky-air thickness. ϕ is fixed for a solve, so are these.
     nV = ntuple(d -> max(sum_mpi(maskRi[d]), 1), dim)
-    nP = max(sum_mpi(maskP), 1)
+    # the continuity norm counts each overlap cell on its owner only
+    maskPi = maskP .& owned_cells(maskP)
+    nP = max(sum_mpi(maskPi), 1)
 
     # errors
     err = 1.0
@@ -188,7 +190,7 @@ function _solve_VariationalDYREL!(
         Pspan = nonzero_span(masked_value_span(maskP, stokes.P))
         Vspan = nonzero_span(maximum(map(masked_value_scale, maskV, Vi)))
         errV = ntuple(d -> masked_norm_mpi(maskRi[d], Ri[d]) / Pspan * lx / √(nV[d]), dim)
-        RP_rms = masked_norm_mpi(maskP, stokes.R.RP) / √(nP)
+        RP_rms = masked_norm_mpi(maskPi, stokes.R.RP) / √(nP)
         errPt = RP_rms * lx / Vspan
         err = maximum((errV..., errPt))
         itAA, err_PH_prev = anderson_restart(itAA, err, err_PH_prev)
@@ -332,10 +334,10 @@ function _solve_VariationalDYREL!(
         # The uniform volumetric mode is fitted to what the local update above left behind, so RP
         # has to be refreshed in between; reusing the pre-update residual corrects the mean twice.
         # Both the refresh and the relaxation are skipped where the mode carries no correction.
-        compliance = volumetric_mode ? volumetric_compliance_total(dyrel.ηb, ϕ, maskP) : zero(eltype(dyrel.ηb))
+        compliance = volumetric_mode ? volumetric_compliance_total(dyrel.ηb, ϕ, maskPi) : zero(eltype(dyrel.ηb))
         if !iszero(compliance)
             compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, false; args...)
-            relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance)
+            relax_volumetric_mode!(stokes.P, stokes.R.RP, dyrel.ηb, maskP, pressure_relaxation, compliance; weight = maskPi)
         end
         # Anderson mixes the whole update of the pass, volumetric mode included
         if !isnothing(anderson)
@@ -360,6 +362,10 @@ function _solve_VariationalDYREL!(
 
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)
+
+    # in 2D the Powell-Hestenes pass leaves the outermost vertex stresses one-sided
+    update_variational_stress_halo!(stokes, dim, linear_viscosity)
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)

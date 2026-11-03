@@ -163,6 +163,9 @@ function _solve_DYREL!(
 
     residuals = @residuals(stokes.R)
     fields = dyrel_fields(dyrel, dim)
+    # the residual norms and the Rayleigh quotient count each overlap entry on its owner only
+    weightR = map(owned_cells, residuals)
+    weightP = owned_cells(stokes.R.RP)
 
     # errors
     err = 1.0
@@ -246,8 +249,8 @@ function _solve_DYREL!(
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
 
         # Residual check
-        errV = ntuple(d -> norm_mpi(residuals[d]) / √(v_dofs[d]), dim)
-        errPt = norm_mpi(stokes.R.RP) / √(p_dof)
+        errV = ntuple(d -> masked_norm_mpi(weightR[d], residuals[d]) / √(v_dofs[d]), dim)
+        errPt = masked_norm_mpi(weightP, stokes.R.RP) / √(p_dof)
         if isone(itPH)
             errV0 = map(x -> x + eps(), errV)
             errPt0 = errPt + eps()
@@ -327,7 +330,7 @@ function _solve_DYREL!(
             # Residual check
             if iszero(iter % nout)
 
-                errV = ntuple(d -> norm_mpi(fields.D[d], residuals[d]) / √(v_dofs[d]), dim)
+                errV = ntuple(d -> masked_norm_mpi(weightR[d], fields.D[d], residuals[d]) / √(v_dofs[d]), dim)
 
                 if iter == nout
                     errV_scale = maximum(errV) + eps()
@@ -347,7 +350,7 @@ function _solve_DYREL!(
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
                 end
-                λminV = compute_λminV!(fields, residuals, residuals0, ni, dim)
+                λminV = compute_λminV!(fields, residuals, residuals0, weightR, ni)
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
@@ -380,6 +383,8 @@ function _solve_DYREL!(
 
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
@@ -574,9 +579,11 @@ function volumetric_compliance_total(ηb, ϕ::JustRelax.RockRatio, mask)
     )
 end
 
-function relax_volumetric_mode!(P, RP, ηb, mask, relaxation = 1, compliance = volumetric_compliance_total(ηb, mask))
+# `weight` selects the cells summed for the correction, e.g. `mask` restricted to the owned cells;
+# the correction is applied to every cell of `mask`, overlaps included.
+function relax_volumetric_mode!(P, RP, ηb, mask, relaxation = 1, compliance = volumetric_compliance_total(ηb, mask); weight = mask)
     iszero(compliance) && return nothing
-    δ = sum_mpi((RPᵢ, valid) -> valid ? RPᵢ : zero(RPᵢ), RP, mask) / compliance
+    δ = sum_mpi((RPᵢ, w) -> w ? RPᵢ : zero(RPᵢ), RP, weight) / compliance
     @. P += ifelse(mask, relaxation * δ, zero(δ))
     return nothing
 end
@@ -605,12 +612,9 @@ end
 
 velocity_dofs(::Val{N}) where {N} = velocity_dofs(Val(N), ntuple(_ -> false, Val(N)))
 
-function compute_λminV!(fields, residuals, residuals0, ni, ::Val{N}) where {N}
+function compute_λminV!(fields, residuals, residuals0, weights, ni)
     @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
-
-    numerator = sum(ntuple(d -> sum_mpi((dv, r, r0) -> dv * (r - r0), fields.dV[d], residuals[d], residuals0[d]), Val(N)))
-    denominator = sum(ntuple(d -> sum_mpi(abs2, fields.dV[d]), Val(N)))
-    return rayleigh_quotient(numerator, denominator)
+    return masked_λminV(fields.dV, residuals, residuals0, weights)
 end
 
 function copy_stress_vertices!(stokes::JustRelax.StokesArrays, ::Val{2})

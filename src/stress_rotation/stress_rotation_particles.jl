@@ -263,8 +263,8 @@ end
 
 function rotate_stress!(pτxx, pτyy, pτxy, pω, stokes, particles, dt)
     # normal components
-    centroid2particle!(pτxx, stokes.τ.xx, particles)
-    centroid2particle!(pτyy, stokes.τ.yy, particles)
+    centroid2particle!(pτxx, stokes.τ.xx, particles; ghosted = false)
+    centroid2particle!(pτyy, stokes.τ.yy, particles; ghosted = false)
     # shear components
     grid2particle!(pτxy, stokes.τ.xy, particles; ghost_1 = false, ghost_2 = false)
     # vorticity tensor
@@ -279,9 +279,9 @@ function rotate_stress!(
         pτxx, pτyy, pτzz, pτyz, pτxz, pτxy, pωyz, pωxz, pωxy, stokes, particles, dt
     )
     # normal components
-    centroid2particle!(pτxx, stokes.τ.xx, particles)
-    centroid2particle!(pτyy, stokes.τ.yy, particles)
-    centroid2particle!(pτzz, stokes.τ.zz, particles)
+    centroid2particle!(pτxx, stokes.τ.xx, particles; ghosted = false)
+    centroid2particle!(pτyy, stokes.τ.yy, particles; ghosted = false)
+    centroid2particle!(pτzz, stokes.τ.zz, particles; ghosted = false)
     # shear components
     grid2particle!(pτyz, stokes.τ.yz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)
     grid2particle!(pτxz, stokes.τ.xz, particles; ghost_1 = false, ghost_2 = false, ghost_3 = false)

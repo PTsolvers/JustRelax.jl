@@ -270,6 +270,8 @@ function _solve_VS!(
         stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
+
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
     shear2center!(stokes.ε_pl)

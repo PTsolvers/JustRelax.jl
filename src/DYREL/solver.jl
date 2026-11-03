@@ -384,6 +384,8 @@ function _solve_DYREL!(
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)
 
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
+
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
     shear2center!(stokes.ε_pl)

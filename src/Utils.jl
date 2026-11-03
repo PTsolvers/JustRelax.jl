@@ -274,6 +274,16 @@ end
     return A.yz, A.xz, A.xy
 end
 
+@inline shear_components(A::JustRelax.SymmetricTensor{<:AbstractArray{T, 2}}) where {T} = (A.xy,)
+@inline shear_components(A::JustRelax.SymmetricTensor{<:AbstractArray{T, 3}}) where {T} = (A.yz, A.xz, A.xy)
+
+# The staggered shear components on the outermost vertices (2D) or edges (3D) of a rank are
+# one-sided until exchanged; `shear2center!` reads them for the cells next to the rank boundary.
+function update_shear_halo!(A::Vararg{JustRelax.SymmetricTensor, N}) where {N}
+    update_halo!(mapreduce(shear_components, (a, b) -> (a..., b...), A)...)
+    return nothing
+end
+
 """
     @shear_center(A)
 
@@ -753,6 +763,20 @@ function owned_cells(A::AbstractArray{<:Any, N}) where {N}
     fill!(owned, false)
     view(owned, ntuple(owned_range, Val(N))...) .= true
     return owned
+end
+
+# Exchange the whole overlap of every array, so that each entry two ranks hold comes from its
+# owner. The default halo width refreshes only the outermost layer, which leaves the two inner
+# shared layers of a ghosted array (one ghost per side, e.g. `thermal.T`) to be computed by both
+# ranks, each with a one-sided stencil at its own edge.
+function update_overlap_halo!(A::Vararg{AbstractArray, N}) where {N}
+    grid = ImplicitGlobalGrid.global_grid()
+    halowidths(B) = ntuple(Val(3)) do d
+        nshared = grid.overlaps[d] + (d ≤ ndims(B) ? size(B, d) : 1) - grid.nxyz[d]
+        max(1, nshared ÷ 2)
+    end
+    update_halo!(map(B -> (A = B, halowidths = halowidths(B)), A)...)
+    return nothing
 end
 
 """

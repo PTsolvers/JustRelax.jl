@@ -362,6 +362,10 @@ function _solve_VariationalDYREL!(
     # compute vorticity
     compute_vorticity!(stokes, _di, ni, dim)
 
+    # the last Powell-Hestenes pass leaves the outermost vertex stresses one-sided
+    update_variational_stress_halo!(stokes, dim, linear_viscosity)
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
+
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
     shear2center!(stokes.ε_pl)

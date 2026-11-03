@@ -109,7 +109,8 @@ function _heatdiffusion_PT!(
                 ni,
             )
             thermal_bcs!(thermal, thermal_bc)
-            update_halo!(thermal.T)
+            # the flux kernel treats each rank edge as a domain boundary
+            update_overlap_halo!(thermal.T)
         end
 
         iter += 1
@@ -266,7 +267,8 @@ function _heatdiffusion_PT!(
                 args,
             )
             thermal_bcs!(thermal, thermal_bc)
-            update_halo!(thermal.T)
+            # the flux kernel treats each rank edge as a domain boundary
+            update_overlap_halo!(thermal.T)
 
 
         end

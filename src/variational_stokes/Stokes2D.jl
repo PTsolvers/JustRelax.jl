@@ -130,6 +130,10 @@ function _solve_VS!(
     # end
 
     # errors
+    # the residual norms count each overlap entry on its owner only; ϕ is fixed during the solve
+    weightRx = owned_cells(stokes.R.Rx) .& (@views(ϕ.Vx[2:(end - 1), :]) .> 0)
+    weightRy = owned_cells(stokes.R.Ry) .& (@views(ϕ.Vy[:, 2:(end - 1)]) .> 0)
+    weightRP = owned_cells(stokes.R.RP) .& (ϕ.center .> 0)
     err_it1 = 1.0
     err = 1.0
     iter = 0
@@ -319,9 +323,9 @@ function _solve_VS!(
         if iter % nout == 0 && iter > 1
 
             errs = (
-                norm_mpi(@views stokes.R.Rx[ϕ.Vx[2:(end - 1), :] .> 0]) / nRx,
-                norm_mpi(@views stokes.R.Ry[ϕ.Vy[:, 2:(end - 1)] .> 0]) / nRy,
-                norm_mpi(@views stokes.R.RP[ϕ.center .> 0]) / nRP,
+                masked_norm_mpi(weightRx, stokes.R.Rx) / nRx,
+                masked_norm_mpi(weightRy, stokes.R.Ry) / nRy,
+                masked_norm_mpi(weightRP, stokes.R.RP) / nRP,
             )
 
             push!(norm_Rx, errs[1])
@@ -356,6 +360,8 @@ function _solve_VS!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
     )
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)

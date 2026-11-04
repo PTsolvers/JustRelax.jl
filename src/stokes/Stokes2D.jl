@@ -83,6 +83,9 @@ function _solve!(
     # end
 
     # errors
+    # the residual norms count each overlap entry on its owner only
+    weightRx, weightRy = map(R -> owned_cells(R, (1, 1)), @residuals(stokes.R))
+    weightRP = owned_cells(stokes.R.RP)
     err_it1 = 1.0
     err = 1.0
     iter = 0
@@ -149,11 +152,11 @@ function _solve!(
             )
 
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRx, stokes.R.Rx) /
                     √((nx_g() - 2) * (ny_g() - 1)),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRy, stokes.R.Ry) /
                     √((nx_g() - 1) * (ny_g() - 2)),
-                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
+                masked_norm_mpi(weightRP, stokes.R.RP) / √(nx_g() * ny_g()),
             )
 
             # errs = maximum_mpi.((abs.(stokes.R.Rx), abs.(stokes.R.Ry), abs.(stokes.R.RP)))
@@ -253,6 +256,9 @@ function _solve!(
     G = get_G(rheology)
 
     # errors
+    # the residual norms count each overlap entry on its owner only
+    weightRx, weightRy = map(R -> owned_cells(R, (1, 1)), @residuals(stokes.R))
+    weightRP = owned_cells(stokes.R.RP)
     err_it1 = 1.0
     err = 1.0
     iter = 0
@@ -370,11 +376,11 @@ function _solve!(
             )
 
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRx, stokes.R.Rx) /
                     √((nx_g() - 2) * (ny_g() - 1)),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRy, stokes.R.Ry) /
                     √((nx_g() - 1) * (ny_g() - 2)),
-                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
+                masked_norm_mpi(weightRP, stokes.R.RP) / √(nx_g() * ny_g()),
             )
 
             push!(norm_Rx, errs[1])
@@ -411,6 +417,8 @@ function _solve!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., _di.velocity[1], _di.velocity[2]
     )
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
@@ -495,6 +503,9 @@ function _solve!(
     # end
 
     # errors
+    # the residual norms count each overlap entry on its owner only
+    weightRx, weightRy = map(R -> owned_cells(R, (1, 1)), @residuals(stokes.R))
+    weightRP = owned_cells(stokes.R.RP)
     err_it1 = 1.0
     err = 1.0
     iter = 0
@@ -685,11 +696,11 @@ function _solve!(
             )
 
             errs = (
-                norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRx, stokes.R.Rx) /
                     √((nx_g() - 2) * (ny_g() - 1)),
-                norm_mpi(@views stokes.R.Ry[2:(end - 1), 2:(end - 1)]) /
+                masked_norm_mpi(weightRy, stokes.R.Ry) /
                     √((nx_g() - 1) * (ny_g() - 2)),
-                norm_mpi(stokes.R.RP) / √(nx_g() * ny_g()),
+                masked_norm_mpi(weightRP, stokes.R.RP) / √(nx_g() * ny_g()),
             )
 
             push!(norm_Rx, errs[1])
@@ -724,6 +735,8 @@ function _solve!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.xy, @velocity(stokes)..., _di.velocity...
     )
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)

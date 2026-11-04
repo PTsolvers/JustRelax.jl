@@ -2,7 +2,7 @@ push!(LOAD_PATH, "..")
 
 using Test
 using JustRelax, JustRelax.JustRelax2D
-import JustRelax.JustRelax2D: norm_mpi, masked_norm_mpi, sum_mpi
+import JustRelax.JustRelax2D: norm_mpi, masked_norm_mpi, sum_mpi, owned_cells
 using MPI
 
 igg = IGG(init_global_grid(4, 4, 1; init_MPI = true, select_device = false)...)
@@ -41,6 +41,20 @@ me = igg.me
     # same rank-dependent C as above.
     direct_formula_norm = sqrt(MPI.Allreduce(sum(C .^ 2), MPI.SUM, MPI.COMM_WORLD))
     @test norm_mpi(C) ≈ direct_formula_norm
+end
+
+@testset "owned_cells reductions match the serial slice" begin
+    n = 4
+    # local index i of a rank at Cartesian coordinate c is global index c * (n - overlap) + i
+    offset = ntuple(d -> igg.coords[d] * (n - 2), 2)
+    f(i, j) = Float64(i + 1000 * j)
+    # arrays one shorter than the cell count (momentum residuals) up to ghosted ones
+    for k in Iterators.product(-1:2, -1:2), trim in ((0, 0), (1, 1), (1, 0))
+        A = [f(offset[1] + i, offset[2] + j) for i in 1:(n + k[1]), j in 1:(n + k[2])]
+        G = [f(i, j) for i in 1:(nx_g() + k[1]), j in 1:(ny_g() + k[2])]
+        serial = sum(G[(1 + trim[1]):(end - trim[1]), (1 + trim[2]):(end - trim[2])])
+        @test sum_mpi((a, w) -> w ? a : zero(a), A, owned_cells(A, trim)) == serial
+    end
 end
 
 finalize_global_grid(; finalize_MPI = false)

@@ -15,7 +15,7 @@ function PTThermalCoeffs(
 end
 
 function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3)
-    Vpdτ = min(di...) * CFL
+    Vpdτ = pt_min_spacing(di) * CFL
     max_lxyz = max(li...)
     max_lxyz2 = max_lxyz^2
     Re = @. π + √(π * π + ρCp * max_lxyz2 / K / dt) # Numerical Reynolds number
@@ -23,6 +23,14 @@ function PTThermalCoeffs(K, ρCp, dt, di, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / �
     dτ_ρ = @. Vpdτ * max_lxyz / K / Re
 
     return JustRelax.PTThermalCoeffs(CFL, ϵ, max_lxyz, max_lxyz2, Vpdτ, θr_dτ, dτ_ρ)
+end
+
+# The spacing can differ between ranks (e.g. on a refined grid); the pseudo-time step takes the
+# smallest one of all ranks, so it does not depend on the domain decomposition.
+@inline function pt_min_spacing(di)
+    di_min = min(di...)
+    (di_min isa Number && ImplicitGlobalGrid.grid_is_initialized()) || return di_min
+    return minimum_mpi(di_min)
 end
 
 # with phase ratios
@@ -53,7 +61,7 @@ end
 function PTThermalCoeffs(
         rheology, phase_ratios, args, dt, ni, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
     )
-    Vpdτ = min(di...) * CFL
+    Vpdτ = pt_min_spacing(di) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
 
@@ -91,7 +99,7 @@ end
 function PTThermalCoeffs(
         rheology::MaterialParams, args, dt, ni, di::NTuple, li::NTuple; ϵ = 1.0e-8, CFL = 0.9 / √3
     )
-    Vpdτ = min(di...) * CFL
+    Vpdτ = pt_min_spacing(di) * CFL
     max_lxyz = max(li...)
     θr_dτ, dτ_ρ = @zeros(ni...), @zeros(ni...)
 

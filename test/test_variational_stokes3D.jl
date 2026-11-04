@@ -174,7 +174,7 @@ else
         _di = inv.(dxi)
         @parallel (@idx ni) JR3.compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
         @parallel (@idx ni .+ 1) JR3.compute_strain_rate!(
-            stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di
+            stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di, _di, _di, _di
         )
         return nothing
     end
@@ -197,6 +197,32 @@ else
             for A in (stokes.∇V, @strain(stokes)...)
                 @test maximum(abs, Array(A)) < 1.0e-12
             end
+        end
+
+        @testset "linear field, nonuniform grid" begin
+            stretch(n) = cumsum([0.0; 1.0 .+ 0.5 .* sin.(1:n)]) ./ n
+            grid = Geometry(PTArray(backend), stretch.(ni)...; distributed = false)
+            L = (0.3, 0.2, -0.4, 0.7, -0.1, 0.5, -0.2, 0.6, 0.4) # V_a = Σ_b L[a, b] x_b, row-major
+            stokes = StokesArrays(backend, ni)
+            for (d, V) in enumerate(@velocity(stokes))
+                X = Array.(grid.xi_vel[d])
+                V .= PTArray(backend)(
+                    [L[3d - 2] * x + L[3d - 1] * y + L[3d] * z for x in X[1], y in X[2], z in X[3]]
+                )
+            end
+            ϕ = full_rock_ratio()
+            _di = grid._di
+            @parallel (@idx ni) JR3.compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)
+            @parallel (@idx ni .+ 1) JR3.compute_strain_rate!(
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di.vertex, _di.velocity...
+            )
+            tr = L[1] + L[5] + L[9]
+            @test all(isapprox.(Array(stokes.∇V), tr; atol = 1.0e-12))
+            @test all(isapprox.(Array(stokes.ε.xx), L[1] - tr / 3; atol = 1.0e-12))
+            @test all(isapprox.(Array(stokes.ε.zz), L[9] - tr / 3; atol = 1.0e-12))
+            @test all(isapprox.(Array(stokes.ε.yz), (L[6] + L[8]) / 2; atol = 1.0e-12))
+            @test all(isapprox.(Array(stokes.ε.xz), (L[3] + L[7]) / 2; atol = 1.0e-12))
+            @test all(isapprox.(Array(stokes.ε.xy), (L[2] + L[4]) / 2; atol = 1.0e-12))
         end
 
         @testset "quadratic field, full rock" begin

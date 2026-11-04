@@ -156,7 +156,7 @@ function _solve_VS!(
             )
 
             @parallel (@idx ni .+ 1) compute_strain_rate!(
-                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di
+                stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di, _di, _di, _di
             )
 
             # Update buoyancy

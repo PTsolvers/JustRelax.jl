@@ -6,6 +6,7 @@ end
 
 using JustRelax, Test
 using GeoParams
+using JustPIC
 import JustRelax.JustRelax2D as JR2
 import JustRelax.JustRelax3D as JR3
 
@@ -20,6 +21,14 @@ else
 end
 
 const BackendArray = PTArray(backend)
+
+const backend_JP = @static if env_backend === "AMDGPU"
+    AMDGPU.ROCBackend
+elseif env_backend === "CUDA"
+    CUDA.CUDABackend
+else
+    JustPIC.CPU
+end
 
 @testset "2D allocators" begin
     ni = nx, ny = (2, 2)
@@ -189,6 +198,21 @@ const BackendArray = PTArray(backend)
     )
     @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2700.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
     @test all(iszero, Array(dt₀)[[1, end], :])
+
+    # with particles, each cell reads its own spacing from the particle grid, which carries a
+    # ghost cell on each side; uneven cell widths expose an off-by-one cell index
+    xv, yv = [0.0, 1.0, 3.0], [0.0, 0.5, 2.0]
+    ghosted_centers(v) = [2v[1] - (v[1] + v[2]) / 2; (v[1:(end - 1)] .+ v[2:end]) ./ 2; 2v[end] - (v[end - 1] + v[end]) / 2]
+    particles = init_particles(
+        backend_JP, 4, 8, 2, (xv, ghosted_centers(yv)), (ghosted_centers(xv), yv); periodic = (false, false)
+    )
+    phase_ratios = PhaseRatios(backend_JP, 1, ni)
+    phase_ratios.center.data .= 1.0
+    fill!(dt₀, 0.0)
+    JR2.subgrid_characteristic_time!(nothing, particles, dt₀, phase_ratios, thermal_rheology, thermal, stokes)
+    dx, dy = diff(xv), diff(yv)
+    @test Array(dt₀)[2:(end - 1), 2:(end - 1)] ≈
+        [2700.0 * 1000.0 / (2 * 3.0 * (1 / dx[i]^2 + 1 / dy[j]^2)) for i in 1:nx, j in 1:ny]
 
     @test JR2.ThermalArrays(10, 10) isa JustRelax.ThermalArrays
     @test JR2.ThermalArrays(ni...) isa JustRelax.ThermalArrays

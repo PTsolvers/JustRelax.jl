@@ -454,6 +454,8 @@ function _solve!(
         stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
 
+    update_shear_halo!(stokes.ε, stokes.ε_pl)
+
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)
     shear2center!(stokes.ε_pl)
@@ -698,6 +700,8 @@ function _solve!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)

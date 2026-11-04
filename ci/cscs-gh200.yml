@@ -23,6 +23,8 @@ unit_tests:
     - srun --uenv julia/26.3:v1 --view=juliaup julia --project --startup-file=no test/test_diffusion3D_multiphase_MPI.jl
     - echo "Running MPI test - test_grid_MPI.jl"
     - srun --uenv julia/26.3:v1 --view=juliaup julia --project --startup-file=no test/test_grid_MPI.jl
+    - echo "Running MPI test - test_halo_consistency_MPI.jl"
+    - srun --uenv julia/26.3:v1 --view=juliaup julia --project --startup-file=no test/test_halo_consistency_MPI.jl
     - echo "Running MPI test - test_shearband2D_MPI.jl"
     - srun --uenv julia/26.3:v1 --view=juliaup julia --project --startup-file=no test/test_shearband2D_MPI.jl
     - echo "Running MPI test - test_shearband3D_MPI.jl"

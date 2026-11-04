@@ -96,6 +96,9 @@ function _solve_VS!(
     (; η, η_vep) = stokes.viscosity
 
     # errors
+    # the residual norms count each overlap entry on its owner only
+    weightRx, weightRy, weightRz = map(R -> owned_cells(R, (1, 1, 1)), @residuals(stokes.R))
+    weightRP = owned_cells(stokes.R.RP)
     err_it1 = 1.0
     err = Inf
     iter = 0
@@ -227,13 +230,13 @@ function _solve_VS!(
         iter += 1
         if iter % nout == 0 && iter > 1
             cont += 1
-            for (norm_Ri, Ri) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R))
+            for (norm_Ri, Ri, weightRi) in zip((norm_Rx, norm_Ry, norm_Rz), @residuals(stokes.R), (weightRx, weightRy, weightRz))
                 push!(
                     norm_Ri,
-                    norm_mpi(Ri[2:(end - 1), 2:(end - 1), 2:(end - 1)]) / √((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
+                    masked_norm_mpi(weightRi, Ri) / √((nx_g() - 1) * (ny_g() - 1) * (nz_g() - 1)),
                 )
             end
-            push!(norm_∇V, norm_mpi(stokes.R.RP) / length(stokes.R.RP))
+            push!(norm_∇V, masked_norm_mpi(weightRP, stokes.R.RP) / (nx_g() * ny_g() * nz_g()))
             err = max(norm_Rx[cont], norm_Ry[cont], norm_Rz[cont], norm_∇V[cont])
             push!(err_evo1, err)
             push!(err_evo2, iter)
@@ -266,6 +269,8 @@ function _solve_VS!(
     @parallel (@idx ni .+ 1) compute_vorticity!(
         stokes.ω.yz, stokes.ω.xz, stokes.ω.xy, @velocity(stokes)..., grid._di.velocity...
     )
+
+    update_shear_halo!(stokes.ε, stokes.ε_pl, stokes.Δε)
 
     # Interpolate shear components to cell center arrays
     shear2center!(stokes.ε)

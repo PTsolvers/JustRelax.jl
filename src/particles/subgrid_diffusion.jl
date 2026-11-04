@@ -1,5 +1,11 @@
 # import JustRelax.compute_ρCp
 
+# `particles.di.vertex` also holds the ghost cell on each side of the grid; grid cell `I` is
+# entry `I + 1`.
+particle_cell_spacing(particles) = map(_inner_cells, particles.di.vertex)
+_inner_cells(di::Number) = di
+_inner_cells(di::AbstractVector) = di[2:(end - 1)]
+
 """
     subgrid_characteristic_time!(subgrid_arrays, particles, dt₀, phases, rheology, thermal::ThermalArrays, stokes::StokesArrays[, di])
 
@@ -21,7 +27,7 @@ function subgrid_characteristic_time!(
     ni = size(stokes.P)
     size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.T, stokes.P, particles.di.vertex
+        dt₀, phases.center, rheology, thermal.T, stokes.P, particle_cell_spacing(particles)
     )
     return nothing
 end

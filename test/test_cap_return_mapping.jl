@@ -242,3 +242,28 @@ end
         end
     end
 end
+
+@testset "Drucker-Prager cone truncated at its apex" begin
+    material, _ = dp_material(; Ψ = 5.0)
+    for JR in (JustRelax.JustRelax2D, JustRelax.JustRelax3D)
+        N = JR === JustRelax.JustRelax2D ? 3 : 6
+        old = ntuple(_ -> 0.0, N)
+        for shear in (0.01, 0.5)
+            strain = ntuple(i -> i == N ? shear : 0.0, N)
+            # the apex sits at P = -C cot(ϕ) ≈ -1.73: both pressures are beyond it
+            outs = map((-3.0, -10.0)) do P
+                JR._compute_local_stress(strain, old, 1.0, P, 1.0, 4.0, 0.0, 1.0, material, 1.0, 0.0)
+            end
+            for out in outs
+                @test all(isfinite, out)
+                @test 0 ≤ out[N] ≤ shear     # the return does not reverse the shear stress
+                @test 0 ≤ out[2N + 1] ≤ shear
+                @test out[2N + 3] ≥ 0        # nor pull P further into tension
+            end
+            # beyond the apex the yield stress is zero, independent of pressure
+            for k in eachindex(outs...)
+                @test outs[1][k] ≈ outs[2][k]
+            end
+        end
+    end
+end

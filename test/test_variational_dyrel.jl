@@ -126,6 +126,21 @@ end
     @test JustRelax2D.volumetric_compliance_total(ηb, ϕ, mask) ≈ 1 / 4
 end
 
+@testset "Variational DYREL volumetric mode needs a closed domain" begin
+    ni = (2, 2)
+    ϕ = RockRatio(CPUBackend, ni)
+    ϕ.center .= 1.0
+    closed = VelocityBoundaryConditions(; free_slip = (left = true, right = true, top = true, bot = true))
+    open_top = VelocityBoundaryConditions(;
+        free_slip = (left = true, right = true, top = true, bot = true), free_surface = true
+    )
+    @test JustRelax2D.volumetric_mode_closed(ϕ, closed)
+    @test !JustRelax2D.volumetric_mode_closed(ϕ, open_top)
+    # a cut cell marks an embedded traction-free interface
+    ϕ.center[1, 2] = 0.25
+    @test !JustRelax2D.volumetric_mode_closed(ϕ, closed)
+end
+
 @testset "Variational DYREL hydrostatic convergence" begin
     stokes, _, _ = _full_volume_dyrel(TEST_IGG; variational = false, hydrostatic = true)
     stokes_variational, result, _ = _full_volume_dyrel(

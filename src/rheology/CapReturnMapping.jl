@@ -254,7 +254,13 @@ end
     # Elastic points skip the flow gradients: every caller scales them by λ = 0.
     (is_pl && !iszero(s) && F > 0) || return zero(T), ntuple(_ -> zero(T), Val(N)), zero(T)
     g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
-    volume = isinf(Kdt) ? zero(T) : Kdt * Fp * Qp
+    # Past the apex of the cone the yield stress `s - F` is negative, and the correction would
+    # return the deviatoric stress through zero into reverse: a negative viscosity that pulls P
+    # further into tension. Truncate the cone at its apex, where the yield stress is zero and
+    # independent of pressure.
+    beyond_apex = F > s
+    F = min(F, s)
+    volume = isinf(Kdt) || beyond_apex ? zero(T) : Kdt * Fp * Qp
     λ = (1 - relλ) * λold + relλ * F / (η + ηvp + volume)
     return λ, g, Qp
 end

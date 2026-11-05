@@ -45,7 +45,7 @@ using JustRelax
 xv = [0.0, 0.1, 0.2, 0.4, 0.7, 1.0]
 yv = [-1.0, -0.7, -0.45, -0.2, 0.0]
 
-grid = Geometry((xv, yv))
+grid = Geometry(Array, xv, yv; distributed = false)
 
 xci = grid.xci
 xvi = grid.xvi
@@ -55,6 +55,8 @@ dx = grid.di.vertex[1]
 dy = grid.di.vertex[2]
 ```
 
+`distributed = false` builds the full grid even when another example has already initialized `ImplicitGlobalGrid`. In serial, it can be omitted.
+
 This constructor derives:
 
 - cell-centered coordinates from the vertex coordinates
@@ -63,10 +65,10 @@ This constructor derives:
 
 The 3D Stokes solvers (`solve!` and `solve_VariationalStokes!`) support only uniform grids and throw an `ArgumentError` when given a nonuniform 3D `Geometry`.
 
-The vertex coordinates are passed as a tuple. If you want the coordinate arrays stored in a specific array type, pass an array constructor as the first argument, in which case the coordinates are given as separate arguments:
+`Geometry((xv, yv))` is the serial shorthand. To choose the coordinate array type or pass `distributed`, use an array constructor followed by separate coordinate arguments:
 
 ```@example grid
-grid = Geometry(Array, xv, yv)
+grid = Geometry(Array, xv, yv; distributed = false)
 grid.xvi[1]
 ```
 

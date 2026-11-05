@@ -17,21 +17,20 @@ end
 function compute_variational_kinematics3D!(stokes, dyrel, rheology, phases, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
     @parallel_async (@idx ni .+ 1) variational_kinematics3D!(
         @strain(stokes)..., @velocity(stokes)..., stokes.R.RP, stokes.P, stokes.P0, stokes.Q, dyrel.ηb, ϕ,
-        _di.vertex, _di.center, rheology, phases.center, ΔT, melt_fraction, dt, do_strain_rate,
+        _di.vertex, _di.velocity..., rheology, phases.center, ΔT, melt_fraction, dt, do_strain_rate,
     )
     return nothing
 end
 
 @parallel_indices (i, j, k) function variational_kinematics3D!(
         εxx::AbstractArray{T, 3}, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, RP, P, P0, Q, ηb, ϕ::JustRelax.RockRatio,
-        _di_vertex, _di_center, rheology, phase, ΔT, melt_fraction, dt, do_strain_rate,
+        _di_vertex, _di_vx, _di_vy, _di_vz, rheology, phase, ΔT, melt_fraction, dt, do_strain_rate,
     ) where {T}
-    _dx, _dy, _dz = @dxi(_di_center, i, j, k)
-
     @inbounds begin
         if all((i, j, k) .≤ size(RP))
             if isvalid_c(ϕ, i, j, k)
-                ∇Vijk = div(Vx, Vy, Vz, @dxi(_di_vertex, i, j, k)..., i, j, k)
+                _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
+                ∇Vijk = div(Vx, Vy, Vz, _dx, _dy, _dz, i, j, k)
                 RP[i, j, k] = ϕ.center[i, j, k] * _RP_cell(P[i, j, k], P0[i, j, k], ∇Vijk, Q[i, j, k], ηb[i, j, k], dt, rheology, phase, ΔT, melt_fraction, i, j, k)
                 if do_strain_rate
                     ∇V_third = ∇Vijk * inv(3)
@@ -48,21 +47,21 @@ end
         end
         if do_strain_rate && all((i, j, k) .≤ size(εyz))
             εyz[i, j, k] = if isvalid_yz(ϕ, i, j, k)
-                0.5 * (_dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) + _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k]))
+                0.5 * (@dz(_di_vy, k) * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) + @dy(_di_vz, j) * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k]))
             else
                 zero(T)
             end
         end
         if do_strain_rate && all((i, j, k) .≤ size(εxz))
             εxz[i, j, k] = if isvalid_xz(ϕ, i, j, k)
-                0.5 * (_dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) + _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k]))
+                0.5 * (@dz(_di_vx, k) * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) + @dx(_di_vz, i) * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k]))
             else
                 zero(T)
             end
         end
         if do_strain_rate && all((i, j, k) .≤ size(εxy))
             εxy[i, j, k] = if isvalid_xy(ϕ, i, j, k)
-                0.5 * (_dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) + _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1]))
+                0.5 * (@dy(_di_vx, j) * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) + @dx(_di_vy, i) * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1]))
             else
                 zero(T)
             end

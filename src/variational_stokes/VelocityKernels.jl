@@ -112,9 +112,14 @@ rock fraction is applied once, in the stress divergence.
 end
 
 """
-    compute_strain_rate!(εxx, εyy, εzz, εyz, εxz, εxy, ∇V, Vx, Vy, Vz, ϕ, _dx, _dy, _dz)
+    compute_strain_rate!(∇V, εxx, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, ϕ, _di_vertex, _di_vx, _di_vy, _di_vz)
 
-Compute the 3D components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ` and grid spacing `_dx`, `_dy`, `_dz`.
+Compute the 3D components of the strain rate tensor `ε` from the velocity field `V` and its divergence `∇V`, taking into account the rock ratio `ϕ`.
+
+The normal components take the inverse cell widths `_di_vertex`; each shear component
+takes the inverse spacing of the velocity component it differentiates (`_di_vx`,
+`_di_vy`, `_di_vz`, as in `grid._di.velocity`). Each may be a uniform scalar or a
+per-index vector.
 """
 @parallel_indices (i, j, k) function compute_strain_rate!(
         ∇V::AbstractArray{T, 3},
@@ -128,24 +133,23 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
         Vy,
         Vz,
         ϕ::JustRelax.RockRatio,
-        _di,
+        _di_vertex,
+        _di_vx,
+        _di_vy,
+        _di_vz,
     ) where {T}
-    _dx, _dy, _dz = @dxi(_di, i, j, k)
-    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j, k)
-    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j, k)
-    Base.@propagate_inbounds @inline d_zi(A) = _d_zi(A, _dz, i, j, k)
-
     @inbounds begin
         # normal components are all located @ cell centers
         if all((i, j, k) .≤ size(εxx))
             if isvalid_c(ϕ, i, j, k)
+                _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
                 ∇Vijk = ∇V[i, j, k] * inv(3)
                 # Compute ε_xx
-                εxx[i, j, k] = d_xi(Vx) - ∇Vijk
+                εxx[i, j, k] = _d_xi(Vx, _dx, i, j, k) - ∇Vijk
                 # Compute ε_yy
-                εyy[i, j, k] = d_yi(Vy) - ∇Vijk
+                εyy[i, j, k] = _d_yi(Vy, _dy, i, j, k) - ∇Vijk
                 # Compute ε_zz
-                εzz[i, j, k] = d_zi(Vz) - ∇Vijk
+                εzz[i, j, k] = _d_zi(Vz, _dz, i, j, k) - ∇Vijk
             else
                 εxx[i, j, k] = zero(T)
                 εyy[i, j, k] = zero(T)
@@ -157,8 +161,8 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
             if isvalid_yz(ϕ, i, j, k)
                 εyz[i, j, k] =
                     0.5 * (
-                    _dz * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
-                        _dy * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
+                    @dz(_di_vy, k) * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) +
+                        @dy(_di_vz, j) * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k])
                 )
             else
                 εyz[i, j, k] = zero(T)
@@ -169,8 +173,8 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
             if isvalid_xz(ϕ, i, j, k)
                 εxz[i, j, k] =
                     0.5 * (
-                    _dz * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
-                        _dx * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
+                    @dz(_di_vx, k) * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) +
+                        @dx(_di_vz, i) * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k])
                 )
             else
                 εxz[i, j, k] = zero(T)
@@ -181,8 +185,8 @@ Compute the 3D components of the strain rate tensor `ε` from the velocity field
             if isvalid_xy(ϕ, i, j, k)
                 εxy[i, j, k] =
                     0.5 * (
-                    _dy * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
-                        _dx * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
+                    @dy(_di_vx, j) * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) +
+                        @dx(_di_vy, i) * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1])
                 )
             else
                 εxy[i, j, k] = zero(T)

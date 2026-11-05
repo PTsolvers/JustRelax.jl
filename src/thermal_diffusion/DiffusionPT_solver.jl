@@ -54,6 +54,8 @@ function _heatdiffusion_PT!(
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
     _sq_len_RT = inv(sqrt(prod(global_grid_size(Val(length(ni))))))
+    # the residual norm counts each overlap cell on its owner only
+    weightT = owned_cells(thermal.ResT)
     @copy thermal.Told thermal.T
 
     # errors
@@ -107,7 +109,8 @@ function _heatdiffusion_PT!(
                 ni,
             )
             thermal_bcs!(thermal, thermal_bc)
-            update_halo!(thermal.T)
+            # the flux kernel treats each rank edge as a domain boundary
+            update_overlap_halo!(thermal.T)
         end
 
         iter += 1
@@ -128,7 +131,7 @@ function _heatdiffusion_PT!(
                 )
             end
 
-            err = norm_mpi(thermal.ResT) * _sq_len_RT
+            err = masked_norm_mpi(weightT, thermal.ResT) * _sq_len_RT
 
             push!(norm_ResT, err)
             push!(iter_count, iter)
@@ -207,6 +210,8 @@ function _heatdiffusion_PT!(
     ϵ = pt_thermal.ϵ
     ni = size(thermal.H)
     _sq_len_RT = inv(sqrt(prod(global_grid_size(Val(length(ni))))))
+    # the residual norm counts each overlap cell on its owner only
+    weightT = owned_cells(thermal.ResT)
     @copy thermal.Told thermal.T
 
     phases = get_phase(phase)
@@ -262,7 +267,8 @@ function _heatdiffusion_PT!(
                 args,
             )
             thermal_bcs!(thermal, thermal_bc)
-            update_halo!(thermal.T)
+            # the flux kernel treats each rank edge as a domain boundary
+            update_overlap_halo!(thermal.T)
 
 
         end
@@ -288,7 +294,7 @@ function _heatdiffusion_PT!(
                 )
             end
 
-            err = norm_mpi(thermal.ResT) * _sq_len_RT
+            err = masked_norm_mpi(weightT, thermal.ResT) * _sq_len_RT
 
             push!(norm_ResT, err)
             push!(iter_count, iter)

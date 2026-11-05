@@ -115,14 +115,82 @@ end
     return reduce(+, values)
 end
 
-@inline function cap_residual(x, rheology, phase, EII, trial, η, Kdt, ηvp, Pf)
+# Cap geometry depends on the material and `EII` only, so it is fixed during one return
+# mapping; computing it once keeps it out of the Newton and ForwardDiff evaluations.
+# GeoParams uses two variants: the yield function recomputes the friction angle only when it
+# softens, its flow-potential derivatives whenever `EII ≠ 0`.
+@inline function cap_geometry(v::DruckerPragerCap, EII, recompute_angles)
+    sinϕ, cosϕ, sinΨ, ϕ, Ψ, C, pT = map(x -> x.val, (v.sinϕ, v.cosϕ, v.sinΨ, v.ϕ, v.Ψ, v.C, v.pT))
+    ϕ = v.softening_ϕ(EII, ϕ)
+    Ψ = v.softening_Ψ(EII, Ψ)
+    C = v.softening_C(EII, C)
+    if recompute_angles
+        sinϕ, cosϕ = sincosd(ϕ)
+        sinΨ = sind(Ψ)
+    end
+    return GeoParams.compute_tensile_cap(sinϕ, cosϕ, sinΨ, C, pT)
+end
+@inline function cap_geometry(v::DruckerPragerCap, EII)
+    yield = cap_geometry(v, EII, !(v.softening_ϕ isa NoSoftening) && !iszero(EII))
+    flow = cap_geometry(v, EII, !iszero(EII))
+    return (yield, flow)
+end
+@inline cap_geometry(v::AbstractPlasticity, EII) = nothing
+
+@generated function cap_geometry(elements::Tuple, EII)
+    N = length(elements.parameters)
+    return quote
+        Base.@inline
+        Base.@nexprs $N i -> begin
+            v = elements[i]
+            isplastic(v) && return cap_geometry(v, EII)
+        end
+        return nothing
+    end
+end
+@inline cap_geometry(rheology, phase::Integer, EII) = cap_geometry(rheology[phase].CompositeRheology[1].elements, EII)
+@inline cap_geometry(rheology, ratio, EII) = map(r -> cap_geometry(r.CompositeRheology[1].elements, EII), rheology)
+
+# Matches `compute_yieldfunction`, `∂Q∂τII` and `-∂Q∂P` of `DruckerPragerCap`.
+@inline function cap_invariants(v::DruckerPragerCap, (yield, flow)::Tuple, s, p, EII, Pf)
+    P = p - Pf
+    F = GeoParams.MaterialParameters.ConstitutiveRelationships.compute_F(yield.k, yield.c, yield.py, yield.a, yield.Ry, yield.pd, yield.τd, s, P)
+    Aτ, Ap = GeoParams.MaterialParameters.ConstitutiveRelationships._Aτ_Ap(flow, s, P)
+    return SVector(F, Aτ, Ap)
+end
+@inline cap_invariants(v::AbstractPlasticity, ::Nothing, s, p, EII, Pf) = cap_invariants(v, s, p, EII, Pf)
+
+@generated function cap_invariants_elements(elements::Tuple, geometry, s, p, EII, Pf)
+    N = length(elements.parameters)
+    return quote
+        Base.@inline
+        Base.@nexprs $N i -> begin
+            v = elements[i]
+            isplastic(v) && return cap_invariants(v, geometry, s, p, EII, Pf)
+        end
+        return SVector(s, zero(s), zero(s))
+    end
+end
+
+@inline cap_invariants(rheology, phase::Integer, geometry, s, p, EII, Pf) =
+    cap_invariants_elements(rheology[phase].CompositeRheology[1].elements, geometry, s, p, EII, Pf)
+
+@inline function cap_invariants(rheology, ratio, geometry, s, p, EII, Pf)
+    values = map(rheology, geometry, Tuple(ratio)) do r, g, w
+        iszero(w) && return SVector(zero(s), zero(s), zero(s))
+        return w * cap_invariants_elements(r.CompositeRheology[1].elements, g, s, p, EII, Pf)
+    end
+    return reduce(+, values)
+end
+
+@inline function cap_residual(x, rheology, phase, geometry, EII, trial, η, Kdt, ηvp, Pf)
     s, p, λ = x
-    F, Aτ, Ap = cap_invariants(rheology, phase, s, p, EII, Pf)
+    F, Aτ, Ap = cap_invariants(rheology, phase, geometry, s, p, EII, Pf)
     return SVector(s - trial[1] + 2 * η * λ * Aτ, p - trial[2] - Kdt * λ * Ap, F - ηvp * λ)
 end
 
-function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; Pf = zero(T), maxiter = 40) where {T}
-    F, _, _ = cap_invariants(rheology, phase, s, p, EII, Pf)
+function cap_return_mapping(rheology, phase, geometry, s::T, p::T, EII, η, Kdt, ηvp; Pf = zero(T), maxiter = 40) where {T}
+    F, _, _ = cap_invariants(rheology, phase, geometry, s, p, EII, Pf)
     x = SVector(s, p, zero(T))
     F <= 0 && return x, true
     # Dilatant cap flow needs a finite elastic volumetric compliance.
@@ -130,7 +198,7 @@ function cap_return_mapping(rheology, phase, s::T, p::T, EII, η, Kdt, ηvp; Pf 
     scale = max(abs(s), abs(p), abs(F), eps(T))
     tolerance = 100 * eps(T)
     trial = SVector(s, p)
-    residual = y -> cap_residual(y, rheology, phase, EII, trial, η, Kdt, ηvp, Pf) / scale
+    residual = y -> cap_residual(y, rheology, phase, geometry, EII, trial, η, Kdt, ηvp, Pf) / scale
     r = residual(x)
     for _ in 1:maxiter
         maximum(abs, r) <= tolerance && return x, true
@@ -159,11 +227,20 @@ end
 # Shared by PT (η = viscosity*dτ_r) and DYREL (η = Maxwell viscosity).
 # Keep the analytical, relaxed Drucker-Prager correction for non-cap materials.
 # Yield and flow are evaluated at the effective pressure `P - Pf`; `P` itself stays total.
-@inline function plastic_correction(rheology, phase, τtrial::NTuple{N, T}, P, EII, η, Kdt, ηvp, λold, relλ, is_pl; Pf = zero(P)) where {N, T}
+# With `cap_mode = Val(:trial)` a tensile-cap phase is only checked at the trial state: a
+# yielding (or non-finite) trial returns `λ = NaN`, so the caller can redo that point with
+# `Val(:full)`. A non-yielding trial gives exactly the `Val(:full)` result.
+@inline function plastic_correction(rheology, phase, τtrial::NTuple{N, T}, P, EII, η, Kdt, ηvp, λold, relλ, is_pl; Pf = zero(P), cap_mode = Val(:full)) where {N, T}
     s = second_invariant(τtrial)
-    if has_tensile_cap(rheology, phase)
-        x, converged = cap_return_mapping(rheology, phase, s, P, EII, η, Kdt, ηvp; Pf)
-        _, Aτ, Ap = cap_invariants(rheology, phase, x[1], x[2], EII, Pf)
+    if has_tensile_cap(rheology, phase) && cap_mode isa Val{:trial}
+        F_trial, Aτ_trial, Ap_trial = cap_invariants(rheology, phase, cap_geometry(rheology, phase, EII), s, P, EII, Pf)
+        trial_direction = iszero(s) ? zero(T) : Aτ_trial / s
+        g_trial = ntuple(i -> trial_direction * τtrial[i], Val(N))
+        return F_trial <= 0 ? zero(T) : T(NaN), g_trial, -Ap_trial
+    elseif has_tensile_cap(rheology, phase)
+        geometry = cap_geometry(rheology, phase, EII)
+        x, converged = cap_return_mapping(rheology, phase, geometry, s, P, EII, η, Kdt, ηvp; Pf)
+        _, Aτ, Ap = cap_invariants(rheology, phase, geometry, x[1], x[2], EII, Pf)
         direction = iszero(s) ? zero(T) : Aτ / s
         g = ntuple(i -> direction * τtrial[i], Val(N))
         # NaNs propagate through the stress/pressure residual to the existing
@@ -173,8 +250,10 @@ end
         # iterations (+15% at relλ = 0.2, +75% at 0.05 on the DPCap shear band).
         return converged ? x[3] : T(NaN), g, -Ap
     end
-    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
     F = compute_yieldfunction_phase(rheology, phase; P, τII = s, EII, Pf)
+    # Elastic points skip the flow gradients: every caller scales them by λ = 0.
+    (is_pl && !iszero(s) && F > 0) || return zero(T), ntuple(_ -> zero(T), Val(N)), zero(T)
+    g, Qp, Fp = compute_plastic_gradients_phase(rheology, phase, τtrial; P, τII = s, EII, Pf)
     # Past the apex of the cone the yield stress `s - F` is negative, and the correction would
     # return the deviatoric stress through zero into reverse: a negative viscosity that pulls P
     # further into tension. Truncate the cone at its apex, where the yield stress is zero and
@@ -182,10 +261,6 @@ end
     beyond_apex = F > s
     F = min(F, s)
     volume = isinf(Kdt) || beyond_apex ? zero(T) : Kdt * Fp * Qp
-    λ = if is_pl && !iszero(s) && F > 0
-        (1 - relλ) * λold + relλ * F / (η + ηvp + volume)
-    else
-        zero(T)
-    end
+    λ = (1 - relλ) * λold + relλ * F / (η + ηvp + volume)
     return λ, g, Qp
 end

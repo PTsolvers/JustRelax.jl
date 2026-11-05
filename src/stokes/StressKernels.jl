@@ -579,6 +579,20 @@ Base.@propagate_inbounds @inline function harm_clamped_xy(A, i0, j0, k0, ic, jc,
     return 4 / (1 / A[i0, j0, kc] + 1 / A[ic, j0, kc] + 1 / A[i0, jc, kc] + 1 / A[ic, jc, kc])
 end
 
+# The same harmonic means from stored reciprocals `A_inv = 1 ./ A`: one division instead of five,
+# and bitwise equal to the above because the reciprocals and the summation order are the same.
+Base.@propagate_inbounds @inline function harm_inv_clamped_yz(A_inv, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (A_inv[ic, j0, k0] + A_inv[ic, jc, k0] + A_inv[ic, j0, kc] + A_inv[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_inv_clamped_xz(A_inv, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (A_inv[i0, jc, k0] + A_inv[ic, jc, k0] + A_inv[i0, jc, kc] + A_inv[ic, jc, kc])
+end
+
+Base.@propagate_inbounds @inline function harm_inv_clamped_xy(A_inv, i0, j0, k0, ic, jc, kc, ::Vararg{Integer, N}) where {N}
+    return 4 / (A_inv[i0, j0, kc] + A_inv[ic, j0, kc] + A_inv[i0, jc, kc] + A_inv[ic, jc, kc])
+end
+
 # Averages of one shear component onto the edge of another. Along the directions in which
 # both edges sit on vertices, or the averaged component sits on vertices, the raw indices
 # `i, j, k` address all `n + 1` planes; only cell-centred directions are clamped.
@@ -1213,4 +1227,9 @@ end
 
 Base.@propagate_inbounds @inline function harm_clamped(A, i0, j0, ic, jc)
     return 4 / (1 / A[i0, j0] + 1 / A[ic, jc] + 1 / A[i0, jc] + 1 / A[ic, j0])
+end
+
+# `harm_clamped` from stored reciprocals `A_inv = 1 ./ A` (see `harm_inv_clamped_yz`)
+Base.@propagate_inbounds @inline function harm_inv_clamped(A_inv, i0, j0, ic, jc)
+    return 4 / (A_inv[i0, j0] + A_inv[ic, jc] + A_inv[i0, jc] + A_inv[ic, j0])
 end

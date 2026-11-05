@@ -11,20 +11,61 @@
     return nothing
 end
 
+# `compute_∇V!`, `compute_strain_rate!` and the pressure residual in one pass. The divergence stays
+# in registers: inside the iterations only ε and RP read it, and the solver recomputes `stokes.∇V`
+# once it returns.
 function compute_variational_kinematics3D!(stokes, dyrel, rheology, phases, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
-    @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di.vertex)
-    if do_strain_rate
-        @parallel (@idx ni .+ 1) compute_strain_rate!(stokes.∇V, @strain(stokes)..., @velocity(stokes)..., ϕ, _di.vertex, _di.velocity...)
-    end
-    @parallel (@idx ni) variational_RP3D!(stokes.R.RP, stokes.P, stokes.P0, stokes.∇V, stokes.Q, dyrel.ηb, ϕ, rheology, phases.center, ΔT, melt_fraction, dt)
+    @parallel_async (@idx ni .+ 1) variational_kinematics3D!(
+        @strain(stokes)..., @velocity(stokes)..., stokes.R.RP, stokes.P, stokes.P0, stokes.Q, dyrel.ηb, ϕ,
+        _di.vertex, _di.velocity..., rheology, phases.center, ΔT, melt_fraction, dt, do_strain_rate,
+    )
     return nothing
 end
 
-@parallel_indices (i, j, k) function variational_RP3D!(RP, P, P0, div, Q, ηb, ϕ, rheology, phase, ΔT, melt_fraction, dt)
-    RP[i, j, k] = if isvalid_c(ϕ, i, j, k)
-        ϕ.center[i, j, k] * _RP_cell(P[i, j, k], P0[i, j, k], div[i, j, k], Q[i, j, k], ηb[i, j, k], dt, rheology, phase, ΔT, melt_fraction, i, j, k)
-    else
-        zero(eltype(RP))
+@parallel_indices (i, j, k) function variational_kinematics3D!(
+        εxx::AbstractArray{T, 3}, εyy, εzz, εyz, εxz, εxy, Vx, Vy, Vz, RP, P, P0, Q, ηb, ϕ::JustRelax.RockRatio,
+        _di_vertex, _di_vx, _di_vy, _di_vz, rheology, phase, ΔT, melt_fraction, dt, do_strain_rate,
+    ) where {T}
+    @inbounds begin
+        if all((i, j, k) .≤ size(RP))
+            if isvalid_c(ϕ, i, j, k)
+                _dx, _dy, _dz = @dxi(_di_vertex, i, j, k)
+                ∇Vijk = div(Vx, Vy, Vz, _dx, _dy, _dz, i, j, k)
+                RP[i, j, k] = ϕ.center[i, j, k] * _RP_cell(P[i, j, k], P0[i, j, k], ∇Vijk, Q[i, j, k], ηb[i, j, k], dt, rheology, phase, ΔT, melt_fraction, i, j, k)
+                if do_strain_rate
+                    ∇V_third = ∇Vijk * inv(3)
+                    εxx[i, j, k] = _d_xi(Vx, _dx, i, j, k) - ∇V_third
+                    εyy[i, j, k] = _d_yi(Vy, _dy, i, j, k) - ∇V_third
+                    εzz[i, j, k] = _d_zi(Vz, _dz, i, j, k) - ∇V_third
+                end
+            else
+                RP[i, j, k] = zero(T)
+                if do_strain_rate
+                    εxx[i, j, k] = εyy[i, j, k] = εzz[i, j, k] = zero(T)
+                end
+            end
+        end
+        if do_strain_rate && all((i, j, k) .≤ size(εyz))
+            εyz[i, j, k] = if isvalid_yz(ϕ, i, j, k)
+                0.5 * (@dz(_di_vy, k) * (Vy[i + 1, j, k + 1] - Vy[i + 1, j, k]) + @dy(_di_vz, j) * (Vz[i + 1, j + 1, k] - Vz[i + 1, j, k]))
+            else
+                zero(T)
+            end
+        end
+        if do_strain_rate && all((i, j, k) .≤ size(εxz))
+            εxz[i, j, k] = if isvalid_xz(ϕ, i, j, k)
+                0.5 * (@dz(_di_vx, k) * (Vx[i, j + 1, k + 1] - Vx[i, j + 1, k]) + @dx(_di_vz, i) * (Vz[i + 1, j + 1, k] - Vz[i, j + 1, k]))
+            else
+                zero(T)
+            end
+        end
+        if do_strain_rate && all((i, j, k) .≤ size(εxy))
+            εxy[i, j, k] = if isvalid_xy(ϕ, i, j, k)
+                0.5 * (@dy(_di_vx, j) * (Vx[i, j + 1, k + 1] - Vx[i, j, k + 1]) + @dx(_di_vy, i) * (Vy[i + 1, j, k + 1] - Vy[i, j, k + 1]))
+            else
+                zero(T)
+            end
+        end
     end
     return nothing
 end
@@ -101,7 +142,8 @@ end
     R, V, u = (Rx, Ry, Rz), (Vx, Vy, Vz), (ux, uy, uz)
     D, α, β, t = (Dx, Dy, Dz), (ax, ay, az), (bx, by, bz), (tx, ty, tz)
     τ, g = (xx, yy, zz, yz, xz, xy), (gx, gy, gz)
-    for d in 1:3
+    # Unrolled: indexing these tuples with a runtime `d` spills them to GPU local memory.
+    Base.Cartesian.@nexprs 3 d -> begin
         if all((i, j, k) .≤ size(R[d]))
             if valid_momentum3(ϕ, d, i, j, k)
                 r = variational_momentum3D(d, V, P, θ, τ, g, ϕ, dc, dv, dt, i, j, k) / D[d][i, j, k]

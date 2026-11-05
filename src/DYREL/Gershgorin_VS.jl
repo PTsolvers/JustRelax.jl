@@ -240,5 +240,14 @@ end
 end
 
 function Gershgorin_variational!(::Val{2}, dyrel, stokes, phases, ϕ, rheology, di, dt, ρg = nothing)
-    return Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phases, ϕ, rheology, di, dt, ρg)
+    Gershgorin_Stokes2D_SchurComplement!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy, stokes.viscosity.η, dyrel.γ_eff, phases, ϕ, rheology, di, dt, ρg)
+    # At a rank seam `η_vertex` clamps the outermost vertex onto the local cells, so the face
+    # rows next to it get a one-sided bound while the neighbor computes the same rows from the
+    # full stencil. Take them from the neighbor; otherwise the two copies of a shared face relax
+    # with different pseudo-time steps. Overlap-1 directions carry no halo and are skipped. A
+    # single rank has no seam, and its arrays need not match the global grid it initialized.
+    if ImplicitGlobalGrid.grid_is_initialized() && ImplicitGlobalGrid.global_grid().nprocs > 1 && !any(periodic_dims(stokes))
+        update_halo!(dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy)
+    end
+    return nothing
 end

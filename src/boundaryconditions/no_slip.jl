@@ -31,10 +31,10 @@ end
 end
 
 function no_slip!(Ax, Ay, bc)
-    bc.left && (@parallel (@idx max(size(Ax, 2), size(Ay, 2))) _no_slip_left!(Ax, Ay))
-    bc.right && (@parallel (@idx max(size(Ax, 2), size(Ay, 2))) _no_slip_right!(Ax, Ay))
-    bc.bot && (@parallel (@idx max(size(Ax, 1), size(Ay, 1))) _no_slip_bot!(Ax, Ay))
-    bc.top && (@parallel (@idx max(size(Ax, 1), size(Ay, 1))) _no_slip_top!(Ax, Ay))
+    bc.left && (@parallel_async (@idx max(size(Ax, 2), size(Ay, 2))) _no_slip_left!(Ax, Ay))
+    bc.right && (@parallel_async (@idx max(size(Ax, 2), size(Ay, 2))) _no_slip_right!(Ax, Ay))
+    bc.bot && (@parallel_async (@idx max(size(Ax, 1), size(Ay, 1))) _no_slip_bot!(Ax, Ay))
+    bc.top && (@parallel_async (@idx max(size(Ax, 1), size(Ay, 1))) _no_slip_top!(Ax, Ay))
     return nothing
 end
 
@@ -93,11 +93,11 @@ end
 end
 
 function no_slip!(Ax, Ay, Az, bc)
-    bc.left && (@parallel (@idx (max(size(Ax, 2), size(Ay, 2), size(Az, 2)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_left!(Ax, Ay, Az))
-    bc.right && (@parallel (@idx (max(size(Ax, 2), size(Ay, 2), size(Az, 2)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_right!(Ax, Ay, Az))
-    bc.front && (@parallel (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_front!(Ax, Ay, Az))
-    bc.back && (@parallel (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_back!(Ax, Ay, Az))
-    bc.bot && (@parallel (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 2), size(Ay, 2), size(Az, 2)))) _no_slip_bot!(Ax, Ay, Az))
-    bc.top && (@parallel (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 2), size(Ay, 2), size(Az, 2)))) _no_slip_top!(Ax, Ay, Az))
+    bc.left && (@parallel_async (@idx (max(size(Ax, 2), size(Ay, 2), size(Az, 2)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_left!(Ax, Ay, Az))
+    bc.right && (@parallel_async (@idx (max(size(Ax, 2), size(Ay, 2), size(Az, 2)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_right!(Ax, Ay, Az))
+    bc.front && (@parallel_async (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_front!(Ax, Ay, Az))
+    bc.back && (@parallel_async (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 3), size(Ay, 3), size(Az, 3)))) _no_slip_back!(Ax, Ay, Az))
+    bc.bot && (@parallel_async (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 2), size(Ay, 2), size(Az, 2)))) _no_slip_bot!(Ax, Ay, Az))
+    bc.top && (@parallel_async (@idx (max(size(Ax, 1), size(Ay, 1), size(Az, 1)), max(size(Ax, 2), size(Ay, 2), size(Az, 2)))) _no_slip_top!(Ax, Ay, Az))
     return nothing
 end

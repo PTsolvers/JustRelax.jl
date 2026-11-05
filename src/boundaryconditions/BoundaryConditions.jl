@@ -86,16 +86,19 @@ function flow_bcs!(bcs, V::Vararg{T, N}) where {T, N}
     return _flow_bcs!(bcs, tuple(V...))
 end
 
-function _flow_bcs!(bcs, V)
+# Kernels on one stream run in launch order, so a single synchronization at the end covers all
+# boundary kernels. `async = true` skips it for callers that synchronize before the next halo
+# exchange themselves.
+function _flow_bcs!(bcs, V, async::Bool = false)
     n = bc_index(V)
     # no slip boundary conditions
-    # do_bc(bcs.no_slip) && (@parallel (@idx n) no_slip!(V..., bcs.no_slip))
     if do_bc(bcs.no_slip)
         no_slip!(V..., bcs.no_slip)
     end
     # free slip boundary conditions
-    do_bc(bcs.free_slip) && (@parallel (@idx n) free_slip!(V..., bcs.free_slip))
-    do_bc(bcs.periodic) && (@parallel (@idx n) periodic_boundary!(V..., bcs.periodic))
+    do_bc(bcs.free_slip) && (@parallel_async (@idx n) free_slip!(V..., bcs.free_slip))
+    do_bc(bcs.periodic) && (@parallel_async (@idx n) periodic_boundary!(V..., bcs.periodic))
+    async || @synchronize
 
     return nothing
 end

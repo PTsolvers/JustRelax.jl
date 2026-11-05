@@ -19,7 +19,7 @@ function compute_∇V_strain_rate_RP!(
     if ndims(stokes.P) == 3
         return compute_variational_kinematics3D!(stokes, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, do_strain_rate, ΔT, melt_fraction)
     end
-    @parallel (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
+    @parallel_async (@idx ni .+ 1) compute_∇V_strain_rate_RP!(
         @strain(stokes)...,
         @velocity(stokes)...,
         stokes.R.RP,

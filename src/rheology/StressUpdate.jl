@@ -472,6 +472,16 @@ elastic-only phases.
     return dQdτ, GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
 end
 
+# Drucker-Prager potentials give ∂Q/∂τij = τij / (2τII) in tensor convention. GeoParams'
+# per-component functions recompute τII six times and are not inlined into GPU kernels, so
+# reuse the τII of `τij` that the caller passes in `args`.
+@inline function _plastic_grad_primitive(v::Union{DruckerPrager, DruckerPrager_regularised}, τij::NTuple{N, T}, args::NamedTuple) where {N, T}
+    τII = haskey(args, :τII) ? args.τII : second_invariant(τij)
+    inv_2τII = inv(2 * τII)
+    dQdτ = ntuple(i -> τij[i] * inv_2τII, Val(N))
+    return dQdτ, GeoParams.∂Q∂P(v, args.P; args...), GeoParams.∂F∂P(v, args.P; args...)
+end
+
 # Older GeoParams tensor wrappers drop state keywords. The scalar cap interface
 # preserves pressure and returns Aτ, the physical tensor-flow coefficient.
 @inline function _plastic_grad_primitive(v::DruckerPragerCap, τij::NTuple{N, T}, args::NamedTuple) where {N, T}

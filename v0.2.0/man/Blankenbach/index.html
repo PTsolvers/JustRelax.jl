@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Blankenbach · JustRelax.jl</title><meta name="title" content="Blankenbach · JustRelax.jl"/><meta property="og:title" content="Blankenbach · JustRelax.jl"/><meta property="twitter:title" content="Blankenbach · JustRelax.jl"/><meta name="description" content="Documentation for JustRelax.jl."/><meta property="og:description" content="Documentation for JustRelax.jl."/><meta property="twitter:description" content="Documentation for JustRelax.jl."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">JustRelax.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><span class="tocitem">User guide</span><ul><li><a class="tocitem" href="../installation/">Installation</a></li><li><a class="tocitem" href="../backend/">Backend</a></li><li><a class="tocitem" href="../equations/">Equations</a></li><li><a class="tocitem" href="../advection/">Advection</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li class="is-active"><a class="tocitem" href>Blankenbach</a><ul class="internal"><li class="toplevel"><a class="tocitem" href="#Initialize-packages"><span>Initialize packages</span></a></li><li class="toplevel"><a class="tocitem" href="#Script"><span>Script</span></a></li><li><a class="tocitem" href="#Model-domain"><span>Model domain</span></a></li><li><a class="tocitem" href="#Rheology"><span>Rheology</span></a></li><li><a class="tocitem" href="#Initialize-particles"><span>Initialize particles</span></a></li><li class="toplevel"><a class="tocitem" href="#Temperature-anomaly"><span>Temperature anomaly</span></a></li><li><a class="tocitem" href="#Stokes-and-heat-diffusion-arrays"><span>Stokes and heat diffusion arrays</span></a></li><li><a class="tocitem" href="#Initialize-thermal-profile-and-viscosity-fields"><span>Initialize thermal profile and viscosity fields</span></a></li><li><a class="tocitem" href="#Boundary-conditions"><span>Boundary conditions</span></a></li><li><a class="tocitem" href="#Pseuo-transient-coefficients"><span>Pseuo-transient coefficients</span></a></li><li><a class="tocitem" href="#Just-before-solving-the-problem..."><span>Just before solving the problem...</span></a></li><li><a class="tocitem" href="#Advancing-one-time-step"><span>Advancing one time step</span></a></li><li class="toplevel"><a class="tocitem" href="#Visualization"><span>Visualization</span></a></li><li><a class="tocitem" href="#Fields"><span>Fields</span></a></li></ul></li><li><a class="tocitem" href="../ShearBands/">Shear Bands</a></li></ul></li><li><a class="tocitem" href="../listfunctions/">List of functions</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Blankenbach</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Blankenbach</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/PTsolvers/JustRelax.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/PTsolvers/JustRelax.jl/blob/main/docs/src/man/Blankenbach.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Blankenbach-benchmark"><a class="docs-heading-anchor" href="#Blankenbach-benchmark">Blankenbach benchmark</a><a id="Blankenbach-benchmark-1"></a><a class="docs-heading-anchor-permalink" href="#Blankenbach-benchmark" title="Permalink"></a></h1><p>Thermal convection benchmark from  <a href="https://academic.oup.com/gji/article/98/1/23/622167">Blankenbach et al., 1989</a></p><h1 id="Initialize-packages"><a class="docs-heading-anchor" href="#Initialize-packages">Initialize packages</a><a id="Initialize-packages-1"></a><a class="docs-heading-anchor-permalink" href="#Initialize-packages" title="Permalink"></a></h1><p>Load JustRelax necessary modules and define backend.</p><pre><code class="language-julia hljs">using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
+const backend_JR = CPUBackend</code></pre><p>For this benchmark we will use particles to track the advection of the material phases and their information. For this, we will use <a href="https://github.com/JuliaGeodynamics/JustPIC.jl">JustPIC.jl</a></p><pre><code class="language-julia hljs">using JustPIC, JustPIC._2D
+const backend = CPUBackend # Options: CPUBackend, CUDABackend, AMDGPUBackend</code></pre><p>We will also use <code>ParallelStencil.jl</code> to write some device-agnostic helper functions:</p><pre><code class="language-julia hljs">using ParallelStencil
+@init_parallel_stencil(Threads, Float64, 2) #or (CUDA, Float64, 2) or (AMDGPU, Float64, 2)</code></pre><p>and will use <a href="https://github.com/JuliaGeodynamics/GeoParams.jl/tree/main">GeoParams.jl</a> to define and compute physical properties of the materials:</p><pre><code class="language-julia hljs">using GeoParams</code></pre><h1 id="Script"><a class="docs-heading-anchor" href="#Script">Script</a><a id="Script-1"></a><a class="docs-heading-anchor-permalink" href="#Script" title="Permalink"></a></h1><h2 id="Model-domain"><a class="docs-heading-anchor" href="#Model-domain">Model domain</a><a id="Model-domain-1"></a><a class="docs-heading-anchor-permalink" href="#Model-domain" title="Permalink"></a></h2><pre><code class="language-julia hljs">nx = ny      = 51                       # number of cells per dimension
+nit          = 6e3
+igg          = IGG(
+    init_global_grid(nx, ny, 1; init_MPI= true)...
+)                                       # initialize MPI grid
+ly           = 1.0                      # domain length in y
+lx           = ly * ar                  # domain length in x
+ni           = nx, ny                   # number of cells
+li           = lx, ly                   # domain length in x- and y-
+di           = @. li / ni               # grid step in x- and -y
+origin       = 0.0, 0.0                 # origin coordinates
+grid         = Geometry(ni, li; origin = origin)
+(; xci, xvi) = grid                     # nodes at the center and vertices of the cells
+dt = dt_diff = 0.9 * min(di...)^2 / 4.0 # diffusive CFL timestep limiter</code></pre><h2 id="Rheology"><a class="docs-heading-anchor" href="#Rheology">Rheology</a><a id="Rheology-1"></a><a class="docs-heading-anchor-permalink" href="#Rheology" title="Permalink"></a></h2><pre><code class="language-julia hljs">rheology = (
+    SetMaterialParams(;
+        Phase             = 1,
+        Density           = PT_Density(; ρ0 = 1, α = 1, β = 0.0),
+        HeatCapacity      = ConstantHeatCapacity(; Cp = 1.0),
+        Conductivity      = ConstantConductivity(;  k = 1.0),
+        CompositeRheology = CompositeRheology((LinearViscous(; η = 1),)),
+        RadioactiveHeat   = ConstantRadioactiveHeat(0.0),
+        Gravity           = ConstantGravity(; g = 1e4),
+    ),
+)</code></pre><h2 id="Initialize-particles"><a class="docs-heading-anchor" href="#Initialize-particles">Initialize particles</a><a id="Initialize-particles-1"></a><a class="docs-heading-anchor-permalink" href="#Initialize-particles" title="Permalink"></a></h2><pre><code class="language-julia hljs">nxcell              = 24 # initial number of perticles per cell
+max_xcell           = 35 # maximum number of perticles per cell
+min_xcell           = 12 # minimum number of perticles per cell
+particles           = init_particles(
+    backend, nxcell, max_xcell, min_xcell, xvi..., di..., ni...
+) # particles object
+subgrid_arrays      = SubgridDiffusionCellArrays(particles) # arrays needed for subgrid diffusion
+# velocity grids
+grid_vx, grid_vy    = velocity_grids(xci, xvi, di) # staggered velocity grids</code></pre><p>and we want to keep track of the temperature <code>pT</code>, temperature of the previous time step <code>pT0</code>, and material phase <code>pPhase</code>:</p><pre><code class="language-julia hljs">pT, pT0, pPhases = init_cell_arrays(particles, Val(3))
+particle_args    = (pT, pT0, pPhases)</code></pre><h1 id="Temperature-anomaly"><a class="docs-heading-anchor" href="#Temperature-anomaly">Temperature anomaly</a><a id="Temperature-anomaly-1"></a><a class="docs-heading-anchor-permalink" href="#Temperature-anomaly" title="Permalink"></a></h1><pre><code class="language-julia hljs">xc_anomaly = 0.0     # origin of thermal anomaly
+yc_anomaly = 1 / 3   # origin of thermal anomaly
+r_anomaly  = 0.1 / 2 # radius of perturbation</code></pre><p>Helper function to initialize material phases with <code>ParallelStencil.jl</code></p><pre><code class="language-julia hljs">function init_phases!(phases, particles)
+    ni = size(phases)
+
+    @parallel_indices (i, j) function init_phases!(phases, index)
+        @inbounds for ip in JustRelax.cellaxes(phases)
+            # quick escape if the ip-th element of the [i,j]-th cell is empty
+            JustRelax.@cell(index[ip, i, j]) == 0 &amp;&amp; continue
+            # all particles have phase number = 1.0
+            JustRelax.@cell phases[ip, i, j] = 1.0
+        end
+        return nothing
+    end
+
+    @parallel (@idx ni) init_phases!(phases, particles.index)
+end
+
+init_phases!(pPhases, particles, lx, yc_anomaly, r_anomaly)</code></pre><p>or we can use the alternative one-liners</p><pre><code class="language-julia hljs">@views pPhase.data[!isnan.(particles.index.data)] .= 1.0</code></pre><p>or</p><pre><code class="language-julia hljs">map!(x -&gt; isnan(x) ? NaN : 1.0, pPhase.data, particles.index.data)</code></pre><p>and finally we need the phase ratios at the cell centers:</p><pre><code class="language-julia hljs">phase_ratios = PhaseRatio(backend_JR, ni, length(rheology))
+phase_ratios_center(phase_ratios, particles, grid, pPhases)</code></pre><h2 id="Stokes-and-heat-diffusion-arrays"><a class="docs-heading-anchor" href="#Stokes-and-heat-diffusion-arrays">Stokes and heat diffusion arrays</a><a id="Stokes-and-heat-diffusion-arrays-1"></a><a class="docs-heading-anchor-permalink" href="#Stokes-and-heat-diffusion-arrays" title="Permalink"></a></h2><p>Stokes arrays object</p><pre><code class="language-julia hljs">stokes = StokesArrays(backend_JR, ni)</code></pre><p>and the correspondent heat diffusion one</p><pre><code class="language-julia hljs">thermal = ThermalArrays(backend_JR, ni)</code></pre><h2 id="Initialize-thermal-profile-and-viscosity-fields"><a class="docs-heading-anchor" href="#Initialize-thermal-profile-and-viscosity-fields">Initialize thermal profile and viscosity fields</a><a id="Initialize-thermal-profile-and-viscosity-fields-1"></a><a class="docs-heading-anchor-permalink" href="#Initialize-thermal-profile-and-viscosity-fields" title="Permalink"></a></h2><p>To initialize the thermal profile we use <code>ParallelStencil.jl</code> again</p><pre><code class="language-julia hljs">@parallel_indices (i, j) function init_T!(T, y)
+    T[i, j] = 1 - y[j]
+    return nothing
+end
+
+@parallel (@idx size(thermal.T))  init_T!(thermal.T,  xvi[2]) # cell vertices
+@parallel (@idx size(thermal.Tc)) init_T!(thermal.Tc, xci[2]) # cell centers</code></pre><p>and we define a rectangular thermal anomaly at <span>$x \in [0, 0.05]$</span>, <span>$y \in [\frac{1}{3} - 0.05, \frac{1}{3} + 0.05]$</span></p><pre><code class="language-julia hljs">function rectangular_perturbation!(T, xc, yc, r, xvi)
+    @parallel_indices (i, j) function _rectangular_perturbation!(T, xc, yc, r, x, y)
+        @inbounds if ((x[i]-xc)^2 ≤ r^2) &amp;&amp; ((y[j] - yc)^2 ≤ r^2)
+            T[i, j] += .2
+        end
+        return nothing
+    end
+    ni = size(T)
+    @parallel (@idx ni) _rectangular_perturbation!(T, xc, yc, r, xvi...)
+    return nothing
+end
+
+xc_anomaly  = 0.0    # center of the thermal anomaly
+yc_anomaly  = 1/3    # center of the thermal anomaly
+r_anomaly   = 0.1/2  # half-width of the thermal anomaly
+rectangular_perturbation!(thermal.T, xc_anomaly, yc_anomaly, r_anomaly, xvi)</code></pre><p>We initialize the buoyancy forces and viscosity</p><pre><code class="language-julia hljs">ρg               = @zeros(ni...), @zeros(ni...)
+η                = @ones(ni...)
+args             = (; T = thermal.Tc, P = stokes.P, dt = Inf)
+compute_ρg!(ρg[2], phase_ratios, rheology, args)
+compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))</code></pre><p>where <code>(-Inf, Inf)</code> is the viscosity cutoff.</p><h2 id="Boundary-conditions"><a class="docs-heading-anchor" href="#Boundary-conditions">Boundary conditions</a><a id="Boundary-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Boundary-conditions" title="Permalink"></a></h2><pre><code class="language-julia hljs">flow_bcs      = FlowBoundaryConditions(;
+    free_slip = (left = true, right=true, top=true, bot=true),
+)
+thermal_bc    = TemperatureBoundaryConditions(;
+    no_flux   = (left = true, right = true, top = false, bot = false),
+)
+thermal_bcs!(thermal.T, thermal_bc)
+thermal.Told .= thermal.T</code></pre><h2 id="Pseuo-transient-coefficients"><a class="docs-heading-anchor" href="#Pseuo-transient-coefficients">Pseuo-transient coefficients</a><a id="Pseuo-transient-coefficients-1"></a><a class="docs-heading-anchor-permalink" href="#Pseuo-transient-coefficients" title="Permalink"></a></h2><pre><code class="language-julia hljs">pt_stokes   = PTStokesCoeffs(li, di; ϵ=1e-4,  CFL = 1 / √2.1)
+pt_thermal  = PTThermalCoeffs(
+    backend_JR, rheology, phase_ratios, args, dt, ni, di, li; ϵ=1e-5, CFL = 1e-1 / √2.1
+)</code></pre><h2 id="Just-before-solving-the-problem..."><a class="docs-heading-anchor" href="#Just-before-solving-the-problem...">Just before solving the problem...</a><a id="Just-before-solving-the-problem...-1"></a><a class="docs-heading-anchor-permalink" href="#Just-before-solving-the-problem..." title="Permalink"></a></h2><p>We need to allocate some arrays to be able to do the subgrid diffusion of the temperature field at the particles level:</p><pre><code class="language-julia hljs">T_buffer    = @zeros(ni.+1)     # without the ghost nodes at the x-direction
+Told_buffer = similar(T_buffer) # without the ghost nodes at the x-direction
+dt₀         = similar(stokes.P) # subgrid diffusion time scale
+# copy temperature to buffer arrays
+for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+    copyinn_x!(dst, src)
+end
+# interpolate temperatyre on the particles
+grid2particle!(pT, xvi, T_buffer, particles)
+pT0.data    .= pT.data</code></pre><p>where</p><pre><code class="language-julia hljs">function copyinn_x!(A, B)
+    @parallel function f_x(A, B)
+        @all(A) = @inn_x(B)
+        return nothing
+    end
+    @parallel f_x(A, B)
+end</code></pre><p>In this benchmark we want to keep track of the time <code>trms</code>, the rms-velocity <code>Urms</code></p><p>$</p><p>U<em>{rms} = \sqrt{ \int</em>{\Omega} (V<em>x^2 + V</em>y^2 ) d\Omega} $</p><p>and the Nusselt number at the top of the model <code>Nu_top</code></p><p>$</p><p>Nu_{top} = \int \frac{\partial T}{\partial x} dx $</p><p>And we will store their time history in the vectors:</p><pre><code class="language-julia hljs">Urms   = Float64[]
+Nu_top = Float64[]
+trms   = Float64[]</code></pre><p>We further need two buffer arrays where to interpolate the velocity field at the vertices of the grid cells</p><pre><code class="language-julia hljs"># Buffer arrays to compute velocity rms
+Vx_v = @zeros(ni.+1...)
+Vy_v = @zeros(ni.+1...)</code></pre><h2 id="Advancing-one-time-step"><a class="docs-heading-anchor" href="#Advancing-one-time-step">Advancing one time step</a><a id="Advancing-one-time-step-1"></a><a class="docs-heading-anchor-permalink" href="#Advancing-one-time-step" title="Permalink"></a></h2><ol><li>Solve stokes</li></ol><pre><code class="language-julia hljs">solve!(
+    stokes,
+    pt_stokes,
+    di,
+    flow_bcs,
+    ρg,
+    phase_ratios,
+    rheology,
+    args,
+    Inf,
+    igg;
+    kwargs = (;
+        iterMax          = 150e3,
+        nout             = 200,
+        viscosity_cutoff = (-Inf, Inf),
+        verbose          = true
+    )
+)
+# calculate adaptive time step
+dt = compute_dt(stokes, di, dt_diff)</code></pre><ol><li>Heat diffusion solver</li></ol><pre><code class="language-julia hljs">heatdiffusion_PT!(
+    thermal,
+    pt_thermal,
+    thermal_bc,
+    rheology,
+    args,
+    dt,
+    di;
+    kwargs = (;
+        igg     = igg,
+        phase   = phase_ratios,
+        iterMax = 10e3,
+        nout    = 1e2,
+        verbose = true,
+    )
+)</code></pre><ol><li>Subgrid diffusion at the particle level</li></ol><pre><code class="language-julia hljs">for (dst, src) in zip((T_buffer, Told_buffer), (thermal.T, thermal.Told))
+    copyinn_x!(dst, src)
+end
+subgrid_characteristic_time!(
+    subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+)
+centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+subgrid_diffusion!(
+    pT, T_buffer, thermal.ΔT[2:end-1, :], subgrid_arrays, particles, xvi,  di, dt
+)</code></pre><ol><li>Advect particles</li></ol><pre><code class="language-julia hljs"># advect particles in space
+advection!(particles, RungeKutta2(), @velocity(stokes), (grid_vx, grid_vy), dt)
+# advect particles in memory
+move_particles!(particles, xvi, particle_args)
+# check if we need to inject particles
+inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+# update phase ratios
+phase_ratios_center(phase_ratios, particles, grid, pPhases)</code></pre><ol><li>Interpolate <code>T</code> back to the grid</li></ol><pre><code class="language-julia hljs"># interpolate fields from particle to grid vertices
+particle2grid!(T_buffer, pT, xvi, particles)
+@views T_buffer[:, end]      .= 0.0
+@views T_buffer[:, 1]        .= 1.0
+@views thermal.T[2:end-1, :] .= T_buffer
+flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+temperature2center!(thermal)</code></pre><ol><li>Update buoyancy forces and viscosity</li></ol><pre><code class="language-julia hljs">args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+compute_viscosity!(stokes, 1.0, phase_ratios, args, rheology, (-Inf, Inf))
+compute_ρg!(ρg[2], phase_ratios, rheology, args)</code></pre><ol><li>Compute Nusselt number and rms-velocity</li></ol><pre><code class="language-julia hljs"># Nusselt number, Nu = ∫ ∂T/∂z dx
+Nu_it = sum( ((abs.(thermal.T[2:end-1,end] - thermal.T[2:end-1,end-1])) ./ di[2]) .*di[1])
+push!(Nu_top, Nu_it)
+# Compute U rms
+# U₍ᵣₘₛ₎ = √ ∫∫ (vx²+vz²) dx dz
+Urms_it = let
+    JustRelax.JustRelax2D.velocity2vertex!(Vx_v, Vy_v, stokes.V.Vx, stokes.V.Vy; ghost_nodes=true)
+    @. Vx_v .= hypot.(Vx_v, Vy_v) # we reuse Vx_v to store the velocity magnitude
+    sqrt(sum( Vx_v.^2 .* prod(di)) )
+end
+push!(Urms, Urms_it)
+push!(trms, t)</code></pre><h1 id="Visualization"><a class="docs-heading-anchor" href="#Visualization">Visualization</a><a id="Visualization-1"></a><a class="docs-heading-anchor-permalink" href="#Visualization" title="Permalink"></a></h1><p>We will use <code>Makie.jl</code> to visualize the results</p><pre><code class="language-julia hljs">using GLMakie</code></pre><h2 id="Fields"><a class="docs-heading-anchor" href="#Fields">Fields</a><a id="Fields-1"></a><a class="docs-heading-anchor-permalink" href="#Fields" title="Permalink"></a></h2><pre><code class="language-julia hljs"># Make particles plottable
+p        = particles.coords
+ppx, ppy = p
+pxv      = ppx.data[:]
+pyv      = ppy.data[:]
+clr      = pT.data[:]
+idxv     = particles.index.data[:];
+
+# Make Makie figure
+fig = Figure(size = (900, 900), title = &quot;t = $t&quot;)
+ax1 = Axis(fig[1,1], aspect = ar, title = &quot;T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)&quot;)
+ax2 = Axis(fig[2,1], aspect = ar, title = &quot;Vy [m/s]&quot;)
+ax3 = Axis(fig[1,3], aspect = ar, title = &quot;Vx [m/s]&quot;)
+ax4 = Axis(fig[2,3], aspect = ar, title = &quot;T [K]&quot;)
+# grid temperature
+h1  = heatmap!(ax1, xvi[1], xvi[2], Array(thermal.T[2:end-1,:]) , colormap=:lajolla, colorrange=(0, 1) )
+# y-velocity
+h2  = heatmap!(ax2, xvi[1], xvi[2], Array(stokes.V.Vy) , colormap=:batlow)
+# x-velocity
+h3  = heatmap!(ax3, xvi[1], xvi[2], Array(stokes.V.Vx) , colormap=:batlow)
+# particles temperature
+h4  = scatter!(ax4, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), colormap=:lajolla, colorrange=(0, 1), markersize=3)
+hidexdecorations!(ax1)
+hidexdecorations!(ax2)
+hidexdecorations!(ax3)
+Colorbar(fig[1,2], h1)
+Colorbar(fig[2,2], h2)
+Colorbar(fig[1,4], h3)
+Colorbar(fig[2,4], h4)
+linkaxes!(ax1, ax2, ax3, ax4)
+save(joinpath(figdir, &quot;$(it).png&quot;), fig)
+fig</code></pre><h3 id="Final-model"><a class="docs-heading-anchor" href="#Final-model">Final model</a><a id="Final-model-1"></a><a class="docs-heading-anchor-permalink" href="#Final-model" title="Permalink"></a></h3><p>Temperature field <img src="../assets/Blankenbach/Temp.png" alt="Temperatuere"/></p><p>And time history of the rms-velocity and Nusselt number <img src="../assets/Blankenbach/Time_Series_V_Nu.png" alt="time series"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../advection/">« Advection</a><a class="docs-footer-nextpage" href="../ShearBands/">Shear Bands »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.0 on <span class="colophon-date" title="Thursday 2 May 2024 15:15">Thursday 2 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

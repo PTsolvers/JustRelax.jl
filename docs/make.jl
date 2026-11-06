@@ -135,6 +135,7 @@ makedocs(;
             "Advection" => "man/advection.md",
             "Visualization" => "man/visualization.md",
         ],
+        "Publications" => "man/publications.md",
         "Examples" => Any[
             "Blankenbach" => "man/Blankenbach.md",
             "Shear Bands" => "man/ShearBand2D.md",

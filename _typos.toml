@@ -7,6 +7,7 @@ pn = "pn"
 nd = "nd"
 Heros = "Heros"
 Normale = "Normale"
+Monserrat = "Monserrat" # misspelling corrected by _pubbot (author_fixes)
 
 [default]
 extend-ignore-words-re = [

@@ -34,8 +34,11 @@ function solve_DYREL_adjoint!(
         update_material = true,
         adjoint_ϵ = nothing,
         adjoint_rel_drop = nothing,
+        penalty_scaling = :global,
+        penalty_factor = nothing,
         kwargs...,
     ) where {N}
+    factor = adjoint_penalty_factor(penalty_scaling, penalty_factor)
     dim = Val(N)
     # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
     # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
@@ -67,6 +70,9 @@ function solve_DYREL_adjoint!(
 
     # the adjoint iterates with its own DYREL state; the forward one is left untouched
     dyrel = adjoint_dyrel!(stokes_ad, dyrel)
+    configure_adjoint_penalty!(
+        dyrel, stokes, phase_ratios, nothing, rheology, grid, dt, ρg, free_surface, factor,
+    )
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
     constitutive_scratch = linear_viscosity ? nothing : implicit_viscosity_scratch(stokes)

@@ -44,16 +44,20 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   from zero, e.g. for a different objective, zero them or use separate `AdjointStokesArrays`.
   The stopping criterion does not depend on the start. Default: `false`.
   The adjoint keeps its own DYREL iteration state in `stokes_ad`: it uses the forward
-  preconditioner and penalty of the current state, and carries its damping over from one
+  preconditioner and penalty of the current state by default, and carries its damping over from one
   adjoint solve to the next; the forward DYREL state is not modified.
 - `adjoint_ϵ`: Convergence tolerance of the adjoint solve. Default: the `ϵ` of `dyrel`.
 - `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: the `rel_drop` passed.
 - `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
   a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
-  `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR` and `pressure_relaxation`, e.g.
+  `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR`, `pressure_relaxation`,
+  `penalty_scaling` and `penalty_factor`, e.g.
   `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
   given are those of the forward solve. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
   `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
+  `penalty_scaling = :local` rebuilds the adjoint penalty and preconditioner from local
+  converged viscosity, with `penalty_factor = 20.0` unless specified. The default `:global`
+  inherits the forward penalty unchanged; `penalty_factor` requires `:local`.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the

@@ -142,3 +142,31 @@ respect to every cell's parameter value, and `per_area`, the same derivative div
 cell area. `center` scales with the cell size, so on a non-uniform grid it is largest where
 the cells are largest; plot or compare `per_area` instead.
 The adjoint kernels differentiate pointwise operations with Enzyme on the selected backend.
+
+### Local penalty for the adjoint
+
+Both 2D DYREL solvers accept an independent numerical penalty through `adjoint_kwargs`:
+
+```julia
+adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 20.0)
+# Include this keyword in solve_DYREL!(...; adjoint = true, ...) or
+# solve_VariationalDYREL!(...; adjoint = true, ...).
+```
+
+The default `penalty_scaling = :global` inherits the converged forward penalty unchanged.
+With `:local`, the numerical scale is `penalty_factor * η` at each cell, where `η` is the
+converged forward viscosity. The factor defaults to `20.0` when omitted. It must be finite
+and positive and can only be specified with `:local`.
+
+For incompressible full-rock cells the effective penalty is `penalty_factor * η / 2`.
+For finite bulk viscosity it retains the forward solver's harmonic combination with `Kb * dt`;
+the variational solver also retains the rock-fraction weighting and eliminated cells.
+The adjoint rebuilds its diagonal preconditioner, eigenvalue bounds and pseudo-time steps,
+including free-surface stabilization and the nonlinear constitutive tangent correction.
+The physical viscosity, bulk viscosity and forward DYREL state are unchanged.
+
+This option can reduce velocity-relaxation cost in connected weak zones with large viscosity
+contrasts. Pressure convergence in enclosed weak regions may instead favor the global
+penalty. Compare total iterations and gradients at the same tolerance before adopting it
+for a new model. The penalty stays fixed during each adjoint solve; adaptive updates between
+pressure passes remain a separate diagnostic experiment.

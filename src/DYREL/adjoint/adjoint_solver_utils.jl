@@ -15,7 +15,7 @@ end
 
 const ADJOINT_SOLVER_OPTIONS = (
     :ϵ, :rel_drop, :iterMax, :iterMax_PH, :iterMax_DR, :total_iterMax, :nout,
-    :verbose_PH, :verbose_DR, :pressure_relaxation,
+    :verbose_PH, :verbose_DR, :pressure_relaxation, :penalty_scaling, :penalty_factor,
 )
 
 # Iteration controls of the adjoint solve: those of the forward solve, overridden by
@@ -36,6 +36,67 @@ function adjoint_solver_options(forward::NamedTuple, adjoint_kwargs, kwargs)
     ϵ = haskey(adjoint_kwargs, :ϵ) ? (; adjoint_ϵ = adjoint_kwargs.ϵ) : (;)
     overrides = Base.structdiff(adjoint_kwargs, NamedTuple{(:ϵ, :iterMax)})
     return merge(forward, options, overrides, (; iterMax_DR), ϵ)
+end
+
+# The global default inherits the forward operator exactly. A local numerical penalty is
+# opt-in: physical bulk viscosity and the constitutive tangent remain unchanged.
+function adjoint_penalty_factor(scaling, factor)
+    scaling in (:global, :local) ||
+        throw(ArgumentError("penalty_scaling must be :global or :local"))
+    if scaling === :global
+        isnothing(factor) || throw(ArgumentError("penalty_factor requires penalty_scaling = :local"))
+        return nothing
+    end
+    factor = something(factor, 20.0)
+    factor isa Real && isfinite(factor) && factor > 0 ||
+        throw(ArgumentError("penalty_factor must be finite and positive"))
+    return factor
+end
+
+@inline adjoint_penalty_weight(::Nothing, i, j) = 1.0
+@inline adjoint_penalty_weight(ϕ::JustRelax.RockRatio, i, j) =
+    isvalid_c(ϕ, i, j) ? ϕ.center[i, j] : 0.0
+
+@parallel_indices (i, j) function local_adjoint_penalty!(Γ, η, ηb, ϕ, factor)
+    @inbounds begin
+        weight = adjoint_penalty_weight(ϕ, i, j)
+        if iszero(weight)
+            Γ[i, j] = 0.0
+        else
+            numerical = factor * η[i, j]
+            physical = isinf(ηb[i, j]) ? numerical : ηb[i, j]
+            # Harmonic combination, without multiplying dimensional viscosities together.
+            lo, hi = minmax(physical, numerical)
+            Γ[i, j] = lo / (1 + lo / hi) / weight
+        end
+    end
+    return nothing
+end
+
+function configure_adjoint_penalty!(dyrel, stokes, phases, rock, rheology, grid, dt, ρg, free_surface, factor)
+    isnothing(factor) && return nothing
+    @parallel (@idx size(stokes.P)) local_adjoint_penalty!(
+        dyrel.γ_eff, stokes.viscosity.η, dyrel.ηb, rock, factor,
+    )
+    sum_mpi(x -> !(isfinite(x) && x ≥ 0), dyrel.γ_eff) == 0 ||
+        throw(ArgumentError("local adjoint penalty must be finite and nonnegative"))
+    if isnothing(rock)
+        Gershgorin_Stokes2D_SchurComplement!(
+            dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy,
+            stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phases, rheology, grid.di, dt,
+        )
+        if free_surface
+            apply_free_surface_diagonal!(dyrel.Dy, dyrel.λmaxVy, ρg[end], grid.di.center, dt)
+        end
+    else
+        Gershgorin_Stokes2D_SchurComplement!(
+            dyrel.Dx, dyrel.Dy, dyrel.λmaxVx, dyrel.λmaxVy,
+            stokes.viscosity.η, dyrel.γ_eff, phases, rock, rheology, grid.di, dt,
+            free_surface ? ρg[end] : nothing,
+        )
+    end
+    update_dτV_α_β!(dyrel)
+    return nothing
 end
 
 # The adjoint iterates on the consistent tangent of the converged forward state, whose smallest

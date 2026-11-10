@@ -606,3 +606,48 @@ end
         @test all(A -> all(iszero, Array(A)), seeds)
     end
 end
+
+@testset "Adjoint penalty parameters" begin
+    @test isnothing(JR2K.adjoint_penalty_factor(:global, nothing))
+    @test JR2K.adjoint_penalty_factor(:local, nothing) == 20.0
+    @test JR2K.adjoint_penalty_factor(:local, 2.0) == 2.0
+    @test_throws ArgumentError JR2K.adjoint_penalty_factor(:unknown, nothing)
+    @test_throws ArgumentError JR2K.adjoint_penalty_factor(:global, 20.0)
+    for factor in (0, -1, Inf, NaN, "20")
+        @test_throws ArgumentError JR2K.adjoint_penalty_factor(:local, factor)
+    end
+    for air in (false, true), bulk in (2.5, Inf), bcs in (flow_bcs_cases.free_slip, flow_bcs_cases.periodic_x)
+        (; stokes, adjoint, dyrel, phase_ratios, ϕ, rheology, grid, dt, ρg, ni) =
+            setup((6, 5), bcs, rheologies.viscoelastic; air)
+        fill!(dyrel.ηb, bulk)
+        ds = JR2K.adjoint_dyrel!(adjoint, dyrel)
+        η = copy(stokes.viscosity.η)
+        penalty = copy(dyrel.γ_eff)
+        mask = fill!(similar(stokes.P, Bool), true)
+        if air
+            @parallel (@idx ni) JR2K.update_valid_c_mask!(mask, ϕ)
+        end
+        weight = air ? Array(ϕ.center) : ones(ni)
+        num = 20 .* Array(η)
+        expected = isinf(bulk) ? num ./ 2 : bulk .* num ./ (bulk .+ num)
+        expected = map((g, w, m) -> m ? g / w : 0.0, expected, weight, Array(mask))
+        configure!(factor, free_surface) = JR2K.configure_adjoint_penalty!(
+            ds, stokes, phase_ratios, ϕ, rheology, grid, dt, ρg, free_surface, factor,
+        )
+        configure!(nothing, false)
+        @test Array(ds.γ_eff) == Array(penalty)
+        fill!(ds.Dx, NaN)
+        fill!(ds.λmaxVx, NaN)
+        configure!(20.0, false)
+        @test Array(ds.γ_eff) ≈ expected
+        @test all(isfinite, Array(ds.Dx))
+        @test all(isfinite, Array(ds.λmaxVx))
+        @test all(isfinite, Array(ds.dτVx))
+        @test Array(ds.ηb) == Array(dyrel.ηb)
+        @test Array(stokes.viscosity.η) == Array(η)
+        @test Array(dyrel.γ_eff) == Array(penalty)
+        diagonal = copy(ds.Dy)
+        configure!(20.0, true)
+        @test Array(ds.Dy) != Array(diagonal)
+    end
+end

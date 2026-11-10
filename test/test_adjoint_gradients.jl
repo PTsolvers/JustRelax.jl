@@ -266,6 +266,24 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test next.Dx !== coupled.dyrel.Dx
     end
 
+    @testset "local adjoint penalty, $(variational ? "variational" : "standard")" for variational in (false, true), field in (:Vy, :P)
+        observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        baseline = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        local_result = @suppress sinking_block(
+            igg; observation, variational, adjoint = true,
+            adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 20.0),
+        )
+        @test local_result.J == baseline.J
+        @test local_result.η == baseline.η
+        @test local_result.gradient ≈ baseline.gradient rtol = 1.0e-6
+        for name in fieldnames(JustRelax.DYREL)
+            a, b = getfield(local_result.dyrel, name), getfield(baseline.dyrel, name)
+            @test a isa AbstractArray ? Array(a) == Array(b) : a == b
+        end
+        @test Array(local_result.stokes_ad.solver.dyrel.ηb) == Array(baseline.dyrel.ηb)
+        @test Array(local_result.stokes_ad.solver.dyrel.γ_eff) != Array(baseline.dyrel.γ_eff)
+    end
+
     # The viscosity depends on the solved pressure only, so its pullback must reach λP.
     @testset "pressure-dependent viscosity, $(variational ? "variational" : "standard")" for variational in (false, true)
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))

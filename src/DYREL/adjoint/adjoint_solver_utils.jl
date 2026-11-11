@@ -16,6 +16,7 @@ end
 const ADJOINT_SOLVER_OPTIONS = (
     :ϵ, :rel_drop, :iterMax, :iterMax_PH, :iterMax_DR, :total_iterMax, :nout,
     :verbose_PH, :verbose_DR, :pressure_relaxation, :penalty_scaling, :penalty_factor,
+    :inner_solver,
 )
 
 # Iteration controls of the adjoint solve: those of the forward solve, overridden by
@@ -252,13 +253,17 @@ relative_momentum_residual(errV, errV0) =
 # Per-iteration reset. Enzyme zeroes the shadow of every output it propagates, so one reverse
 # sweep consumes the stress, strain-rate and residual seeds; only the accumulated residuals P and
 # V need zeroing. `initialize_adjoint_iteration!` clears everything, once per solve.
-function reset_adjoint_residuals!(adjoint, ni)
+# `λV` and `λP` are the point the residual is evaluated at: the adjoint unknowns, or a search
+# direction of the Krylov inner solver.
+function reset_adjoint_residuals!(
+        adjoint, ni, λV = (adjoint.λV.Vx, adjoint.λV.Vy), λP = adjoint.λP,
+    )
     @parallel (@idx ni .+ 2) _reset_adjoint_residuals!(
         adjoint.P,
         (adjoint.V.Vx, adjoint.V.Vy),
         (adjoint.R.Rx, adjoint.R.Ry, adjoint.R.RP),
-        (adjoint.λV.Vx, adjoint.λV.Vy),
-        adjoint.λP,
+        λV,
+        λP,
     )
     return nothing
 end
@@ -529,4 +534,147 @@ end
         end
     end
     return nothing
+end
+
+# The Schur-complement correction of `update_adjoint_V_damping_DR!` on its own: the Krylov inner
+# solver needs the corrected residual without the damped update.
+@parallel_indices (i, j) function adjoint_schur_correction!(Rx, Ry, P, γ_eff, Dx, Dy, _di_center)
+    @inbounds begin
+        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+            iE = wrap_next(i, size(γ_eff, 1))
+            Rx[i + 1, j + 1] -=
+                (γ_eff[i, j] * P[i, j] - γ_eff[iE, j] * P[iE, j]) * @dx(_di_center, i)
+        end
+        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+            jN = wrap_next(j, size(γ_eff, 2))
+            Ry[i + 1, j + 1] -=
+                (γ_eff[i, j] * P[i, j] - γ_eff[i, jN] * P[i, jN]) * @dy(_di_center, j)
+        end
+    end
+    return nothing
+end
+
+@parallel_indices (i, j) function adjoint_schur_correction!(
+        Rx, Ry, P, γ_eff, Dx, Dy, ϕ::JustRelax.RockRatio, _di_center,
+    )
+    @inbounds begin
+        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+            if isvalid_vx(ϕ, i + 1, j)
+                iE = wrap_next(i, size(γ_eff, 1))
+                Rx[i + 1, j + 1] -= (
+                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
+                        ϕ.center[iE, j] * γ_eff[iE, j] * P[iE, j]
+                ) * @dx(_di_center, i)
+            else
+                Rx[i + 1, j + 1] = 0.0
+            end
+        end
+        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+            if isvalid_vy(ϕ, i, j + 1)
+                jN = wrap_next(j, size(γ_eff, 2))
+                Ry[i + 1, j + 1] -= (
+                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
+                        ϕ.center[i, jN] * γ_eff[i, jN] * P[i, jN]
+                ) * @dy(_di_center, j)
+            else
+                Ry[i + 1, j + 1] = 0.0
+            end
+        end
+    end
+    return nothing
+end
+
+function check_inner_solver(inner_solver)
+    inner_solver in (:dr, :bicgstab) ||
+        throw(ArgumentError("inner_solver must be :dr or :bicgstab"))
+    return inner_solver
+end
+
+# Work arrays of `adjoint_bicgstab!`, allocated once per adjoint solve on the backend of `D`.
+function adjoint_bicgstab_workspace(stokes_ad, D)
+    direction = (zero(stokes_ad.λV.Vx), zero(stokes_ad.λV.Vy))
+    direction_i = map(
+        (A, D) -> @view(A[2:(size(D, 1) + 1), 2:(size(D, 2) + 1)]), direction, D,
+    )
+    vectors() = map(zero, D)
+    return (;
+        direction, direction_i, zeroP = zero(stokes_ad.λP), isqrtD = vectors(),
+        r = vectors(), r̂ = vectors(), p = vectors(), v = vectors(), t = vectors(),
+    )
+end
+
+"""
+    adjoint_bicgstab!(
+        residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
+        total_iterMax; verbose = false, nout = 1,
+    )
+
+Inner velocity solve of one Powell–Hestenes pass of the adjoint with BiCGStab, in place of the
+damped dynamic relaxation. The adjoint is linear, so the step and the damping need no
+eigenvalue estimates, and BiCGStab does not need the Jacobian to be symmetric or to have real
+eigenvalues (non-associated plasticity, the tangent of a nonlinear viscosity). It iterates on
+the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal.
+
+`residual!(λV, λP, seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
+with or without the objective seed; on entry `R` holds that of the current `λVi`. Returns
+`(err, iter)`; `iter` counts reverse sweeps, two per BiCGStab iteration. After a breakdown the
+solve returns early and restarts from the true residual in the next pass.
+"""
+function adjoint_bicgstab!(
+        residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
+        total_iterMax; verbose = false, nout = 1,
+    )
+    (; direction, direction_i, zeroP, isqrtD, r, r̂, p, v, t) = work
+    components = eachindex(r)
+    dot(a, b) = sum(map((a, b) -> masked_dot_mpi(nothing, a, b), a, b))
+    # out = D^-½ A D^-½ x, by one reverse sweep without the objective seed: R = −A·direction
+    function apply!(out, x)
+        for d in components
+            @. direction_i[d] = x[d] * isqrtD[d]
+        end
+        residual!(direction, zeroP, false)
+        for d in components
+            @. out[d] = -R[d] * isqrtD[d]
+        end
+        return nothing
+    end
+    for d in components
+        # rows without a diagonal are not unknowns
+        @. isqrtD[d] = ifelse(D[d] > 0, inv(sqrt(D[d])), 0.0)
+        @. r[d] = R[d] * isqrtD[d]
+        copyto!(r̂[d], r[d])
+        fill!(p[d], 0)
+        fill!(v[d], 0)
+    end
+    ρ = α = ω = one(eltype(r[1]))
+    itPT = 0
+    while err > ϵ_vel && itPT ≤ iterMax && iter < total_iterMax
+        itPT += 2
+        iter += 2
+        ρ_new = dot(r̂, r)
+        β = (ρ_new / ρ) * (α / ω)
+        ρ = ρ_new
+        for d in components
+            @. p[d] = r[d] + β * (p[d] - ω * v[d])
+        end
+        apply!(v, p)
+        α = ρ / dot(r̂, v)
+        isfinite(α) || break
+        for d in components
+            @. λVi[d] += α * p[d] * isqrtD[d]
+            @. r[d] -= α * v[d]
+        end
+        apply!(t, r)
+        ω = dot(t, r) / dot(t, t)
+        isfinite(ω) && !iszero(ω) || break
+        for d in components
+            @. λVi[d] += ω * r[d] * isqrtD[d]
+            @. r[d] -= ω * t[d]
+            # the unscaled residual, for the norm of the stopping criterion
+            @. R[d] = r[d] * D[d] * isqrtD[d]
+        end
+        err = maximum(relative_momentum_residual(momentum_norms(), errV0))
+        verbose && iszero(itPT % 2nout) && @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+    end
+    return err, iter
 end

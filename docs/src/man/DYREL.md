@@ -143,6 +143,22 @@ cell area. `center` scales with the cell size, so on a non-uniform grid it is la
 the cells are largest; plot or compare `per_area` instead.
 The adjoint kernels differentiate pointwise operations with Enzyme on the selected backend.
 
+### Krylov inner solver for the adjoint
+
+The adjoint is a linear system, so its velocity solve does not need dynamic relaxation. With
+
+```julia
+adjoint_kwargs = (; inner_solver = :bicgstab)
+```
+
+each pressure pass of the adjoint solves its velocity system with BiCGStab, preconditioned by
+the DYREL diagonal, instead of the default damped dynamic relaxation (`inner_solver = :dr`).
+BiCGStab needs no damping or eigenvalue estimates and does not require a symmetric Jacobian,
+so it also suits nonlinear viscosity and non-associated plasticity, where the relaxation can
+need many more iterations than the forward solve. The pressure passes, the stopping criterion
+and the sensitivities are unchanged. `iterMax_DR` and `total_iterMax` count reverse sweeps,
+two per BiCGStab iteration. It combines with the local penalty below.
+
 ### Local penalty for the adjoint
 
 Both 2D DYREL solvers accept an independent numerical penalty through `adjoint_kwargs`:

@@ -135,6 +135,7 @@ end
 # plastic multiplier relaxed by `λ_relaxation`. Returns J and the adjoint dJ/dC of the matrix.
 function plastic_shear(
         igg; observation, C_matrix = 0.25, λ_relaxation = 1, adjoint = false, cells = 16,
+        adjoint_kwargs = (;),
     )
     ni = (cells, cells)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -179,7 +180,7 @@ function plastic_shear(
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax = 4.0e5,
         nout = 50, rel_drop = 0.5, λ_relaxation_PH = λ_relaxation,
         λ_relaxation_DR = λ_relaxation, viscosity_relaxation = 1, linear_viscosity = true,
-        adjoint, observation, gradients,
+        adjoint, adjoint_kwargs, observation, gradients,
     )
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
     return (;
@@ -282,6 +283,23 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         end
         @test Array(local_result.stokes_ad.solver.dyrel.ηb) == Array(baseline.dyrel.ηb)
         @test Array(local_result.stokes_ad.solver.dyrel.γ_eff) != Array(baseline.dyrel.γ_eff)
+    end
+
+    # BiCGStab replaces only the inner velocity iteration: same gradient, same forward state.
+    @testset "BiCGStab inner solver, $(variational ? "variational" : "standard") $field" for variational in (false, true), field in (:Vy, :P)
+        observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
+        baseline = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        krylov = @suppress sinking_block(
+            igg; observation, variational, adjoint = true,
+            adjoint_kwargs = (; inner_solver = :bicgstab),
+        )
+        @test krylov.J == baseline.J
+        @test krylov.η == baseline.η
+        @test krylov.gradient ≈ baseline.gradient rtol = 1.0e-6
+        @test_throws ArgumentError @suppress sinking_block(
+            igg; observation, variational, adjoint = true,
+            adjoint_kwargs = (; inner_solver = :unknown),
+        )
     end
 
     # The viscosity depends on the solved pressure only, so its pullback must reach λP.
@@ -396,6 +414,12 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             @suppress plastic_shear(igg; observation, C_matrix, λ_relaxation, cells).J
         end
         @test solution.gradient ≈ fd rtol = 1.0e-6
+        # the plastic tangent is not symmetric
+        krylov = @suppress plastic_shear(
+            igg; observation, λ_relaxation, adjoint = true, cells,
+            adjoint_kwargs = (; inner_solver = :bicgstab),
+        )
+        @test krylov.gradient ≈ fd rtol = 1.0e-6
     end
     finalize_global_grid(; finalize_MPI = false)
 end

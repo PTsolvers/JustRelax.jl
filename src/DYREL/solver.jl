@@ -51,13 +51,16 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
   a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
   `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR`, `pressure_relaxation`,
-  `penalty_scaling` and `penalty_factor`, e.g.
+  `penalty_scaling`, `penalty_factor` and `inner_solver`, e.g.
   `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
   given are those of the forward solve. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
   `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
   `penalty_scaling = :local` rebuilds the adjoint penalty and preconditioner from local
   converged viscosity, with `penalty_factor = 20.0` unless specified. The default `:global`
   inherits the forward penalty unchanged; `penalty_factor` requires `:local`.
+  `inner_solver = :bicgstab` solves the adjoint velocity system of each pressure pass with
+  BiCGStab instead of the default damped dynamic relaxation (`:dr`); it needs no damping or
+  eigenvalue estimates and tolerates a non-symmetric Jacobian.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the

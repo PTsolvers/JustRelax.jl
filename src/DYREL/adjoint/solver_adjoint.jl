@@ -36,9 +36,11 @@ function solve_DYREL_adjoint!(
         adjoint_rel_drop = nothing,
         penalty_scaling = :global,
         penalty_factor = nothing,
+        inner_solver = :dr,
         kwargs...,
     ) where {N}
     factor = adjoint_penalty_factor(penalty_scaling, penalty_factor)
+    check_inner_solver(inner_solver)
     dim = Val(N)
     # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
     # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
@@ -140,6 +142,26 @@ function solve_DYREL_adjoint!(
     end
     errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
 
+    # Momentum residual of (λV, λP) with the Schur correction, which the DR update kernel
+    # applies itself, for the Krylov inner solver
+    λV = (stokes_ad.λV.Vx, stokes_ad.λV.Vy)
+    function corrected_residual!(λV, λP, seed)
+        reset_adjoint_residuals!(stokes_ad, ni, λV, λP)
+        seed && seed_observation!(observation)
+        adjoint_residual!(
+            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
+            λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
+            constitutive_scratch; update_material,
+        )
+        @parallel (@idx ni) adjoint_schur_correction!(
+            stokes_ad.V.Vx, stokes_ad.V.Vy, stokes_ad.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
+            _di.center,
+        )
+        return nothing
+    end
+    bicgstab = inner_solver === :bicgstab ?
+        adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy)) : nothing
+
     converged = false
     for itPH in 1:Int(iterMax_PH)
 
@@ -198,7 +220,18 @@ function solve_DYREL_adjoint!(
 
         ϵ_vel = err * rel_drop
         itPT = 0
-        while (err > ϵ_vel && itPT ≤ iterMax_DR && iter < total_iterMax)
+        if inner_solver === :bicgstab
+            corrected_residual!(λV, stokes_ad.λP, true)
+            err, iter = adjoint_bicgstab!(
+                corrected_residual!, momentum_norms, bicgstab, λVi, adjoint_velocity_residuals,
+                (dyrel.Dx, dyrel.Dy), errV0, err, ϵ_vel, iter, iterMax_DR, total_iterMax;
+                verbose = verbose_DR && igg.me == 0, nout,
+            )
+            # the last sweep was of a search direction: refresh the continuity adjoint of λV,
+            # which the λP update below reads
+            corrected_residual!(λV, stokes_ad.λP, true)
+        end
+        while (inner_solver === :dr && err > ϵ_vel && itPT ≤ iterMax_DR && iter < total_iterMax)
             itPT += 1
             iter += 1
 

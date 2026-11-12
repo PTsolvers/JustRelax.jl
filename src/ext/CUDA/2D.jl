@@ -47,7 +47,14 @@ import JustRelax: @dxi, @dx, @dy, @dz
 
 import JustPIC: numphases, nphases, PhaseRatios, update_phase_ratios!, cell_index
 
-__init__() = @init_parallel_stencil(CUDA, Float64, 2)
+function __init__()
+    @init_parallel_stencil(CUDA, Float64, 2)
+    # Enzyme accumulates shadows atomically on GPU targets. In a function it does not inline,
+    # the shadow of a by-reference argument is the caller's stack memory, where PTX has no
+    # atomics (CUDA error 717), so Enzyme has to inline everything before differentiating.
+    Enzyme.API.inlineall!(true)
+    return nothing
+end
 
 include("../../common.jl")
 include("../../stokes/Stokes2D.jl")

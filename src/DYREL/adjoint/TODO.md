@@ -94,10 +94,14 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
    `err` is a global reduction), not only on rank 0. Real MPI support remains open.
 8. ✅ **3D guarded.** The same check throws an `ArgumentError` for `adjoint = true` in 3D before
    reaching the 2D-only adjoint code. Both guards are unit-tested in `test_dyrel_kernels.jl`.
-9. 🟡 **GPU.** CUDA error 717 fix (`detach(rheology)` for the inactive cap Newton solve, commit
-   `c1c91c6b`) not yet verified on CUDA: rerun diagnostic cases B/E and the dike example, and
-   run `test_dyrel_kernels`, `test_adjoint_dot_product`, `test_adjoint_gradients` and
-   `test_adjoint_gradients_physics` with `JULIA_JUSTRELAX_BACKEND=CUDA`. AMDGPU never run.
+9. 🟡 **GPU.** CUDA error 717 fixed: Enzyme accumulates shadows atomically on GPU targets, and
+   in a function it does not inline the shadow of a by-reference argument is the caller's stack
+   memory, where PTX has no atomics. `Enzyme.API.inlineall!(true)` in the CUDA 2D module's
+   `__init__` removes it (the `detach(rheology)` of commit `c1c91c6b` did not). With it,
+   `test_dyrel_kernels`, `test_adjoint_dot_product`, `test_adjoint_gradients` and
+   `test_adjoint_gradients_physics` pass with `JULIA_JUSTRELAX_BACKEND=CUDA` (GTX TITAN X,
+   CUDA 6.4.1, Enzyme 0.13.216). Still open: diagnostic cases B/E and the dike example not
+   rerun on CUDA; AMDGPU never run.
 10. ✅ **Multi-threaded pullbacks deadlocked.** Cause: `autodiff_deferred` compiles its gradient
     on the first call, which happened inside the threaded kernel loop; threads compiling the
     same gradient at once deadlocked. `compile_pullback_serially!` (`Enzyme_pointwise.jl`) now

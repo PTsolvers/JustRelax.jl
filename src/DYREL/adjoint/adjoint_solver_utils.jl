@@ -193,48 +193,17 @@ function adjoint_λminV(dV, residuals, D, residuals0, masks)
     return rayleigh_quotient(numerator, denominator)
 end
 
-# A diverged adjoint solve leaves no usable starting point for the next one.
-function reset_nonfinite_adjoint!(adjoint)
-    λ = (adjoint.λV.Vx, adjoint.λV.Vy, adjoint.λP)
-    all(A -> all(isfinite, A), λ) || foreach(A -> fill!(A, 0), λ)
-    return nothing
-end
-
-# λ is kept from the previous adjoint solve, whose objective may differ (an observation that
-# follows the phases) or be scaled differently, so its residual can far exceed that of λ = 0.
-# The momentum residual is affine in λ, r(αλ) = b + α (r(λ) − b) with b the objective's seed,
-# so start from the multiple αλ that minimizes it, which is never worse than λ = 0 or λ.
-# `residuals` hold b on entry; `evaluate_residual!()` puts r(λ) into them. Returns α, or
-# `nothing` for λ = 0.
-function scale_adjoint_start!(evaluate_residual!, stokes_ad, residuals, masks)
-    λ = (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP)
-    all(A -> iszero(norm_mpi(A)), λ) && return nothing
-    b = map(copy, residuals)
-    evaluate_residual!()
-    # ⟨b, d⟩ and ⟨d, d⟩ with d = r(λ) − b, over the momentum rows of the system
-    bd = sum(map((m, b, r) -> masked_dot_mpi(m, b, r .- b), masks, b, residuals))
-    dd = sum(map((m, b, r) -> masked_dot_mpi(m, r .- b, r .- b), masks, b, residuals))
-    α = -bd / dd
-    isfinite(α) || return nothing
-    foreach(A -> A .*= α, λ)
-    return α
-end
-
 masked_dot_mpi(::Nothing, A, B) = sum_mpi((a, b) -> a * b, A, B)
 masked_dot_mpi(mask, A, B) = sum_mpi((m, a, b) -> m ? a * b : zero(a * b), mask, A, B)
 
 # A pressure objective seeds only the continuity adjoint, so its momentum residual at λ = 0 is
-# zero. Measure it instead against the momentum residual a cold start reaches after its first
-# outer pass: λV = 0 and λP from the pressure seed, which `stokes_ad.P` holds on entry.
+# zero. Measure it instead against the momentum residual after the first outer pass: λV = 0 and
+# λP from the pressure seed, which `stokes_ad.P` holds on entry. Expects λ = 0 and leaves it so.
 # `evaluate_residual!()` returns the momentum residual norms of the current λ.
 function pressure_objective_reference!(evaluate_residual!, stokes_ad, dyrel, pressure_relaxation)
-    λ = (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP)
-    saved = map(copy, λ)
-    fill!(stokes_ad.λV.Vx, 0)
-    fill!(stokes_ad.λV.Vy, 0)
     @. stokes_ad.λP = pressure_relaxation * dyrel.γ_eff * stokes_ad.P
     errV = evaluate_residual!()
-    foreach(copyto!, λ, saved)
+    fill!(stokes_ad.λP, 0)
     return errV
 end
 

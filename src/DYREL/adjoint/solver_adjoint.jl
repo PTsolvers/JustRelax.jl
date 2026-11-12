@@ -107,11 +107,10 @@ function solve_DYREL_adjoint!(
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
 
-    # λ starts from the previous adjoint solve, e.g. the previous time step, unless that solve
-    # failed. The momentum residual is measured against its value at λ = 0, the objective's
-    # velocity seed, so that a good initial λ shortens the solve instead of tightening its
-    # stopping criterion; the initial λ is scaled so that it is never worse than λ = 0.
-    reset_nonfinite_adjoint!(stokes_ad)
+    # Every solve starts from λ = 0: the previous time step's λ did not shorten the solve (and
+    # lengthened it on fine grids). The momentum residual is measured against its value at
+    # λ = 0, the objective's velocity seed.
+    foreach(A -> fill!(A, 0), (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP))
     initialize_adjoint_iteration!(stokes_ad, ni)
     seed_observation!(observation)
     momentum_norms() = ntuple(d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim)
@@ -127,18 +126,6 @@ function solve_DYREL_adjoint!(
             )
             momentum_norms()
         end
-    else
-        α = scale_adjoint_start!(stokes_ad, adjoint_velocity_residuals, (nothing, nothing)) do
-            reset_adjoint_residuals!(stokes_ad, ni)
-            seed_observation!(observation)
-            adjoint_residual!(
-                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni,
-                dt, λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-                constitutive_scratch; update_material,
-            )
-        end
-        verbose_PH && igg.me == 0 && !isnothing(α) &&
-            @printf("adjoint start: previous λ scaled by %1.3e\n", α)
     end
     errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
 

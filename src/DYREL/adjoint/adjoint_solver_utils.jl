@@ -39,8 +39,8 @@ function adjoint_solver_options(forward::NamedTuple, adjoint_kwargs, kwargs)
     return merge(forward, options, overrides, (; iterMax_DR), ϵ)
 end
 
-# The global default inherits the forward operator exactly. A local numerical penalty is
-# opt-in: physical bulk viscosity and the constitutive tangent remain unchanged.
+# The local numerical penalty leaves the physical bulk viscosity and the constitutive tangent
+# unchanged. `:global` inherits the forward operator exactly.
 function adjoint_penalty_factor(scaling, factor)
     scaling in (:global, :local) ||
         throw(ArgumentError("penalty_scaling must be :global or :local"))
@@ -48,7 +48,7 @@ function adjoint_penalty_factor(scaling, factor)
         isnothing(factor) || throw(ArgumentError("penalty_factor requires penalty_scaling = :local"))
         return nothing
     end
-    factor = something(factor, 20.0)
+    factor = something(factor, 320.0)
     factor isa Real && isfinite(factor) && factor > 0 ||
         throw(ArgumentError("penalty_factor must be finite and positive"))
     return factor
@@ -168,7 +168,6 @@ function update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, upda
         @. dyrel.Ry0 = preconditioned_residual(residuals[2], dyrel.Dy)
         damping.stored[] = iter
     elseif iszero(iter % nout) && damping.stored[] == iter - 1
-        # a stored step from before a λP update would mix in the pressure change
         λminV = adjoint_λminV(
             (dyrel.dVx, dyrel.dVy), residuals, (dyrel.Dx, dyrel.Dy), (dyrel.Rx0, dyrel.Ry0),
             damping.masks,
@@ -618,7 +617,7 @@ the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal.
 `residual!(λV, λP, seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
 with or without the objective seed; on entry `R` holds that of the current `λVi`. Returns
 `(err, iter)`; `iter` counts reverse sweeps, two per BiCGStab iteration. After a breakdown the
-solve returns early and restarts from the true residual in the next pass.
+solve warns, returns early and restarts from the true residual in the next pass.
 """
 function adjoint_bicgstab!(
         residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
@@ -648,7 +647,7 @@ function adjoint_bicgstab!(
     end
     ρ = α = ω = one(eltype(r[1]))
     itPT = 0
-    while err > ϵ_vel && itPT ≤ iterMax && iter < total_iterMax
+    while err > ϵ_vel && itPT < iterMax && iter < total_iterMax
         itPT += 2
         iter += 2
         ρ_new = dot(r̂, r)
@@ -659,14 +658,20 @@ function adjoint_bicgstab!(
         end
         apply!(v, p)
         α = ρ / dot(r̂, v)
-        isfinite(α) || break
+        if !isfinite(α)
+            @warn "adjoint BiCGStab broke down (α = $α); restarting from the true residual" maxlog = 5
+            break
+        end
         for d in components
             @. λVi[d] += α * p[d] * isqrtD[d]
             @. r[d] -= α * v[d]
         end
         apply!(t, r)
         ω = dot(t, r) / dot(t, t)
-        isfinite(ω) && !iszero(ω) || break
+        if !isfinite(ω) || iszero(ω)
+            @warn "adjoint BiCGStab broke down (ω = $ω); restarting from the true residual" maxlog = 5
+            break
+        end
         for d in components
             @. λVi[d] += ω * r[d] * isqrtD[d]
             @. r[d] -= ω * t[d]

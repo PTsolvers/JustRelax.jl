@@ -126,9 +126,6 @@ function _solve_VariationalDYREL!(
     stokes.λ .= 0.0
     stokes.λv .= 0.0
 
-    # the forward loop tightens `rel_drop` whenever its error rises; the adjoint starts from
-    # the caller's value instead of inheriting the forward's tightened one
-    rel_drop_adjoint = rel_drop
     # Iteration loop
     err_min = Inf
     err = 1.0
@@ -368,6 +365,10 @@ function _solve_VariationalDYREL!(
 
     # The adjoint linearizes around the converged state, so it runs before the plastic pressure
     # correction is absorbed into P and before τ_o is overwritten. ϕ and the masks stay frozen.
+    adjoint && !converged && error(
+        "the adjoint needs a converged forward state, but the variational DYREL solve did not meet ϵ " *
+            "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
+    )
     adjoint_out = if adjoint
         solve_VariationalDYREL_adjoint!(
             stokes,
@@ -395,7 +396,7 @@ function _solve_VariationalDYREL!(
             adjoint_solver_options(
                 (;
                     pressure_relaxation, iterMax_PH, iterMax_DR, total_iterMax, nout,
-                    rel_drop = rel_drop_adjoint, verbose_PH, verbose_DR,
+                    rel_drop = 0.1, verbose_PH, verbose_DR,
                 ),
                 adjoint_kwargs,
                 kwargs,

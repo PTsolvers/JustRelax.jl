@@ -145,34 +145,36 @@ The adjoint kernels differentiate pointwise operations with Enzyme on the select
 
 ### Krylov inner solver for the adjoint
 
-The adjoint is a linear system, so its velocity solve does not need dynamic relaxation. With
+The adjoint is a linear system, so its velocity solve does not need dynamic relaxation. By
+default each pressure pass of the adjoint solves its velocity system with BiCGStab,
+preconditioned by the DYREL diagonal. Damped dynamic relaxation remains available:
 
 ```julia
-adjoint_kwargs = (; inner_solver = :bicgstab)
+adjoint_kwargs = (; inner_solver = :dr)
 ```
 
-each pressure pass of the adjoint solves its velocity system with BiCGStab, preconditioned by
-the DYREL diagonal, instead of the default damped dynamic relaxation (`inner_solver = :dr`).
 BiCGStab needs no damping or eigenvalue estimates and does not require a symmetric Jacobian,
 so it also suits nonlinear viscosity and non-associated plasticity, where the relaxation can
 need many more iterations than the forward solve. The pressure passes, the stopping criterion
 and the sensitivities are unchanged. `iterMax_DR` and `total_iterMax` count reverse sweeps,
-two per BiCGStab iteration. It combines with the local penalty below.
+two per BiCGStab iteration. The adjoint inner tolerance `rel_drop` defaults to `0.1`,
+whatever the forward solve uses.
 
 ### Local penalty for the adjoint
 
-Both 2D DYREL solvers accept an independent numerical penalty through `adjoint_kwargs`:
+Both 2D DYREL adjoints use their own numerical penalty, set through `adjoint_kwargs`:
 
 ```julia
-adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 20.0)
+adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 320.0)  # the default
+adjoint_kwargs = (; penalty_scaling = :global)                         # the forward penalty
 # Include this keyword in solve_DYREL!(...; adjoint = true, ...) or
 # solve_VariationalDYREL!(...; adjoint = true, ...).
 ```
 
-The default `penalty_scaling = :global` inherits the converged forward penalty unchanged.
-With `:local`, the numerical scale is `penalty_factor * η` at each cell, where `η` is the
-converged forward viscosity. The factor defaults to `20.0` when omitted. It must be finite
-and positive and can only be specified with `:local`.
+With the default `:local`, the numerical scale is `penalty_factor * η` at each cell, where
+`η` is the converged forward viscosity. The factor defaults to `320.0`. It must be finite
+and positive and can only be specified with `:local`. `penalty_scaling = :global` inherits
+the converged forward penalty unchanged.
 
 For incompressible full-rock cells the effective penalty is `penalty_factor * η / 2`.
 For finite bulk viscosity it retains the forward solver's harmonic combination with `Kb * dt`;
@@ -181,8 +183,7 @@ The adjoint rebuilds its diagonal preconditioner, eigenvalue bounds and pseudo-t
 including free-surface stabilization and the nonlinear constitutive tangent correction.
 The physical viscosity, bulk viscosity and forward DYREL state are unchanged.
 
-This option can reduce velocity-relaxation cost in connected weak zones with large viscosity
-contrasts. Pressure convergence in enclosed weak regions may instead favor the global
-penalty. Compare total iterations and gradients at the same tolerance before adopting it
-for a new model. The penalty stays fixed during each adjoint solve; adaptive updates between
+A small factor (about 20) is fastest in connected weak zones with large viscosity contrasts,
+while a pressure objective inside an enclosed weak region favors a large factor or the global
+penalty; the default is a compromise that converged in every tested case. The penalty stays fixed during each adjoint solve; adaptive updates between
 pressure passes remain a separate diagnostic experiment.

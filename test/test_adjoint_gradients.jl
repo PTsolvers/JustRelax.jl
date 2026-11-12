@@ -377,11 +377,14 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test all(≈(0.5), Array(stokes_ad.λP))
     end
 
-    # Sensitivities of an unconverged adjoint state are not returned.
-    @testset "unconverged adjoint, $(variational ? "variational" : "standard")" for variational in (false, true)
+    # Sensitivities of an unconverged forward or adjoint state are not returned.
+    @testset "unconverged solve, $(variational ? "variational" : "standard")" for variational in (false, true)
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        @test_throws "adjoint did not converge" @suppress sinking_block(
+        @test_throws "adjoint needs a converged forward state" @suppress sinking_block(
             igg; observation, variational, adjoint = true, total_iterMax = 10,
+        )
+        @test_throws "adjoint did not converge" @suppress sinking_block(
+            igg; observation, variational, adjoint = true, adjoint_kwargs = (; total_iterMax = 10),
         )
     end
 

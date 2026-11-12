@@ -47,9 +47,9 @@ function solve_VariationalDYREL_adjoint!(
         linear_viscosity = false,
         adjoint_ϵ = nothing,
         adjoint_rel_drop = nothing,
-        penalty_scaling = :global,
+        penalty_scaling = :local,
         penalty_factor = nothing,
-        inner_solver = :dr,
+        inner_solver = :bicgstab,
         kwargs...,
     ) where {N}
     factor = adjoint_penalty_factor(penalty_scaling, penalty_factor)
@@ -260,7 +260,7 @@ function solve_VariationalDYREL_adjoint!(
             # which the λP update below reads
             corrected_residual!(λV, stokes_ad.λP, true)
         end
-        while (inner_solver === :dr && err > ϵ_vel && itPT ≤ iterMax_DR && iter < total_iterMax)
+        while (inner_solver === :dr && err > ϵ_vel && itPT < iterMax_DR && iter < total_iterMax)
             itPT += 1
             iter += 1
 
@@ -317,6 +317,8 @@ function solve_VariationalDYREL_adjoint!(
 
         # stokes_ad.P is masked, so eliminated cells keep λP = 0
         @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P
+        # a step stored before this update would mix the pressure change into the λmin estimate
+        damping.stored[] = 0
     end
     if !converged
         # do not calculate or return sensitivities from an unconverged adjoint state

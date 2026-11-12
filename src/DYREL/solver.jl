@@ -37,30 +37,30 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `linear_viscosity`: Whether to use linear viscosity. Default: `false`.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_DYREL_adjoint!` after convergence and before updating
-  history-dependent state. 2D on a single MPI rank only; an unconverged adjoint solve throws an
-  error instead of returning sensitivities. The iteration starts from the adjoint state
+  history-dependent state. 2D on a single MPI rank only; an unconverged forward or adjoint
+  solve throws an error instead of returning sensitivities. The iteration starts from the adjoint state
   `stokes_ad.λV`, `stokes_ad.λP` left by the previous adjoint solve (zero for new arrays, and
   reset to zero if the previous solve diverged), which shortens it in a time loop. To start
   from zero, e.g. for a different objective, zero them or use separate `AdjointStokesArrays`.
   The stopping criterion does not depend on the start. Default: `false`.
-  The adjoint keeps its own DYREL iteration state in `stokes_ad`: it uses the forward
-  preconditioner and penalty of the current state by default, and carries its damping over from one
+  The adjoint keeps its own DYREL iteration state in `stokes_ad`: it rebuilds the
+  preconditioner from its own penalty at the current state, and carries its damping over from one
   adjoint solve to the next; the forward DYREL state is not modified.
 - `adjoint_ϵ`: Convergence tolerance of the adjoint solve. Default: the `ϵ` of `dyrel`.
-- `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: the `rel_drop` passed.
+- `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: `0.1`.
 - `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
   a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
   `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR`, `pressure_relaxation`,
   `penalty_scaling`, `penalty_factor` and `inner_solver`, e.g.
   `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
-  given are those of the forward solve. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
+  given are those of the forward solve, except `rel_drop`. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
   `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
-  `penalty_scaling = :local` rebuilds the adjoint penalty and preconditioner from local
-  converged viscosity, with `penalty_factor = 20.0` unless specified. The default `:global`
-  inherits the forward penalty unchanged; `penalty_factor` requires `:local`.
-  `inner_solver = :bicgstab` solves the adjoint velocity system of each pressure pass with
-  BiCGStab instead of the default damped dynamic relaxation (`:dr`); it needs no damping or
-  eigenvalue estimates and tolerates a non-symmetric Jacobian.
+  The default `penalty_scaling = :local` rebuilds the adjoint penalty and preconditioner from
+  the local converged viscosity, with `penalty_factor = 320.0` unless specified;
+  `penalty_scaling = :global` inherits the forward penalty unchanged and takes no
+  `penalty_factor`. The default `inner_solver = :bicgstab` solves the adjoint velocity system
+  of each pressure pass with BiCGStab, which needs no damping or eigenvalue estimates and
+  tolerates a non-symmetric Jacobian; `inner_solver = :dr` uses damped dynamic relaxation.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
@@ -144,7 +144,7 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `free_surface`: Include the density-gradient free-surface stabilization term. Default: `false`.
 - `adjoint`: Run `solve_VariationalDYREL_adjoint!` after convergence and before updating
   history-dependent state. `ϕ` and the validity masks are frozen for the adjoint. Single MPI
-  rank only; an unconverged adjoint solve throws an error. Starts from the previous adjoint
+  rank only; an unconverged forward or adjoint solve throws an error. Starts from the previous adjoint
   state as for `solve_DYREL!`; rows and cells eliminated since then start at zero.
   Default: `false`.
 - `adjoint_ϵ`, `adjoint_rel_drop`: Tolerance and `rel_drop` of the adjoint solve, as for
@@ -290,9 +290,7 @@ function _solve_DYREL!(
         update_dτV_α_β!(dyrel)
     end
 
-    # the forward loop tightens `rel_drop` whenever its error rises; the adjoint starts from
-    # the caller's value instead of inheriting the forward's tightened one
-    rel_drop_adjoint = rel_drop
+    converged = false
     # viscosity before each outer update, for the viscosity residual
     η_previous = linear_viscosity ? nothing : (similar(stokes.viscosity.η), similar(stokes.viscosity.ηv))
 
@@ -377,7 +375,10 @@ function _solve_DYREL!(
         end
         igg.me == 0 && isnan(err) && error("NaN detected in outer loop")
         igg.me == 0 && err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        err < ϵ && break
+        if err < ϵ
+            converged = true
+            break
+        end
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
@@ -480,6 +481,10 @@ function _solve_DYREL!(
         iter > total_iterMax && break
     end
 
+    adjoint && !converged && error(
+        "the adjoint needs a converged forward state, but the DYREL solve did not meet ϵ " *
+            "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
+    )
     adjoint_out = if adjoint
         solve_DYREL_adjoint!(
             stokes,
@@ -504,7 +509,7 @@ function _solve_DYREL!(
             adjoint_solver_options(
                 (;
                     pressure_relaxation, iterMax_PH, iterMax_DR, total_iterMax, nout,
-                    rel_drop = rel_drop_adjoint, verbose_PH, verbose_DR,
+                    rel_drop = 0.1, verbose_PH, verbose_DR,
                 ),
                 adjoint_kwargs,
                 kwargs,

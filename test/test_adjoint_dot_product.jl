@@ -609,7 +609,7 @@ end
 
 @testset "Adjoint penalty parameters" begin
     @test isnothing(JR2K.adjoint_penalty_factor(:global, nothing))
-    @test JR2K.adjoint_penalty_factor(:local, nothing) == 20.0
+    @test JR2K.adjoint_penalty_factor(:local, nothing) == 320.0
     @test JR2K.adjoint_penalty_factor(:local, 2.0) == 2.0
     @test_throws ArgumentError JR2K.adjoint_penalty_factor(:unknown, nothing)
     @test_throws ArgumentError JR2K.adjoint_penalty_factor(:global, 20.0)

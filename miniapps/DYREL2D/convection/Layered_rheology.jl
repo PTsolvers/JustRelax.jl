@@ -112,7 +112,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "LowerCrust",
         SetMaterialParams(;
             Phase = 2,
-            Density = PT_Density(; ρ0 = 3.0e3kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = 3.0e3kg / m^3, β = β_lower_crust, T0 = 0.0e0C, α = 3.5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 7.5e2J / kg / K),
             Conductivity = K_crust,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
@@ -124,7 +124,7 @@ function init_rheologies(CharDim; is_plastic = true)
         # Name              = "LithosphericMantle",
         SetMaterialParams(;
             Phase = 3,
-            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = 3.3e3kg / m^3, β = β_lithospheric_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1.25e3J / kg / K),
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),
@@ -135,7 +135,7 @@ function init_rheologies(CharDim; is_plastic = true)
         ),
         SetMaterialParams(;
             Phase = 4,
-            Density = PT_Density(; ρ0 = (3.3e3 - 50)kg / m^3, β = β_upper_crust, T0 = 0.0e0C, α = 3.5e-5 / K),
+            Density = PT_Density(; ρ0 = (3.3e3 - 50)kg / m^3, β = β_sublithospheric_mantle, T0 = 0.0e0C, α = 3.5e-5 / K),
             HeatCapacity = ConstantHeatCapacity(; Cp = 1.25e3J / kg / K),
             Conductivity = K_mantle,
             RadioactiveHeat = ConstantRadioactiveHeat(0.0),

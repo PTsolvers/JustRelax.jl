@@ -59,10 +59,10 @@ function init_rheologies(CharDim; is_plastic = true)
     el_lower_crust = SetConstantElasticity(; G = 25.0e9Pa, ν = 0.4)
     el_lithospheric_mantle = SetConstantElasticity(; G = 67.0e9Pa, ν = 0.4)
     el_sublithospheric_mantle = SetConstantElasticity(; G = 67.0e9Pa, ν = 0.4)
-    β_upper_crust = inv(get_Kb(el_upper_crust))
-    β_lower_crust = inv(get_Kb(el_lower_crust))
-    β_lithospheric_mantle = inv(get_Kb(el_lithospheric_mantle))
-    β_sublithospheric_mantle = inv(get_Kb(el_sublithospheric_mantle))
+    β_upper_crust = inv(get_Kb(el_upper_crust) * Pa)
+    β_lower_crust = inv(get_Kb(el_lower_crust) * Pa)
+    β_lithospheric_mantle = inv(get_Kb(el_lithospheric_mantle) * Pa)
+    β_sublithospheric_mantle = inv(get_Kb(el_sublithospheric_mantle) * Pa)
 
     # Physical properties using GeoParams ----------------
     η_reg = 1.0e16 * Pa * s

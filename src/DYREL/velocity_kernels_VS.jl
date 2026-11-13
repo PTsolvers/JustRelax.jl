@@ -170,13 +170,13 @@ end
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
-                # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
+                # stabilizing part of the free-surface stabilization term (ρg masked by ϕ.center, see `stabilizing_∂ρg∂y`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
                 j_N = wrap_next(j, ny)
                 ρg_S = center(ρgy, ϕ.center, i, j)
                 ρg_N = center(ρgy, ϕ.center, i, j_N)
-                ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
+                ∂ρg∂y = stabilizing_∂ρg∂y((ρg_N - ρg_S) * _dy_c)
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
                 d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) - d_ya(ΔPψ, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction
@@ -249,13 +249,13 @@ end
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
             if isvalid_vy(ϕ, i, j + 1)
-                # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
+                # stabilizing part of the free-surface stabilization term (ρg masked by ϕ.center, see `stabilizing_∂ρg∂y`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
                 j_N = wrap_next(j, ny)
                 ρg_S = center(ρgy, ϕ.center, i, j)
                 ρg_N = center(ρgy, ϕ.center, i, j_N)
-                ∂ρg∂y = (ρg_N - ρg_S) * _dy_c
+                ∂ρg∂y = stabilizing_∂ρg∂y((ρg_N - ρg_S) * _dy_c)
                 ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
                 Ry_ij = (d_ya(τyy, ϕ.center) + d_xi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(2), _dy_c, i, j) - d_ya(θc, ϕ.center) - av_ya(ρgy, ϕ.center) + ρg_correction) / Dy[i, j]

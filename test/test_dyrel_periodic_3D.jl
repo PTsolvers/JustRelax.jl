@@ -113,7 +113,7 @@ _linear_phase(η, phase = 1) = SetMaterialParams(;
         plain = StokesArrays(backend, ni)
         @test JustRelax.periodic_dims(plain) == (false, false, false)
         @test_throws "do not match the StokesArrays allocation" JustRelax.check_periodic_bcs(
-            plain, bcs, igg, ntuple(_ -> 1.0, 3)
+            plain, bcs, igg
         )
     end
 

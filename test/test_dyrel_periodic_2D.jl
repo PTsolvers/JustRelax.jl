@@ -62,6 +62,67 @@ _linear_phase(η, phase = 1) = SetMaterialParams(;
     CompositeRheology = CompositeRheology((LinearViscous(; η = η),)),
 )
 
+const total_iterMax = 50.0e3
+
+# Simple shear driven by the two y-boundary planes, which carry no boundary condition and so keep
+# whatever is written on them, through a material that varies in x, translated by `shift` cells.
+function _solve_periodic_shear(grid, shift, rheology, igg; εbg = 1.0, dt = Inf)
+    ni = grid.ni
+    n = ni[1]
+    phase_ratios = PhaseRatios(backend_JP, 2, ni)
+    @parallel (@idx size(phase_ratios.center)) _init_x_center_phases_2D!(
+        phase_ratios.center, n, shift
+    )
+    @parallel (@idx size(phase_ratios.vertex)) _init_x_vertex_phases_2D!(
+        phase_ratios.vertex, n, shift
+    )
+
+    flow_bcs = _periodic_flow_bcs()
+    stokes = StokesArrays(backend, ni, flow_bcs)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
+    compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
+
+    ymid = grid.origin[2] + grid.li[2] / 2
+    yVx = Array(grid.xi_vel[1][2])
+    stokes.V.Vx .= PTArray(backend)([2 * εbg * (y - ymid) for _i in 1:(n + 1), y in yVx])
+    @views stokes.V.Vx[:, 2:(end - 1)] .= 0.0
+    fill!(stokes.V.Vy, 0.0)
+    flow_bcs!(stokes, flow_bcs)
+    update_halo!(@velocity(stokes)...)
+
+    ρg = @zeros(ni...), @zeros(ni...)
+    dyrel = JustRelax2D.DYREL(
+        backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-10, CFL = 0.99
+    )
+    out = solve_DYREL!(
+        stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+        kwargs = (;
+            verbose_PH = false, verbose_DR = false, iterMax = 100.0e3, total_iterMax,
+            nout = 50, rel_drop = 1.0e-3, linear_viscosity = true,
+            viscosity_cutoff = (-Inf, Inf),
+        )
+    )
+    return (
+        Vx = Array(stokes.V.Vx), Vy = Array(stokes.V.Vy),
+        η = Array(stokes.viscosity.η),
+        τxy = Array(stokes.τ.xy), εxy = Array(stokes.ε.xy),
+        iter = out.iter,
+    )
+end
+
+# drop the duplicated seam plane / the ghost columns so a plain circshift is the comparison
+_unwrap_vertex(A) = A[1:(end - 1), :]
+_unwrap_ghosted(A) = A[2:(end - 1), :]
+
+# largest deviation of `b` from `a` translated by `m` cells in x, relative to the Vx scale
+function _shift_error(a, b, m)
+    scale = maximum(abs, a.Vx)
+    return max(
+        maximum(abs, circshift(_unwrap_vertex(a.Vx), (m, 0)) .- _unwrap_vertex(b.Vx)),
+        maximum(abs, circshift(_unwrap_ghosted(a.Vy), (m, 0)) .- _unwrap_ghosted(b.Vy)),
+    ) / scale
+end
+
 @testset "DYREL 2D periodic" begin
     init_mpi = !JustRelax.MPI.Initialized()
     igg = IGG(init_global_grid(24, 24, 1; init_MPI = init_mpi)...)
@@ -86,7 +147,7 @@ _linear_phase(η, phase = 1) = SetMaterialParams(;
         plain = StokesArrays(backend, ni)
         @test JustRelax.periodic_dims(plain) == (false, false)
         @test_throws "do not match the StokesArrays allocation" JustRelax.check_periodic_bcs(
-            plain, bcs, igg, ntuple(_ -> 1.0, 2)
+            plain, bcs, igg
         )
     end
 
@@ -94,77 +155,49 @@ _linear_phase(η, phase = 1) = SetMaterialParams(;
         # A material field that varies in x, translated by `m` cells, must translate the solution
         # by `m` cells. Any stencil that special-cases the seam instead of wrapping breaks this.
         n, m = 32, 7
-        ni = n, n
-        li = 1.0, 1.0
-        εbg, ly = 1.0, li[2]
-        grid = Geometry(ni, li; origin = (0.0, 0.0))
-        dt = Inf
+        grid = Geometry((n, n), (1.0, 1.0); origin = (0.0, 0.0))
         rheology = (_linear_phase(1.0, 1), _linear_phase(100.0, 2))
 
-        function solve_shifted(shift)
-            phase_ratios = PhaseRatios(backend_JP, 2, ni)
-            @parallel (@idx size(phase_ratios.center)) _init_x_center_phases_2D!(
-                phase_ratios.center, n, shift
-            )
-            @parallel (@idx size(phase_ratios.vertex)) _init_x_vertex_phases_2D!(
-                phase_ratios.vertex, n, shift
-            )
-
-            flow_bcs = _periodic_flow_bcs()
-            stokes = StokesArrays(backend, ni, flow_bcs)
-            args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = dt)
-            compute_viscosity!(stokes, phase_ratios, args, rheology, (-Inf, Inf))
-
-            # simple shear driven by the two y-boundary planes, which carry no boundary condition
-            # and so keep whatever is written on them
-            yVx = grid.xi_vel[1][2]
-            stokes.V.Vx .= PTArray(backend)(
-                [2 * εbg * (y - ly / 2) for _i in 1:(n + 1), y in yVx]
-            )
-            @views stokes.V.Vx[:, 2:(end - 1)] .= 0.0
-            fill!(stokes.V.Vy, 0.0)
-            flow_bcs!(stokes, flow_bcs)
-            update_halo!(@velocity(stokes)...)
-
-            ρg = @zeros(ni...), @zeros(ni...)
-            dyrel = JustRelax2D.DYREL(
-                backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-10, CFL = 0.99
-            )
-            solve_DYREL!(
-                stokes, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
-                kwargs = (;
-                    verbose_PH = false, verbose_DR = false, iterMax = 100.0e3, nout = 50,
-                    rel_drop = 1.0e-3, linear_viscosity = true, viscosity_cutoff = (-Inf, Inf),
-                )
-            )
-            return (
-                Vx = Array(stokes.V.Vx), Vy = Array(stokes.V.Vy),
-                η = Array(stokes.viscosity.η),
-                τxy = Array(stokes.τ.xy), εxy = Array(stokes.ε.xy),
-            )
-        end
-
-        a = solve_shifted(0)
-        b = solve_shifted(m)
+        a = _solve_periodic_shear(grid, 0, rheology, igg)
+        b = _solve_periodic_shear(grid, m, rheology, igg)
 
         # sanity: the input really is an exact translation
         @test circshift(a.η, (m, 0)) ≈ b.η
-
-        # drop the duplicated seam plane / the ghost columns so a plain circshift is the comparison
-        unwrap_vertex(A) = A[1:(end - 1), :]
-        unwrap_ghosted(A) = A[2:(end - 1), :]
-        scale = maximum(abs, a.Vx)
-
-        @test maximum(
-            abs, circshift(unwrap_vertex(a.Vx), (m, 0)) .- unwrap_vertex(b.Vx)
-        ) / scale < 1.0e-10
-        @test maximum(
-            abs, circshift(unwrap_ghosted(a.Vy), (m, 0)) .- unwrap_ghosted(b.Vy)
-        ) / scale < 1.0e-10
+        @test _shift_error(a, b, m) < 1.0e-10
 
         # the two x-seam planes carry the same strain rate and the same stress
         @test a.εxy[1, :] ≈ a.εxy[end, :]
         @test a.τxy[1, :] ≈ a.τxy[end, :]
+    end
+
+    @testset "refined grid across the seam" begin
+        n, m = 32, 7
+        rheology = (_linear_phase(1.0, 1), _linear_phase(100.0, 2))
+        vertices(widths) = vcat(0.0, cumsum(widths) ./ sum(widths))
+        refined(xv, yv) = Geometry(PTArray(backend), xv, yv; distributed = false)
+
+        # A grid built from vertex vectors stores even uniform spacings as vectors, so the seam
+        # face needs its own spacing; the same vertices as the scalar grid must give its solution.
+        uniform = Geometry((n, n), (1.0, 1.0); origin = (0.0, 0.0))
+        a = _solve_periodic_shear(uniform, m, rheology, igg)
+        b = _solve_periodic_shear(refined(collect.(Array.(uniform.xvi))...), m, rheology, igg)
+        @test a.iter < total_iterMax && b.iter < total_iterMax
+        scale = maximum(abs, a.Vx)
+        @test maximum(abs, a.Vx .- b.Vx) / scale < 1.0e-10
+        @test maximum(abs, a.Vy .- b.Vy) / scale < 1.0e-10
+
+        # Cell widths periodic in x, y stretched: shifting the widths together with the material
+        # by `m` cells is the same discrete problem in index space only if the seam face sees the
+        # spacing across the wrap like any interior face.
+        widths = [1 + 0.3 * sinpi(2 * (i - 0.5) / n) for i in 1:n]
+        yv = vertices([1 + 0.3 * cospi((j - 0.5) / n) for j in 1:n])
+        c = _solve_periodic_shear(refined(vertices(widths), yv), 0, rheology, igg)
+        d = _solve_periodic_shear(refined(vertices(circshift(widths, m)), yv), m, rheology, igg)
+        @test c.iter < total_iterMax && d.iter < total_iterMax
+        @test circshift(c.η, (m, 0)) ≈ d.η
+        @test _shift_error(c, d, m) < 1.0e-10
+        @test c.εxy[1, :] ≈ c.εxy[end, :]
+        @test c.τxy[1, :] ≈ c.τxy[end, :]
     end
 
     @testset "variational solver" begin

@@ -38,11 +38,12 @@ function _solve_VariationalDYREL!(
         kwargs...,
     ) where {N}
 
-    check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+    check_periodic_bcs(stokes, flow_bcs, igg)
 
     N == 3 && reject_periodic_bcs(flow_bcs, "`solve_VariationalDYREL!` in 3D")
     dim = Val(N)
-    _di = grid._di
+    di = periodic_spacing(grid.di, periodic_dims(stokes))
+    _di = inv_spacing(di)
     lx = grid.max_li
     ni = size(stokes.P)
     momentum_pressure = prepare_surface_pressure(stokes.P, surface_pressure, ϕ, flow_bcs)
@@ -149,7 +150,7 @@ function _solve_VariationalDYREL!(
     # recompute all the DYREL variables
     compute_viscosity!(stokes, phase_ratios, ϕ, args, rheology, viscosity_cutoff; air_phase = air_phase)
     compute_ρg!(ρg[end], phase_ratios, rheology, args; air_phase)
-    DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
+    DYREL!(dyrel, stokes, rheology, phase_ratios, ϕ, di, dt, iszero(free_surface) ? nothing : ρg[end])
     # reciprocal viscosity for the harmonic means of the stress kernel, refreshed with η
     η_inv = inv.(stokes.viscosity.η)
 
@@ -251,7 +252,7 @@ function _solve_VariationalDYREL!(
         # velocity updates would drive the free-surface-stabilization residual term against
         # a dτ tuned for the plain viscous operator and diverge.
         if !iszero(free_surface)
-            Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, grid.di, dt, ρg[end])
+            Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, di, dt, ρg[end])
             update_dτV_α_β!(dyrel)
         end
         while (err_vel > ϵ_vel && itPT ≤ iterMax_DR)
@@ -309,6 +310,13 @@ function _solve_VariationalDYREL!(
             _flow_bcs!(flow_bcs, @velocity(stokes), true)
             update_halo_synced!(@velocity(stokes)...)
 
+            if iszero(iter % nout)
+                # R - R0 was caused by the previous increment, not the one just taken.
+                λminV = masked_λminV(dVi, Ri, R0i, maskRi)
+                @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
+            end
+            @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
+
             # Residual check
             if iszero(iter % nout)
 
@@ -327,15 +335,8 @@ function _solve_VariationalDYREL!(
                 if verbose_DR && igg.me == 0
                     @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err_vel)
                 end
-                # Estimate the smallest eigenvalue on exactly the same reduced, boundary-trimmed
-                # velocity space used by the residual norm. Eliminated cut-cell rows otherwise
-                # contaminate the Rayleigh quotient even though they are not part of the solve.
-                @parallel (@idx ni) compute_dV!(fields.dV, fields.dVdτ, fields.βV, fields.dτV)
-                λminV = masked_λminV(dVi, Ri, R0i, maskRi)
-                @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
-
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, grid.di, dt, iszero(free_surface) ? nothing : ρg[end])
+                Gershgorin_variational!(dim, dyrel, stokes, phase_ratios, ϕ, rheology, di, dt, iszero(free_surface) ? nothing : ρg[end])
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)

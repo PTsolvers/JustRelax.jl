@@ -1,3 +1,39 @@
+# Grid spacings `di` (`center`, `vertex`, `velocity`, as in `Geometry`) with the seam of every
+# periodic direction filled in. The seam face lies between the last and the first cell, whose
+# centers are `(Δv[1] + Δv[end]) / 2` apart across the wrap. `Geometry` does not know which
+# directions wrap: its cell-center spacing stops one entry short of the seam row, and its
+# cell-centered velocity grids place the ghost nodes by mirroring the first and last center
+# spacing. Scalar (uniform) spacings already describe the seam, and a center spacing that already
+# has the seam entry is kept, so applying this twice changes nothing.
+function periodic_spacing(di::NamedTuple, periodic::NTuple{N, Bool}) where {N}
+    center = ntuple(d -> periodic[d] ? _seam_center(di.center[d], di.vertex[d]) : di.center[d], Val(N))
+    velocity = ntuple(Val(N)) do c
+        ntuple(d -> periodic[d] && c != d ? _seam_ghosts(di.velocity[c][d], di.vertex[d]) : di.velocity[c][d], Val(N))
+    end
+    return (; center, vertex = di.vertex, velocity)
+end
+
+inv_spacing(di::NamedTuple) = (;
+    center = map(x -> inv.(x), di.center),
+    vertex = map(x -> inv.(x), di.vertex),
+    velocity = map(x -> map(y -> inv.(y), x), di.velocity),
+)
+
+# one-element array holding the seam spacing: slicing keeps device arrays on the device
+_seam(Δv::AbstractVector) = (view(Δv, 1:1) .+ view(Δv, lastindex(Δv):lastindex(Δv))) ./ 2
+
+_seam_center(Δc::Number, _) = Δc
+_seam_center(Δc::AbstractVector, Δv::AbstractVector) = length(Δc) == length(Δv) ? Δc : vcat(Δc, _seam(Δv))
+
+_seam_ghosts(Δg::Number, _) = Δg
+function _seam_ghosts(Δg::AbstractVector, Δv::AbstractVector)
+    s = _seam(Δv)
+    out = copy(Δg)
+    view(out, 1:1) .= s
+    view(out, lastindex(out):lastindex(out)) .= s
+    return out
+end
+
 """
     DYREL(ni::NTuple{N, Integer}[, periodic]; ϵ=1e-6, ϵ_vel=1e-6, CFL=0.99, c_fact=0.5, γfact=20.0) where N
 
@@ -178,7 +214,7 @@ function DYREL(stokes::JustRelax.StokesArrays, rheology, phase_ratios, di, dt; �
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, periodic_spacing(di, periodic_dims(stokes)), dt)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)
@@ -221,7 +257,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phase_ratios, γfact, dt)
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+    Gershgorin_Stokes_SchurComplement!(dim, dyrel.Dx, dyrel.Dy, dyrel.Dz, dyrel.λmaxVx, dyrel.λmaxVy, dyrel.λmaxVz, stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, periodic_spacing(di, periodic_dims(stokes)), dt)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)
@@ -238,7 +274,7 @@ function DYREL!(dyrel::JustRelax.DYREL, stokes::JustRelax.StokesArrays, rheology
     end
 
     # compute Gershgorin estimates for maximum eigenvalues and diagonal preconditioners
-    Gershgorin_variational!(Val(ndims(stokes.P)), dyrel, stokes, phase_ratios, ϕ, rheology, di, dt, ρgy)
+    Gershgorin_variational!(Val(ndims(stokes.P)), dyrel, stokes, phase_ratios, ϕ, rheology, periodic_spacing(di, periodic_dims(stokes)), dt, ρgy)
 
     # compute damping coefficients
     update_dτV_α_β!(dyrel, CFL)
@@ -326,8 +362,8 @@ end
 # `Dx`/`Dy` — hence the reciprocal factor here. Without it the pressure of a cut cell
 # relaxes `ϕ.center` times slower than the rest of the domain and is left visibly
 # under-converged along a free surface. Every consumer multiplies at least one rock
-# fraction back in (`γ_eff * RP` and the single center-fraction factor used by the
-# Gershgorin bound), so no second volume-fraction factor is introduced; `isvalid_c`
+# fraction back in (`γ_eff * RP`, followed by the masked pressure gradient), so
+# the Schur term carries γ_eff * ϕ.center^2; `isvalid_c`
 # guarantees the divisor is positive.
 @parallel_indices (I...) function compute_bulk_viscosity_and_penalty!(ηb, γ_eff, rheology, phase_ratios_center, η, ϕ::JustRelax.RockRatio, η_mean, γfact, dt, global_penalty)
 

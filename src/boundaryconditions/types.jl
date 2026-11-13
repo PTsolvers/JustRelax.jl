@@ -274,16 +274,16 @@ function periodic_dims end
 end
 
 """
-    check_periodic_bcs(stokes, bcs, igg, di_center)
+    check_periodic_bcs(stokes, bcs, igg)
 
 Throw unless the periodic directions of `bcs` are ones the solver can actually solve.
 
 The momentum row of a periodic seam only exists if `stokes` was allocated for it, which is what
 `StokesArrays(backend, ni, bcs)` does; a `stokes` built without the boundary conditions leaves that
-row out and the seam velocity is then frozen at its initial value. The other two conditions mark
-combinations that are not implemented rather than ones that are wrong in principle.
+row out and the seam velocity is then frozen at its initial value. The single-rank condition marks
+a combination that is not implemented rather than one that is wrong in principle.
 """
-function check_periodic_bcs(stokes, bcs::AbstractFlowBoundaryConditions, igg, di_center)
+function check_periodic_bcs(stokes, bcs::AbstractFlowBoundaryConditions, igg)
     bc_periodic = periodic_dims(bcs)
     any(bc_periodic) || return nothing
 
@@ -299,14 +299,6 @@ function check_periodic_bcs(stokes, bcs::AbstractFlowBoundaryConditions, igg, di
         `init_global_grid` with `periodx`/`periody` rescales the global grid against the \
         overlap, which does not match the `Geometry` the solver is given."
     )
-
-    for (d, isperiodic) in enumerate(bc_periodic)
-        isperiodic && di_center[d] isa AbstractVector && error(
-            "Periodic boundary conditions require uniform grid spacing in the periodic \
-            direction; direction $d has a variable cell-center spacing. The seam face spans the \
-            wrap, so a single spacing value has to describe it."
-        )
-    end
     return nothing
 end
 

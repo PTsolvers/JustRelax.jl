@@ -92,9 +92,13 @@ For the variational solver the volume fractions have to be periodic too: on the
 periodic direction are the same plane and must carry the same fraction,
 otherwise the reduced space itself is not periodic.
 
-Two further restrictions are checked at solve time: the periodic direction must
-have uniform grid spacing (the seam face spans the wrap, so one spacing value has
-to describe it), and the run must be on a single MPI rank. In particular, do
+A periodic direction may be refined: with a `Geometry` built from vertex
+coordinates, the seam face gets the spacing across the wrap, half the sum of the
+first and last cell widths, and so does the ghost interval of every velocity grid
+that is cell-centred along that direction.
+
+One further restriction is checked at solve time: the run must be on a single
+MPI rank. In particular, do
 *not* pass `periodx`/`periody`/`periodz` to `init_global_grid` for these models:
 ImplicitGlobalGrid then reports a global grid shrunk by the halo overlap, which
 is the count the residual norms are normalised by. The periodicity is carried

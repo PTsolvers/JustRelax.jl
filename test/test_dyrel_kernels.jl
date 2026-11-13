@@ -267,3 +267,127 @@ end
         @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
     end
 end
+
+@testset "Variational DYREL diagonal matches refined momentum operator" begin
+    ni = (6, 5)
+    xv = [0.0, 0.05, 0.12, 0.3, 0.5, 0.7, 1.0]
+    yv = [0.0, 0.1, 0.15, 0.4, 0.8, 1.0]
+    grid = Geometry(PTArray(backend), xv, yv; distributed = false)
+    el = ConstantElasticity(; G = 3.0, Kb = 5.0)
+    rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            CompositeRheology = CompositeRheology((LinearViscous(; η = 2.0), el)),
+            Elasticity = el,
+        ),
+    )
+    phases = PhaseRatios(backend_JP, 1, ni)
+    @parallel (@idx ni) _init_single_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_single_phase!(phases.vertex)
+    stokes = StokesArrays(backend, ni)
+    stokes.viscosity.η .= 2.0
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 0.6), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    dt = 0.7
+    dyrel = DYREL(backend, stokes, rheology, phases, ϕ, grid.di, dt)
+    ρg = @zeros(ni...), @zeros(ni...)
+    θc = similar(stokes.P)
+    i, j = 3, 3
+    # A unit velocity at the row's own unknown extracts its diagonal from the actual
+    # Schur-complement residual, independently of the Gershgorin coefficient formulas.
+    function row_residual(d, component, ii, jj)
+        foreach(A -> fill!(A, 0.0), @velocity(stokes))
+        V = @velocity(stokes)[component]
+        basis = zeros(size(V))
+        basis[ii, jj] = 1.0
+        V .= PTArray(backend)(basis)
+        JR2K.compute_∇V_strain_rate_RP!(stokes, dyrel, rheology, phases, ϕ, grid._di, ni, dt)
+        JR2K.compute_stress_DYREL!(stokes, rheology, phases, ϕ, 1.0, dt)
+        @. θc = dyrel.γ_eff * stokes.R.RP
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy, stokes.P, θc,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg..., ϕ,
+            grid._di.center, grid._di.vertex, 0.0,
+        )
+        return Array((stokes.R.Rx, stokes.R.Ry)[d])[i, j]
+    end
+    for d in 1:2
+        diagonal = Array((dyrel.Dx, dyrel.Dy)[d])[i, j]
+        @test diagonal ≈ -row_residual(d, d, i + 1, j + 1)
+        row_sum = sum(abs(row_residual(d, c, ii, jj)) for c in 1:2, ii in i:(i + 2), jj in j:(j + 2))
+        bound = Array((dyrel.λmaxVx, dyrel.λmaxVy)[d])[i, j] * diagonal
+        @test bound ≈ row_sum
+    end
+end
+
+@testset "Variational FSSA never lowers the Vy diagonal" begin
+    ni = nx, ny = (6, 5)
+    grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+    rheology = (SetMaterialParams(; Phase = 1, CompositeRheology = CompositeRheology((LinearViscous(; η = 2.0),))),)
+    phases = PhaseRatios(backend_JP, 1, ni)
+    @parallel (@idx ni) _init_single_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_single_phase!(phases.vertex)
+    stokes = StokesArrays(backend, ni)
+    stokes.viscosity.η .= 2.0
+    stokes.V.Vy .= PTArray(backend)(rand(size(stokes.V.Vy)...))
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    dt = 0.7
+    dyrel = DYREL(backend, stokes, rheology, phases, ϕ, grid.di, dt)
+    JR2K.Gershgorin_variational!(Val(2), dyrel, stokes, phases, ϕ, rheology, grid.di, dt, nothing)
+    Dy_viscous = Array(dyrel.Dy)
+    ρgx = @zeros(ni...)
+    function Ry_fssa(ρgy)
+        Ry(dt) = (
+            @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+                stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.ΔPψ,
+                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρgx, ρgy, ϕ,
+                grid._di.center, grid._di.vertex, dt,
+            ); Array(stokes.R.Ry)
+        )
+        return Ry(dt) .- Ry(0.0)
+    end
+    Vy = Array(stokes.V.Vy)[2:(end - 1), 2:(end - 1)]
+    # density decreasing upward, as across the rock/air interface: the term stabilizes
+    ∂ρg∂y = -ny
+    ρgy = PTArray(backend)([3.0 + ∂ρg∂y * y for _ in 1:nx, y in grid.xci[2]])
+    JR2K.Gershgorin_variational!(Val(2), dyrel, stokes, phases, ϕ, rheology, grid.di, dt, ρgy)
+    @test Array(dyrel.Dy) ≈ Dy_viscous .- ∂ρg∂y * dt
+    @test Ry_fssa(ρgy) ≈ Vy .* (∂ρg∂y * dt)
+    # density increasing upward, as in a Rayleigh–Taylor-unstable layer: the term is left out
+    ρgy = PTArray(backend)([3.0 + ny * y for _ in 1:nx, y in grid.xci[2]])
+    JR2K.Gershgorin_variational!(Val(2), dyrel, stokes, phases, ϕ, rheology, grid.di, dt, ρgy)
+    @test Array(dyrel.Dy) == Dy_viscous
+    @test all(iszero, Ry_fssa(ρgy))
+end
+
+@testset "Variational DYREL damping recovers a single mode" begin
+    n = 8
+    ni = n, n
+    grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
+    bcs = VelocityBoundaryConditions(; free_slip = (left = false, right = false, top = false, bot = false), periodic = (left = true, right = true, top = true, bot = true))
+    stokes = StokesArrays(backend, ni, bcs)
+    rheology = (SetMaterialParams(; Phase = 1, Density = ConstantDensity(; ρ = 1.0), Gravity = ConstantGravity(; g = 0.0), CompositeRheology = CompositeRheology((LinearViscous(; η = 1.0),))),)
+    phases = PhaseRatios(backend_JP, 1, ni)
+    @parallel (@idx ni) _init_single_phase!(phases.center)
+    @parallel (@idx ni .+ 1) _init_single_phase!(phases.vertex)
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    stokes.V.Vx .= PTArray(backend)([sinpi(2 * x) for x in grid.xvi[1], _ in 1:(n + 2)])
+    stokes.viscosity.η .= 1.0
+    dyrel = DYREL(backend, stokes, rheology, phases, ϕ, grid.di, Inf; ϵ = 1.0e-12)
+    args = (; T = @zeros(ni .+ 2...), P = stokes.P)
+    igg = IGG(init_global_grid(n, n, 1; init_MPI = !JustRelax.MPI.Initialized())...)
+    # One PH pass leaves the first damping estimate available for inspection.
+    solve_VariationalDYREL!(
+        stokes, (@zeros(ni...), @zeros(ni...)), dyrel, bcs, phases, ϕ, rheology, args, grid, Inf, igg;
+        linear_viscosity = true, verbose_PH = false, verbose_DR = false,
+        iterMax_PH = 1, iterMax_DR = 50, total_iterMax = 50, nout = 50
+    )
+    # This sinusoidal velocity is an eigenvector of the uniform Schur operator.
+    diagonal = Array(dyrel.Dx)[1, 1]
+    γ = Array(dyrel.γ_eff)[1, 1]
+    λ = (γ + 4 / 3) * 4 * sinpi(1 / n)^2 * n^2 / diagonal
+    @test all(isapprox.(Array(dyrel.cVx), 2 * sqrt(λ) * dyrel.c_fact; rtol = 1.0e-10))
+    finalize_global_grid()
+end

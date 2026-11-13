@@ -1,9 +1,16 @@
+# The variational free-surface stabilization keeps only the stabilizing part of ∂(ρg)/∂y, where
+# density decreases upward (the rock/air interface, stable stratification). Where density
+# increases upward the full term would anticipate Rayleigh–Taylor growth over `dt`; once `dt`
+# exceeds that growth time it makes the momentum operator indefinite and the pseudo-transient
+# iterations diverge. Left out, such growth is resolved by the advective time step instead.
+@inline stabilizing_∂ρg∂y(∂ρg∂y) = min(∂ρg∂y, zero(∂ρg∂y))
+
 # Diagonal contribution of the free-surface stabilization buoyancy term (Kaus et al.,
-# 2010) to the Vy operator: -∂(ρg)/∂y·θ·dt, with θ = 1. The residual kernels
+# 2010) to the Vy operator: -∂(ρg)/∂y·θ·dt, with θ = 1 and ∂(ρg)/∂y clipped by
+# `stabilizing_∂ρg∂y`, so it never reduces the diagonal. The residual kernels
 # (`compute_PH_residual_V!`/`compute_DR_residual_update_V!`) add Vy·∂(ρg)/∂y·θ·dt to Ry, and
 # Ry = b - A·V, so the term enters A's diagonal with the opposite sign — the same convention as
-# `free_surface_diagonal`. It is signed, not a magnitude: where density increases upward it
-# reduces the diagonal. Passing a `RockRatio` selects the ϕ-masked ρg sampling those masked
+# `free_surface_diagonal`. Passing a `RockRatio` selects the ϕ-masked ρg sampling those masked
 # kernels use, so the preconditioner describes the same stabilized operator. Returns a Bool
 # `false` (numeric zero) when no buoyancy field is supplied, so construction-time estimates and
 # the FSSA-off path are byte-identical to the plain viscous diagonal.
@@ -11,7 +18,7 @@
 Base.@propagate_inbounds @inline function fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ = nothing)
     # the launch spans every center row, so the north neighbour of the top row does not exist
     j == lastindex(ρgy, 2) && return zero(eltype(ρgy))
-    return -_d_ya_ρg(ρgy, ϕ, _dy, i, j) * dt
+    return -stabilizing_∂ρg∂y(_d_ya_ρg(ρgy, ϕ, _dy, i, j)) * dt
 end
 
 Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ::Nothing, _dy, i, j) = _d_ya(ρgy, _dy, i, j)
@@ -24,9 +31,9 @@ Base.@propagate_inbounds @inline _d_ya_ρg(ρgy, ϕ::JustRelax.RockRatio, _dy, i
 #
 # A diagonal of exactly zero is a legitimate mask-boundary row that `isvalid_*` accepts but whose
 # neighbouring stress weights all vanish; it carries no coupling, so the identity is the right
-# preconditioner for it. A negative or non-finite diagonal is not legitimate — it means either a
-# degenerate viscosity sample or an FSSA term large enough to invert the row — and is propagated as
-# `NaN`, the same signal `free_surface_pseudotime` raises, rather than silently replaced by 1.
+# preconditioner for it. A negative or non-finite diagonal is not legitimate — it means a
+# degenerate viscosity sample — and is propagated as `NaN`, the same signal
+# `free_surface_pseudotime` raises, rather than silently replaced by 1.
 Base.@propagate_inbounds @inline function set_preconditioner!(D, λmaxV, diagonal, row_sum, i, j)
     if diagonal > zero(diagonal)
         D[i, j] = diagonal
@@ -72,6 +79,7 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_e
         γ_eff,
         di.center,
         di.vertex,
+        di.velocity,
         phase_ratios.vertex,
         phase_ratios.center,
         ϕ,
@@ -83,7 +91,7 @@ function Gershgorin_Stokes2D_SchurComplement!(Dx, Dy, λmaxVx, λmaxVy, η, γ_e
 end
 
 @parallel_indices (i, j) function _Gershgorin_Stokes2D_SchurComplement!(
-        Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, di_center, di_vertex,
+        Dx, Dy, λmaxVx, λmaxVy, η, γ_eff, di_center, di_vertex, di_velocity,
         phase_vertex, phase_center, ϕ::JustRelax.RockRatio, rheology, dt, ρgy
     )
 
@@ -105,10 +113,9 @@ end
     ηS = η_vertex(η, ni, periodic, i + 1, j)
     ηW = η[i, j]
 
-    # Powell-Hestenes penalty coefficient using the same effective weighting as the
-    # pressure update. `γ_eff` already compensates the center fraction in the weighted
-    # continuity residual, so the preconditioner must not reintroduce a second fraction.
-    γW = γ_eff[i, j] * ϕ.center[i, j]
+    # The Schur term carries one fraction from RP and one from its masked gradient.
+    # Keep both even though γ_eff already compensates one in the pressure step.
+    γW = γ_eff[i, j] * ϕ.center[i, j]^2
 
     if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
         if isvalid_vx(ϕ, i + 1, j)
@@ -117,8 +124,6 @@ end
             dy = @dy(di_vertex, j)
             _dx = inv(dx)
             _dy = inv(dy)
-            _dx2 = _dx * _dx
-            _dy2 = _dy * _dy
             _dxdy = _dx * _dy
             c43 = 4 / 3
             c23 = 2 / 3
@@ -130,34 +135,27 @@ end
             phase = phase_center[iE, j]
             GE = fn_ratio(get_shear_modulus, rheology, phase)
             ηE = η[iE, j]
-            γE = γ_eff[iE, j] * ϕ.center[iE, j]
+            γE = γ_eff[iE, j] * ϕ.center[iE, j]^2
             # effective viscoelastic viscosity, ϕ-weighted after the combine
             ηN = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηN, GN, dt)
             ηS = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j], ηS, GS, dt)
             ηW = ϕ_weighted_harmonic(ϕ.center[i, j], ηW, GW, dt)
             ηE = ϕ_weighted_harmonic(ϕ.center[iE, j], ηE, GE, dt)
 
-            # Precompute common terms
-            ηN_dy = ηN * _dy
-            ηS_dy = ηS * _dy
-            ηE_dx = ηE * _dx
-            ηW_dx = ηW * _dx
-            γE_dx = γE * _dx
-            γW_dx = γW * _dx
-
-            # compute Gershgorin entries
-            Cxx = abs(ηN * _dy2) +
-                abs(ηS * _dy2) +
-                abs((γE + c43 * ηE) * _dx2) +
-                abs((γW + c43 * ηW) * _dx2) +
-                abs((ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx)
+            # Differentiate with the spacing of each source cell/vertex, then that
+            # of the momentum row; these coincide only on a uniform grid.
+            aN = ηN / (@dy di_velocity[1] j + 1) * _dy
+            aS = ηS / (@dy di_velocity[1] j) * _dy
+            aE = (γE + c43 * ηE) / (@dx di_vertex iE) * _dx
+            aW = (γW + c43 * ηW) / (@dx di_vertex i) * _dx
+            Dx_ij = aN + aS + aE + aW
+            Cxx = abs(aN) + abs(aS) + abs(aE) + abs(aW) + abs(Dx_ij)
 
             Cxy = abs((γE - c23 * ηE + ηN) * _dxdy) +
                 abs((γE - c23 * ηE + ηS) * _dxdy) +
                 abs((γW + ηN - c23 * ηW) * _dxdy) +
                 abs((γW + ηS - c23 * ηW) * _dxdy)
 
-            Dx_ij = (ηN_dy + ηS_dy) * _dy + (γE_dx + γW_dx + c43 * (ηE_dx + ηW_dx)) * _dx
             set_preconditioner!(Dx, λmaxVx, Dx_ij, Cxx + Cxy, i, j)
         else
             Dx[i, j] = one(eltype(Dx))
@@ -184,8 +182,6 @@ end
             dy = @dy(di_center, j)
             _dx = inv(dx)
             _dy = inv(dy)
-            _dx2 = _dx * _dx
-            _dy2 = _dy * _dy
             _dxdy = _dx * _dy
             c43 = 4 / 3
             c23 = 2 / 3
@@ -197,31 +193,20 @@ end
             GN = fn_ratio(get_shear_modulus, rheology, phase)
 
             ηN = η[i, jN]
-            γN = γ_eff[i, jN] * ϕ.center[i, jN]
+            γN = γ_eff[i, jN] * ϕ.center[i, jN]^2
             # effective viscoelastic viscosity, ϕ-weighted after the combine (see Vx block)
             ηN = ϕ_weighted_harmonic(ϕ.center[i, jN], ηN, GN, dt)
             ηS = ϕ_weighted_harmonic(ϕ.center[i, j], ηS, GS, dt)
             ηW = ϕ_weighted_harmonic(ϕ.vertex[i, j + 1], ηW, GW, dt)
             ηE = ϕ_weighted_harmonic(ϕ.vertex[i + 1, j + 1], ηE, GE, dt)
 
-            # Precompute common terms
-            ηE_dx = ηE * _dx
-            ηW_dx = ηW * _dx
-            ηN_dy = ηN * _dy
-            ηS_dy = ηS * _dy
-            γN_dy = γN * _dy
-            γS_dy = γS * _dy
-
-            # Viscous+penalty diagonal augmented by the signed ϕ-masked FSSA term, as above.
-            Dy_visc = (γN_dy + γS_dy + c43 * (ηN_dy + ηS_dy)) * _dy + (ηE_dx + ηW_dx) * _dx
+            aE = ηE / (@dx di_velocity[2] i + 1) * _dx
+            aW = ηW / (@dx di_velocity[2] i) * _dx
+            aN = (γN + c43 * ηN) / (@dy di_vertex jN) * _dy
+            aS = (γS + c43 * ηS) / (@dy di_vertex j) * _dy
+            Dy_visc = aE + aW + aN + aS
             Dy_ij = Dy_visc + fssa_diagonal_y(ρgy, i, j, _dy, dt, ϕ)
-
-            # compute Gershgorin entries
-            Cyy = abs(ηE * _dx2) +
-                abs(ηW * _dx2) +
-                abs((γN + c43 * ηN) * _dy2) +
-                abs((γS + c43 * ηS) * _dy2) +
-                Dy_ij
+            Cyy = abs(aE) + abs(aW) + abs(aN) + abs(aS) + Dy_ij
 
             Cyx = abs((γN + ηE - c23 * ηN) * _dxdy) +
                 abs((γN - c23 * ηN + ηW) * _dxdy) +

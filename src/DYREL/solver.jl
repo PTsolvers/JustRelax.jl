@@ -149,15 +149,15 @@ function _solve_DYREL!(
         kwargs...,
     ) where {N}
 
-    check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+    check_periodic_bcs(stokes, flow_bcs, igg)
 
     @copy stokes.P0 stokes.P
 
     dim = Val(N)
     v_dofs = velocity_dofs(dim, periodic_dims(stokes))
     p_dof = pressure_dof(dim)
-    di = grid.di
-    _di = grid._di
+    di = periodic_spacing(grid.di, periodic_dims(stokes))
+    _di = inv_spacing(di)
     di_center = di.center
     ni = size(stokes.P)
 
@@ -209,9 +209,9 @@ function _solve_DYREL!(
         compute_viscosity!(stokes, phase_ratios, args, rheology, viscosity_cutoff)
         compute_ρg!(ρg[end], phase_ratios, rheology, args)
     end
-    DYREL!(dyrel, stokes, rheology, phase_ratios, grid.di, dt; CFL = dyrel.CFL)
+    DYREL!(dyrel, stokes, rheology, phase_ratios, di, dt; CFL = dyrel.CFL)
     if free_surface
-        apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], grid.di.center, dt)
+        apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], di.center, dt)
         update_dτV_α_β!(dyrel)
     end
     # reciprocal viscosity for the 3D edge harmonic means; the stress kernel keeps it current
@@ -340,7 +340,7 @@ function _solve_DYREL!(
             )
             _flow_bcs!(flow_bcs, @velocity(stokes), true)
             free_surface_bcs!(
-                stokes, flow_bcs, stokes.viscosity.η_vep, grid.di.velocity..., dim
+                stokes, flow_bcs, stokes.viscosity.η_vep, di.velocity..., dim
             )
             update_halo_synced!(@velocity(stokes)...)
 
@@ -371,8 +371,8 @@ function _solve_DYREL!(
                 @parallel (@idx ni) update_cV!(fields.cV, 2 * √(λminV) * dyrel.c_fact)
 
                 # Optimal pseudo-time steps - can be replaced by AD
-                Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, grid.di, dt)
-                free_surface && apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], grid.di.center, dt)
+                Gershgorin_Stokes_SchurComplement!(dim, fields.D..., fields.λmaxV..., stokes.viscosity.η, stokes.viscosity.ηv, dyrel.γ_eff, phase_ratios, rheology, di, dt)
+                free_surface && apply_free_surface_diagonal!(fields.D[N], fields.λmaxV[N], ρg[end], di.center, dt)
 
                 # Select dτ
                 update_dτV_α_β!(dyrel)

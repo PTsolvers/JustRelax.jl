@@ -504,12 +504,14 @@ function JR2D.subgrid_characteristic_time!(
         phases::JustPIC.PhaseRatios,
         rheology,
         thermal::JustRelax.ThermalArrays,
-        stokes::JustRelax.StokesArrays,
+        stokes::JustRelax.StokesArrays;
+        args = (;),
     )
     ni = size(stokes.P)
     size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
+    check_subgrid_args(args, ni)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases.center, rheology, thermal.T, stokes.P, particle_cell_spacing(particles)
+        dt₀, phases.center, rheology, thermal.T, stokes.P, args, particle_cell_spacing(particles)
     )
     return nothing
 end
@@ -521,12 +523,14 @@ function JR2D.subgrid_characteristic_time!(
         phases::AbstractArray{Int, N},
         rheology,
         thermal::JustRelax.ThermalArrays,
-        stokes::JustRelax.StokesArrays,
+        stokes::JustRelax.StokesArrays;
+        args = (;),
     ) where {N}
     ni = size(stokes.P)
     size(dt₀) == ni .+ 2 || throw(DimensionMismatch("dt₀ must have size $(ni .+ 2), got $(size(dt₀))"))
+    check_subgrid_args(args, ni)
     @parallel (@idx ni) subgrid_characteristic_time!(
-        dt₀, phases, rheology, thermal.T, stokes.P, particle_cell_spacing(particles)
+        dt₀, phases, rheology, thermal.T, stokes.P, args, particle_cell_spacing(particles)
     )
     return nothing
 end
@@ -539,10 +543,11 @@ function JR2D.subgrid_characteristic_time!(
         rheology,
         thermal::JustRelax.ThermalArrays,
         stokes::JustRelax.StokesArrays,
-        di,
+        di;
+        args = (;),
     ) where {N}
     return subgrid_characteristic_time!(
-        subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes, di
+        subgrid_arrays, particles, dt₀, phases, rheology, thermal, stokes, di; args
     )
 end
 

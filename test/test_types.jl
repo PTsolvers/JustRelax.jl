@@ -199,6 +199,42 @@ end
     @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2700.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
     @test all(iszero, Array(dt₀)[[1, end], :])
 
+    # `args` reaches the material laws: the melt fraction ϕ selects the melt density
+    melt_rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = MeltDependent_Density(; ρsolid = ConstantDensity(; ρ = 2700.0), ρmelt = ConstantDensity(; ρ = 2200.0)),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1000.0),
+            Conductivity = ConstantConductivity(; k = 3.0),
+        ),
+    )
+    fill!(dt₀, 0.0)
+    JR2.subgrid_characteristic_time!(
+        nothing, nothing, dt₀, phases, melt_rheology, thermal, stokes, (1.0, 2.0); args = (; ϕ = PTArray(backend)(fill(1.0, ni...)))
+    )
+    @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2200.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
+    fill!(dt₀, 0.0)
+    JR2.subgrid_characteristic_time!(nothing, nothing, dt₀, phases, melt_rheology, thermal, stokes, (1.0, 2.0))
+    @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2700.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
+    # a field of `args` named `T` replaces `thermal.T` (zero here): ρ = 2700 (1 - 1e-3 * 100)
+    T_rheology = (
+        SetMaterialParams(;
+            Phase = 1,
+            Density = T_Density(; ρ0 = 2700.0, α = 1.0e-3, T0 = 0.0),
+            HeatCapacity = ConstantHeatCapacity(; Cp = 1000.0),
+            Conductivity = ConstantConductivity(; k = 3.0),
+        ),
+    )
+    fill!(dt₀, 0.0)
+    JR2.subgrid_characteristic_time!(
+        nothing, nothing, dt₀, phases, T_rheology, thermal, stokes, (1.0, 2.0); args = (; T = PTArray(backend)(fill(100.0, ni...)))
+    )
+    @test all(@view(Array(dt₀)[2:(end - 1), 2:(end - 1)]) .≈ 2430.0 * 1000.0 / (2 * 3.0 * (1 + 1 / 4)))
+    # args are indexed at the cell, so a field of another size is rejected
+    @test_throws "args must be numbers or cell arrays" JR2.subgrid_characteristic_time!(
+        nothing, nothing, dt₀, phases, melt_rheology, thermal, stokes, (1.0, 2.0); args = (; ϕ = PTArray(backend)(fill(1.0, (ni .+ 1)...)))
+    )
+
     # with particles, each cell reads its own spacing from the particle grid, which carries a
     # ghost cell on each side; uneven cell widths expose an off-by-one cell index
     xv, yv = [0.0, 1.0, 3.0], [0.0, 0.5, 2.0]

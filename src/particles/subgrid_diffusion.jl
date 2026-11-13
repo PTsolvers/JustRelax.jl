@@ -69,7 +69,7 @@ end
     # Temperature carries ghost cells, whereas pressure and `args` are physical-sized.
     # Index them explicitly so this remains device-compatible for GPU arrays; a field of `args`
     # replaces `T` or `P` of the same name.
-    argsᵢ = (; T = T[(I .+ 1)...], P = P[I...], map(a -> a isa Number ? a : a[I...], args)...)
+    argsᵢ = (; T = T[(I .+ 1)...], P = P[I...], map(a -> getindex_or_scalar(a, I...), args)...)
     phaseᵢ = getindex_phase(phase_ratios, I...)
 
     # Compute the characteristic timescale `dt₀` of the local cell

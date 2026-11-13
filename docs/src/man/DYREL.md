@@ -160,6 +160,19 @@ and the sensitivities are unchanged. `iterMax_DR` and `total_iterMax` count reve
 two per BiCGStab iteration. The adjoint inner tolerance `rel_drop` defaults to `0.1`,
 whatever the forward solve uses.
 
+A few very slow modes can cost BiCGStab most of its sweeps, for example the rigid motions of a
+stiff body that a weak layer separates from its surroundings. Such modes dominate what an
+inexact velocity solve leaves behind, so the solver can recycle its own work to remove them:
+
+```julia
+adjoint_kwargs = (; deflation = 16)
+```
+
+keeps the solution increments of the last 16 pressure passes and deflates them from the
+BiCGStab iteration. This needs no extra reverse sweeps, but each sweep then costs 16 more dot
+products and vector updates, and the vectors use the memory of 32 velocity fields. The
+default is `deflation = 0`.
+
 ### Local penalty for the adjoint
 
 Both 2D DYREL adjoints use their own numerical penalty, set through `adjoint_kwargs`:

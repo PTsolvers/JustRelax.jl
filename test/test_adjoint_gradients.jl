@@ -300,6 +300,15 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             igg; observation, variational, adjoint = true,
             adjoint_kwargs = (; inner_solver = :unknown),
         )
+        # recycled deflation changes the iteration, not the result
+        deflated = @suppress sinking_block(
+            igg; observation, variational, adjoint = true, adjoint_kwargs = (; deflation = 4),
+        )
+        @test deflated.gradient ≈ baseline.gradient rtol = 1.0e-6
+        @test_throws ArgumentError @suppress sinking_block(
+            igg; observation, variational, adjoint = true,
+            adjoint_kwargs = (; deflation = 4, inner_solver = :dr),
+        )
     end
 
     # The viscosity depends on the solved pressure only, so its pullback must reach λP.

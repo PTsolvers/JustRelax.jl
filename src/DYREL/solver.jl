@@ -48,7 +48,7 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
   a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
   `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR`, `pressure_relaxation`,
-  `penalty_scaling`, `penalty_factor` and `inner_solver`, e.g.
+  `penalty_scaling`, `penalty_factor`, `inner_solver` and `deflation`, e.g.
   `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
   given are those of the forward solve, except `rel_drop`. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
   `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
@@ -58,6 +58,9 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
   `penalty_factor`. The default `inner_solver = :bicgstab` solves the adjoint velocity system
   of each pressure pass with BiCGStab, which needs no damping or eigenvalue estimates and
   tolerates a non-symmetric Jacobian; `inner_solver = :dr` uses damped dynamic relaxation.
+  `deflation = k` lets BiCGStab deflate the last `k` solution increments of the pressure
+  passes, which helps when a few modes converge very slowly, e.g. a stiff body enclosed by a
+  weak layer. Default: `0`, no deflation.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the

@@ -16,7 +16,7 @@ end
 const ADJOINT_SOLVER_OPTIONS = (
     :ϵ, :rel_drop, :iterMax, :iterMax_PH, :iterMax_DR, :total_iterMax, :nout,
     :verbose_PH, :verbose_DR, :pressure_relaxation, :penalty_scaling, :penalty_factor,
-    :inner_solver,
+    :inner_solver, :deflation,
 )
 
 # Iteration controls of the adjoint solve: those of the forward solve, overridden by
@@ -558,8 +558,126 @@ function check_inner_solver(inner_solver)
     return inner_solver
 end
 
+function check_deflation(deflation, inner_solver)
+    deflation isa Integer && deflation ≥ 0 || throw(
+        ArgumentError("deflation must be a nonnegative integer, the number of recycled vectors")
+    )
+    iszero(deflation) || inner_solver === :bicgstab ||
+        throw(ArgumentError("deflation requires inner_solver = :bicgstab"))
+    return deflation
+end
+
+adjoint_dot(a, b) = sum(map((a, b) -> masked_dot_mpi(nothing, a, b), a, b))
+
+# Recycled deflation of the Krylov inner solver. A few very slow modes of the velocity system,
+# e.g. the rigid motions of a stiff body enclosed by a weak layer, cost the diagonally
+# preconditioned iteration most of its sweeps. What an inexact solve leaves behind is dominated
+# by those modes, so the solution increments of the pressure passes span them: BiCGStab then
+# iterates on P A with P = I − AW E Wᵀ and E = (Wᵀ A W)⁻¹, where W holds the last `kmax`
+# increments (orthonormalized) of the scaled system.
+mutable struct AdjointDeflation{A, V}
+    const W::A              # per velocity component, the vectors in the slices of one array
+    const AW::A             # their images: differences of true residuals, so they cost no sweep
+    E::Matrix{Float64}      # (Wᵀ A W)⁻¹ on the filled slots, zero elsewhere
+    const slots::Vector{Int}    # filled slots, oldest first
+    const x0::V             # iterate and scaled residual at the start of the pass
+    const r0::V
+    const scratch::V
+end
+
+function AdjointDeflation(vectors, kmax)
+    slices() = map(A -> fill!(similar(A, size(A)..., kmax), 0), vectors())
+    return AdjointDeflation(slices(), slices(), zeros(kmax, kmax), Int[], vectors(), vectors(), vectors())
+end
+
+# one column per vector, so that all vectors are handled by a single matrix product
+@inline columns(A) = reshape(A, :, size(A, ndims(A)))
+
+# Wᵀ y for all slots at once, summed over the velocity components and the MPI ranks
+function deflation_dots(W, y)
+    c = sum(map((W, y) -> Array(columns(W)' * vec(y)), W, y))
+    return MPI.Allreduce(c, MPI.SUM, MPI.COMM_WORLD)
+end
+
+on_backend(c, A) = copyto!(similar(A, length(c)), c)
+
+# y ← P y. Returns c = E Wᵀ y, which also gives the iterate correction Q x = x − W c for y = A x.
+deflate!(y, ::Nothing) = nothing
+function deflate!(y, deflation::AdjointDeflation)
+    isempty(deflation.slots) && return nothing
+    c = on_backend(deflation.E * deflation_dots(deflation.W, y), first(y))
+    for d in eachindex(y)
+        mul!(vec(y[d]), columns(deflation.AW[d]), c, -1.0, 1.0)
+    end
+    return c
+end
+
+# λ += s W c, in the unscaled unknowns
+correct_iterate!(λVi, deflation, ::Nothing, s, isqrtD) = nothing
+function correct_iterate!(λVi, deflation, c, s, isqrtD)
+    for d in eachindex(λVi)
+        mul!(vec(deflation.scratch[d]), columns(deflation.W[d]), c)
+        @. λVi[d] += s * deflation.scratch[d] * isqrtD[d]
+    end
+    return nothing
+end
+
+# Remember where the pass starts and solve for the deflated modes: λ += W E Wᵀ r, r ← P r.
+start_deflated_pass!(::Nothing, λVi, r, isqrtD) = nothing
+function start_deflated_pass!(deflation, λVi, r, isqrtD)
+    for d in eachindex(r)
+        deflation.x0[d] .= λVi[d]
+        deflation.r0[d] .= r[d]
+    end
+    correct_iterate!(λVi, deflation, deflate!(r, deflation), 1.0, isqrtD)
+    return nothing
+end
+
+# Add the increment of the finished pass to the deflation space. `R` is the true residual of
+# the new `λVi`, for the same λP as at the start of the pass.
+recycle_increment!(::Nothing, λVi, R, isqrtD) = nothing
+function recycle_increment!(deflation, λVi, R, isqrtD)
+    (; W, AW, slots) = deflation
+    kmax = size(deflation.E, 1)
+    Δ, AΔ = deflation.x0, deflation.r0
+    for d in eachindex(Δ)
+        @. Δ[d] = ifelse(isqrtD[d] > 0, (λVi[d] - Δ[d]) / isqrtD[d], 0.0)
+        @. AΔ[d] -= R[d] * isqrtD[d]
+    end
+    scale = sqrt(adjoint_dot(Δ, Δ))
+    # orthogonalize against the vectors that stay; the oldest makes room when all slots are full
+    kept = length(slots) == kmax ? slots[2:end] : slots
+    h = zeros(kmax)
+    h[kept] = deflation_dots(W, Δ)[kept]
+    h = on_backend(h, first(Δ))
+    for d in eachindex(Δ)
+        mul!(vec(Δ[d]), columns(W[d]), h, -1.0, 1.0)
+        mul!(vec(AΔ[d]), columns(AW[d]), h, -1.0, 1.0)
+    end
+    nrm = sqrt(adjoint_dot(Δ, Δ))
+    # an increment that is already in the space adds nothing
+    isfinite(nrm) && nrm > 1.0e-8 * scale || return nothing
+    slot = length(slots) == kmax ? popfirst!(slots) : first(setdiff(1:kmax, slots))
+    for d in eachindex(Δ)
+        selectdim(W[d], ndims(W[d]), slot) .= Δ[d] ./ nrm
+        selectdim(AW[d], ndims(AW[d]), slot) .= AΔ[d] ./ nrm
+    end
+    push!(slots, slot)
+    G = sum(map((W, AW) -> Array(columns(W)' * columns(AW)), W, AW))
+    G = MPI.Allreduce(G, MPI.SUM, MPI.COMM_WORLD)
+    factorization = lu(G[slots, slots]; check = false)
+    fill!(deflation.E, 0)
+    if issuccess(factorization)
+        deflation.E[slots, slots] = inv(factorization)
+    else
+        empty!(slots)
+    end
+    return nothing
+end
+
 # Work arrays of `adjoint_bicgstab!`, allocated once per adjoint solve on the backend of `D`.
-function adjoint_bicgstab_workspace(stokes_ad, D)
+# `deflation` is the number of recycled deflation vectors, 0 for none.
+function adjoint_bicgstab_workspace(stokes_ad, D, deflation = 0)
     direction = (zero(stokes_ad.λV.Vx), zero(stokes_ad.λV.Vy))
     direction_i = map(
         (A, D) -> @view(A[2:(size(D, 1) + 1), 2:(size(D, 2) + 1)]), direction, D,
@@ -568,6 +686,7 @@ function adjoint_bicgstab_workspace(stokes_ad, D)
     return (;
         direction, direction_i, zeroP = zero(stokes_ad.λP), isqrtD = vectors(),
         r = vectors(), r̂ = vectors(), p = vectors(), v = vectors(), t = vectors(),
+        deflation = iszero(deflation) ? nothing : AdjointDeflation(vectors, deflation),
     )
 end
 
@@ -581,7 +700,8 @@ Inner velocity solve of one Powell–Hestenes pass of the adjoint with BiCGStab,
 damped dynamic relaxation. The adjoint is linear, so the step and the damping need no
 eigenvalue estimates, and BiCGStab does not need the Jacobian to be symmetric or to have real
 eigenvalues (non-associated plasticity, the tangent of a nonlinear viscosity). It iterates on
-the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal.
+the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal, deflated by the
+recycled vectors of `work.deflation` if there are any.
 
 `residual!(λV, λP, seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
 with or without the objective seed; on entry `R` holds that of the current `λVi`. Returns
@@ -592,10 +712,11 @@ function adjoint_bicgstab!(
         residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
         total_iterMax; verbose = false, nout = 1,
     )
-    (; direction, direction_i, zeroP, isqrtD, r, r̂, p, v, t) = work
+    (; direction, direction_i, zeroP, isqrtD, r, r̂, p, v, t, deflation) = work
     components = eachindex(r)
-    dot(a, b) = sum(map((a, b) -> masked_dot_mpi(nothing, a, b), a, b))
-    # out = D^-½ A D^-½ x, by one reverse sweep without the objective seed: R = −A·direction
+    dot = adjoint_dot
+    # out = P D^-½ A D^-½ x, by one reverse sweep without the objective seed: R = −A·direction.
+    # Returns the deflation coefficients of the sweep, `nothing` without deflation.
     function apply!(out, x)
         for d in components
             @. direction_i[d] = x[d] * isqrtD[d]
@@ -604,12 +725,15 @@ function adjoint_bicgstab!(
         for d in components
             @. out[d] = -R[d] * isqrtD[d]
         end
-        return nothing
+        return deflate!(out, deflation)
     end
     for d in components
         # rows without a diagonal are not unknowns
         @. isqrtD[d] = ifelse(D[d] > 0, inv(sqrt(D[d])), 0.0)
         @. r[d] = R[d] * isqrtD[d]
+    end
+    start_deflated_pass!(deflation, λVi, r, isqrtD)
+    for d in components
         copyto!(r̂[d], r[d])
         fill!(p[d], 0)
         fill!(v[d], 0)
@@ -625,7 +749,7 @@ function adjoint_bicgstab!(
         for d in components
             @. p[d] = r[d] + β * (p[d] - ω * v[d])
         end
-        apply!(v, p)
+        c = apply!(v, p)
         α = ρ / dot(r̂, v)
         if !isfinite(α)
             @warn "adjoint BiCGStab broke down (α = $α); restarting from the true residual" maxlog = 5
@@ -635,7 +759,8 @@ function adjoint_bicgstab!(
             @. λVi[d] += α * p[d] * isqrtD[d]
             @. r[d] -= α * v[d]
         end
-        apply!(t, r)
+        correct_iterate!(λVi, deflation, c, -α, isqrtD)
+        c = apply!(t, r)
         ω = dot(t, r) / dot(t, t)
         if !isfinite(ω) || iszero(ω)
             @warn "adjoint BiCGStab broke down (ω = $ω); restarting from the true residual" maxlog = 5
@@ -647,6 +772,7 @@ function adjoint_bicgstab!(
             # the unscaled residual, for the norm of the stopping criterion
             @. R[d] = r[d] * D[d] * isqrtD[d]
         end
+        correct_iterate!(λVi, deflation, c, -ω, isqrtD)
         err = maximum(relative_momentum_residual(momentum_norms(), errV0))
         verbose && iszero(itPT % 2nout) && @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
     end

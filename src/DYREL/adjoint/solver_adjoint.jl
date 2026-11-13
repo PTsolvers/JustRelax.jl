@@ -37,10 +37,12 @@ function solve_DYREL_adjoint!(
         penalty_scaling = :local,
         penalty_factor = nothing,
         inner_solver = :bicgstab,
+        deflation = 0,
         kwargs...,
     ) where {N}
     factor = adjoint_penalty_factor(penalty_scaling, penalty_factor)
     check_inner_solver(inner_solver)
+    check_deflation(deflation, inner_solver)
     dim = Val(N)
     # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
     # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
@@ -147,7 +149,7 @@ function solve_DYREL_adjoint!(
         return nothing
     end
     bicgstab = inner_solver === :bicgstab ?
-        adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy)) : nothing
+        adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy), deflation) : nothing
 
     converged = false
     for itPH in 1:Int(iterMax_PH)
@@ -217,6 +219,7 @@ function solve_DYREL_adjoint!(
             # the last sweep was of a search direction: refresh the continuity adjoint of λV,
             # which the λP update below reads
             corrected_residual!(λV, stokes_ad.λP, true)
+            recycle_increment!(bicgstab.deflation, λVi, adjoint_velocity_residuals, bicgstab.isqrtD)
         end
         while (inner_solver === :dr && err > ϵ_vel && itPT < iterMax_DR && iter < total_iterMax)
             itPT += 1

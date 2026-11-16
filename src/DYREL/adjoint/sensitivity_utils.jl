@@ -45,7 +45,7 @@ end
 """
     finish_density_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic, _di;
-        air_phase=0, ϕ=nothing,
+        air_phase=0, ϕ,
     )
 
 Differentiate the forward buoyancy and continuity-residual functions with respect to their
@@ -56,7 +56,7 @@ continuity residual.
 function finish_density_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, rheology, args, dt, gradients, periodic,
         _di;
-        air_phase::Integer = 0, ϕ = nothing,
+        air_phase::Integer = 0, ϕ,
     )
     compute_buoyancy_parameter_gradients!(
         ρg, stokes_ad, phase_ratios, rheology, args, gradients; air_phase
@@ -194,17 +194,6 @@ end
 
 @inline _has_parameter_paths(parameters) = any(paths -> !isempty(paths), parameters)
 
-# Parameters that reach J only through ρg, or through η with `linear_viscosity`: with
-# `update_material = false` the forward takes those fields from the caller.
-function prescribed_field_parameters(rheology, names, linear_viscosity)
-    return filter(names) do name
-        any(rheology) do material
-            !isempty(_buoyancy_parameter_paths(material, name)) ||
-                linear_viscosity && !isempty(_viscosity_parameter_paths(material, name))
-        end
-    end
-end
-
 function material_parameter_is_used(material, parameter)
     return !isempty(_density_parameter_paths(material, parameter)) ||
         !isempty(_gravity_parameter_paths(material, parameter)) ||
@@ -213,9 +202,7 @@ end
 
 function compute_viscosity_parameter_gradients!(
         stokes, adjoint, phases, rheology, args, viscosity_cutoff, gradients;
-        air_phase::Integer = 0,
-        viscosity_seed = (adjoint.viscosity.η, adjoint.viscosity.ηv),
-        include_vertex::Bool = true,
+        air_phase::Integer = 0, viscosity_seed = adjoint.viscosity.η,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -224,14 +211,13 @@ function compute_viscosity_parameter_gradients!(
         rheology,
     )
     any(_has_parameter_paths, parameters) || return nothing
-    η_bar, ηv_bar = viscosity_seed
     # Copies, so that a primal write of the recomputed viscosity cannot replace the forward
     # viscosity, e.g. one scaled by `η_multiplier`. `DuplicatedNoNeed` does not rule it out.
     differentiate_pointwise_material_kernel!(
         compute_viscosity_kernel_point!, size(phases.center),
         map(entry -> entry.center, gradients), parameters,
         (
-            copy(stokes.viscosity.η) => copy(η_bar),
+            copy(stokes.viscosity.η) => copy(viscosity_seed),
             1.0 => nothing,
             phases.center => nothing,
             stokes.τ.xx => nothing,
@@ -245,26 +231,6 @@ function compute_viscosity_parameter_gradients!(
             local_viscosity_args => nothing,
         ),
     )
-    if include_vertex
-        differentiate_pointwise_material_kernel!(
-            compute_viscosity_kernel_point!, size(phases.vertex),
-            map(entry -> entry.vertex, gradients), parameters,
-            (
-                copy(stokes.viscosity.ηv) => copy(ηv_bar),
-                1.0 => nothing,
-                phases.vertex => nothing,
-                stokes.τ.xx_v => nothing,
-                stokes.τ.yy_v => nothing,
-                stokes.τ.xy => nothing,
-                args => nothing,
-                rheology => Enzyme.Active,
-                air_phase => nothing,
-                viscosity_cutoff => nothing,
-                compute_viscosity_τII => nothing,
-                local_viscosity_args_vertex => nothing,
-            ),
-        )
-    end
     return nothing
 end
 
@@ -329,18 +295,17 @@ _bulk_modulus_parameter_paths(material, name::Symbol) =
 
 """
     compute_continuity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ=nothing,
+        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ,
     )
 
 Accumulate the material-parameter contributions of the continuity residual, the bulk modulus
 through the compressibility term and, when `args` contains `ΔT`, thermal expansion, by
 differentiating the matching pointwise forward pressure-residual function. The bulk viscosity
 is recomputed from `rheology` instead of read from the DYREL state, so that `Kb` is
-differentiated. Passing `ϕ` selects the variational overload, including its rock-fraction
-weighting and masked cells.
+differentiated. `ϕ` carries the rock-fraction weighting and the masked cells.
 """
 function compute_continuity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ = nothing,
+        stokes, adjoint, phases, rheology, args, dt, gradients, _di, ϕ,
     )
     isempty(gradients) && return nothing
     names = keys(gradients)
@@ -366,10 +331,8 @@ function compute_continuity_parameter_gradients!(
         stokes.P0 => nothing,
         stokes.Q => nothing,
         nothing => nothing,
+        ϕ => nothing,
     )
-    if !isnothing(ϕ)
-        point_args = (point_args..., ϕ => nothing)
-    end
     differentiate_pointwise_material_kernel!(
         compute_∇V_strain_rate_RP_point!, size(stokes.P), centers, parameters,
         (

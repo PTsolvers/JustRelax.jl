@@ -1,21 +1,34 @@
 """
-    solve_DYREL_adjoint!(stokes, stokes_ad, args...; kwargs...)
+    solve_VariationalDYREL_adjoint!(
+        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
+        maskV, maskP, air_phase, kwargs...,
+    )
 
-Adjoint entry point called by `solve_DYREL!(...; adjoint=true)` after the
-forward iterations converge and before history-dependent state is updated.
+Adjoint entry point called by `solve_VariationalDYREL!(...; adjoint=true)` after the forward
+iterations converge and before history-dependent state is updated. It works on the reduced
+(rock) space of the variational solver: `ϕ`, the velocity masks `maskV` and the pressure mask
+`maskP` are those of the converged forward solve and stay frozen. Adjoint velocities and
+pressures of eliminated rows and cells are held at zero, like their forward counterparts.
+
+Nonlinear viscosity is differentiated as the converged stress-based constitutive relation
+`η = viscosity_τII(stress(η))`; viscosity relaxation is not differentiated.
 """
-function solve_DYREL_adjoint!(
+function solve_VariationalDYREL_adjoint!(
         stokes,
         stokes_ad,
         ρg,
         dyrel,
         flow_bcs,
         phase_ratios,
+        ϕ::JustRelax.RockRatio,
         rheology,
         args,
         grid::Geometry{N},
         dt,
         igg;
+        maskV,
+        maskP,
+        air_phase::Integer = 0,
         λ_relaxation_DR,
         λ_relaxation_PH,
         pressure_relaxation,
@@ -31,7 +44,6 @@ function solve_DYREL_adjoint!(
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
         linear_viscosity = false,
-        update_material = true,
         adjoint_ϵ = nothing,
         adjoint_rel_drop = nothing,
         penalty_scaling = :local,
@@ -47,20 +59,9 @@ function solve_DYREL_adjoint!(
     # Differentiate the unrelaxed plastic multiplier: at convergence λ equals its trial value,
     # and holding the relaxed history constant would scale the plastic tangent by the relaxation.
     λ_relaxation = one(eltype(stokes.P))
-    v_dofs = velocity_dofs(dim, periodic_dims(stokes))
-    p_dof = pressure_dof(dim)
     _di = grid._di
     ni = size(stokes.P)
     lx = grid.max_li
-    # adjoint velocity unknowns, for the scale of the continuity check
-    λVi = (
-        @view(stokes_ad.λV.Vx[2:(size(stokes.R.Rx, 1) + 1), 2:(size(stokes.R.Rx, 2) + 1)]),
-        @view(stokes_ad.λV.Vy[2:(size(stokes.R.Ry, 1) + 1), 2:(size(stokes.R.Ry, 2) + 1)]),
-    )
-    adjoint_velocity_residuals = (
-        @view(stokes_ad.V.Vx[2:(size(stokes.R.Rx, 1) + 1), 2:(size(stokes.R.Rx, 2) + 1)]),
-        @view(stokes_ad.V.Vy[2:(size(stokes.R.Ry, 1) + 1), 2:(size(stokes.R.Ry, 2) + 1)]),
-    )
 
     size(stokes_ad.R.Rx) == size(stokes.R.Rx) &&
         size(stokes_ad.R.Ry) == size(stokes.R.Ry) || throw(
@@ -70,34 +71,39 @@ function solve_DYREL_adjoint!(
     get(args, :P, nothing) === stokes.P ||
         throw(ArgumentError("the adjoint solve requires args.P === stokes.P"))
 
-    igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (DYREL) ########\n")
+    igg.me == 0 && @printf("\n######## Running adjoint Stokes solver (variational DYREL) ########\n")
+
+    # the momentum rows are the interior of the velocity arrays: unknowns λV and residuals
+    momentum_rows(A, R) = @view A[2:(size(R, 1) + 1), 2:(size(R, 2) + 1)]
+    R = (stokes.R.Rx, stokes.R.Ry)
+    λV = (stokes_ad.λV.Vx, stokes_ad.λV.Vy)
+    λVi = map(momentum_rows, λV, R)
+    adjoint_velocity_residuals = map(momentum_rows, (stokes_ad.V.Vx, stokes_ad.V.Vy), R)
 
     # the adjoint iterates with its own DYREL state; the forward one is left untouched
     dyrel = adjoint_dyrel!(stokes_ad, dyrel)
     configure_adjoint_penalty!(
-        dyrel, stokes, phase_ratios, nothing, rheology, grid, dt, ρg, free_surface, factor,
+        dyrel, stokes, phase_ratios, ϕ, rheology, grid, dt, ρg, free_surface, factor,
+    )
+    (; maskRi, adjoint_Ri, nV, nP, damping) = adjoint_norm_rows(
+        maskV, maskP, adjoint_velocity_residuals, dim, periodic_dims(stokes),
     )
     stokes_ad.viscosity.η .= 0
     stokes_ad.viscosity.ηv .= 0
-    constitutive_scratch = linear_viscosity ? nothing : implicit_viscosity_scratch(stokes)
-    if !isnothing(constitutive_scratch)
-        compute_constitutive_tangent_amplification!(
-            constitutive_scratch, stokes, rheology, phase_ratios,
-            λ_relaxation, dt, args, viscosity_cutoff,
-        )
-        update_adjoint_dτV_α_β!(
-            dyrel, constitutive_scratch.η, constitutive_scratch.ηv,
-        )
-    end
-    damping = AdjointDamping(dyrel)
+    constitutive_scratch = linear_viscosity ? nothing : implicit_viscosity_scratch(stokes, ϕ)
+    # `constitutive_scratch.η` is reused as scratch during the iterations, so the pseudo-time
+    # steps keep their own copy of the tangent amplification it holds after this call
     update_steps! = if isnothing(constitutive_scratch)
         () -> update_dτV_α_β!(dyrel)
     else
-        # `constitutive_scratch.η` is reused as scratch during the iterations, so keep the
-        # tangent amplification it holds now
-        amplification = (copy(constitutive_scratch.η), copy(constitutive_scratch.ηv))
-        () -> update_adjoint_dτV_α_β!(dyrel, amplification...)
+        compute_constitutive_tangent_amplification!(
+            constitutive_scratch, stokes, rheology, phase_ratios, ϕ,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+        )
+        amplification = copy(constitutive_scratch.η)
+        () -> update_variational_adjoint_dτV_α_β!(dyrel, amplification)
     end
+    isnothing(constitutive_scratch) || update_steps!()
 
     # Iteration loop
     err_min = Inf
@@ -108,74 +114,73 @@ function solve_DYREL_adjoint!(
 
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))
     observation = observation_mask(stokes_ad, grid, observation)
+    check_observation_mask(observation, maskV, maskP)
+
+    # One reverse sweep through the forward kernels, for the seeds the caller has set
+    sweep!() = variational_adjoint_residual!(
+        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni, dt,
+        λ_relaxation, free_surface, air_phase, maskP, constitutive_scratch, viscosity_cutoff,
+    )
+    # Residual of the adjoint unknowns, with the objective seed
+    function residual!()
+        reset_adjoint_residuals!(stokes_ad, ni)
+        seed_observation!(observation)
+        sweep!()
+        return nothing
+    end
+    # Momentum residual of (λV, λP) with the Schur correction, which the DR update kernel
+    # applies itself, for the Krylov inner solver
+    function corrected_residual!(λV, λP, seed)
+        reset_adjoint_residuals!(stokes_ad, ni, λV, λP)
+        seed && seed_observation!(observation)
+        sweep!()
+        @parallel (@idx ni) adjoint_schur_correction!(
+            stokes_ad.V.Vx, stokes_ad.V.Vy, stokes_ad.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
+            ϕ, _di.center,
+        )
+        return nothing
+    end
+    momentum_norms() = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
 
     # Every solve starts from λ = 0: the previous time step's λ did not shorten the solve (and
     # lengthened it on fine grids). The momentum residual is measured against its value at
     # λ = 0, the objective's velocity seed.
-    foreach(A -> fill!(A, 0), (stokes_ad.λV.Vx, stokes_ad.λV.Vy, stokes_ad.λP))
+    foreach(A -> fill!(A, 0), (λV..., stokes_ad.λP))
     initialize_adjoint_iteration!(stokes_ad, ni)
     seed_observation!(observation)
-    momentum_norms() = ntuple(d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim)
     errV_seed = momentum_norms()
     if observation.field === :P
         errV_seed = pressure_objective_reference!(stokes_ad, dyrel, pressure_relaxation) do
             initialize_adjoint_iteration!(stokes_ad, ni)
             seed_observation!(observation)
-            adjoint_residual!(
-                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni,
-                dt, λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-                constitutive_scratch; update_material,
-            )
+            sweep!()
             momentum_norms()
         end
     end
     errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
 
-    # Momentum residual of (λV, λP) with the Schur correction, which the DR update kernel
-    # applies itself, for the Krylov inner solver
-    λV = (stokes_ad.λV.Vx, stokes_ad.λV.Vy)
-    function corrected_residual!(λV, λP, seed)
-        reset_adjoint_residuals!(stokes_ad, ni, λV, λP)
-        seed && seed_observation!(observation)
-        adjoint_residual!(
-            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-            λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-            constitutive_scratch; update_material,
-        )
-        @parallel (@idx ni) adjoint_schur_correction!(
-            stokes_ad.V.Vx, stokes_ad.V.Vy, stokes_ad.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
-            _di.center,
-        )
-        return nothing
-    end
     bicgstab = inner_solver === :bicgstab ?
         adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy), deflation) : nothing
 
     converged = false
     for itPH in 1:Int(iterMax_PH)
 
-        reset_adjoint_residuals!(stokes_ad, ni)
+        residual!()
 
-        # Init observation points
-        seed_observation!(observation)
-
-        adjoint_residual!(
-            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-            λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-            constitutive_scratch; update_material,
-        )
-
-        # Residual check
-        errV = ntuple(d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim)
-        # Scale-free criteria, as in the variational adjoint: the momentum adjoints relative to
-        # the largest initial one (the objective seeds only some components), the continuity
-        # adjoint, the divergence of λV, like the forward `RP·lx/Vspan`. An absolute floor would
-        # accept an unconverged pressure, since the adjoint carries the units of the problem.
+        # Scale-free criteria, so that ϵ does not depend on the units of the problem. The
+        # objective seeds only some velocity components, so the momentum adjoints are measured
+        # against the largest initial one. The continuity adjoint is the divergence of λV and,
+        # like the forward `RP·lx/Vspan`, is measured against the λV scale over the domain length.
+        # (Relative to its own initial value instead, it would have to drop by ϵ, which the
+        # Powell–Hestenes iteration only reaches after many passes.)
+        errV = momentum_norms()
         errV0 = momentum_residual_reference(errV0, errV)
-        λVspan = maximum(λ -> max(maximum_mpi(λ), -minimum_mpi(λ)), λVi)
-        # λV is zero before its first update and gives the continuity check no scale yet
+        λVspan = maximum(map(masked_value_scale, maskV, λVi))
+        # λV is exactly zero before the first adjoint update and gives the continuity check no
+        # scale yet; the momentum residual remains one for a nontrivial objective on that pass
         has_λV_scale = !iszero(λVspan)
-        errPt = has_λV_scale ? norm_mpi(stokes_ad.P) / √(p_dof) * lx / λVspan : zero(λVspan)
+        errPt = has_λV_scale ?
+            masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan : zero(λVspan)
         errV_relative = relative_momentum_residual(errV, errV0)
         err = has_λV_scale ? maximum((errV_relative..., errPt)) : maximum(errV_relative)
 
@@ -188,8 +193,8 @@ function solve_DYREL_adjoint!(
         end
         isnan(err) && error("NaN detected in outer loop")
         err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
-        # A pressure objective has no initial momentum residual: its first outer pass transfers
-        # the pressure seed into λP. Do not accept that pre-update state as converged.
+        # A pressure-only objective has no initial momentum residual: its first outer pass
+        # transfers the pressure seed into λP. Do not accept that pre-update state as converged.
         pending_pressure_seed = isone(itPH) && observation.field === :P
         if err < ϵ && !pending_pressure_seed
             converged = true
@@ -200,7 +205,6 @@ function solve_DYREL_adjoint!(
 
         # Set tolerance of velocity solve proportional to residual
         if err > err_min * 1.05
-            # rel_drop = max(rel_drop * 0.1, ϵ)
             rel_drop = max(rel_drop * 0.1, 1.0e-3)
         end
         if err_min > err
@@ -225,35 +229,14 @@ function solve_DYREL_adjoint!(
             itPT += 1
             iter += 1
 
-            reset_adjoint_residuals!(stokes_ad, ni)
-
-            # A pressure seed enters the Schur correction and the λP update below
-            seed_observation!(observation)
-
-            adjoint_residual!(
-                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-                λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-                constitutive_scratch; update_material,
-            )
+            # a pressure seed enters the Schur correction and the λP update below
+            residual!()
 
             @parallel (@idx ni) update_adjoint_V_damping_DR!(
-                stokes_ad.λV.Vx,
-                stokes_ad.λV.Vy,
-                dyrel.dVxdτ,
-                dyrel.dVydτ,
-                stokes_ad.V.Vx,
-                stokes_ad.V.Vy,
-                stokes_ad.P,
-                dyrel.γ_eff,
-                dyrel.Dx,
-                dyrel.Dy,
-                dyrel.αVx,
-                dyrel.αVy,
-                dyrel.βVx,
-                dyrel.βVy,
-                dyrel.dτVx,
-                dyrel.dτVy,
-                _di.center,
+                stokes_ad.λV.Vx, stokes_ad.λV.Vy, dyrel.dVxdτ, dyrel.dVydτ,
+                stokes_ad.V.Vx, stokes_ad.V.Vy, stokes_ad.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
+                dyrel.αVx, dyrel.αVy, dyrel.βVx, dyrel.βVy, dyrel.dτVx, dyrel.dτVy,
+                ϕ, _di.center,
             )
             update_adjoint_damping!(
                 damping, dyrel, adjoint_velocity_residuals, iter, nout, ni, update_steps!
@@ -261,9 +244,7 @@ function solve_DYREL_adjoint!(
 
             # Residual check
             if iszero(iter % nout)
-                errV = ntuple(
-                    d -> norm_mpi(adjoint_velocity_residuals[d]) / √(v_dofs[d]), dim
-                )
+                errV = momentum_norms()
                 # same reference as the outer check: relative to the value after the first `nout`
                 # iterations, a residual already at round-off by then can never drop by `rel_drop`
                 errV0 = momentum_residual_reference(errV0, errV)
@@ -277,6 +258,7 @@ function solve_DYREL_adjoint!(
 
         end
 
+        # stokes_ad.P is masked, so eliminated cells keep λP = 0
         @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P
         # a step stored before this update would mix the pressure change into the λmin estimate
         damping.stored[] = 0
@@ -284,38 +266,58 @@ function solve_DYREL_adjoint!(
     if !converged
         # do not calculate or return sensitivities from an unconverged adjoint state
         error(
-            "DYREL adjoint did not converge " *
+            "Variational DYREL adjoint did not converge " *
                 "(err=$err, ϵ=$ϵ, iterations=$iter, total_iterMax=$total_iterMax)"
         )
     end
 
     # sensitivity evaluation
     compute_sensitivities!(
-        stokes, stokes_ad, ρg, phase_ratios, rheology, _di, ni, λ_relaxation, dt, igg,
-        gradients, args; viscosity_cutoff, free_surface, constitutive_scratch,
+        stokes, stokes_ad, ρg, phase_ratios, ϕ, rheology, _di, ni, λ_relaxation, dt, igg,
+        gradients, args; viscosity_cutoff, free_surface, air_phase, constitutive_scratch,
     )
 
     return stokes_ad
 end
 
-# One reverse sweep through the final forward equations: momentum residual, the separate stress
-# kernel with its local implicit viscosity correction, strain rate and continuity residual, then
-# boundary conditions. The relaxed forward viscosity update is not differentiated, and neither
-# is ρg(P) when the forward keeps ρg fixed (`update_material = false`).
-function adjoint_residual!(
-        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, _di, ni, dt,
-        λ_relaxation, free_surface, viscosity_cutoff, linear_viscosity,
-        constitutive_scratch; update_material = true,
+# Rows of the residual norms and of the damping estimate, the same as in the forward solver so
+# that ϵ means the same thing: the reduced, boundary-trimmed rows. A periodic axis has no
+# boundary row to trim.
+function adjoint_norm_rows(maskV, maskP, residuals, dim, periodic)
+    norm_trim(A) = @views A[ntuple(k -> periodic[k] ? (1:size(A, k)) : (2:(size(A, k) - 1)), dim)...]
+    maskRi = map(norm_trim, maskV)
+    damping_masks = map(maskV, maskRi) do mask, trimmed
+        rows = fill!(similar(mask), false)
+        norm_trim(rows) .= trimmed
+        rows
+    end
+    return (;
+        maskRi, adjoint_Ri = map(norm_trim, residuals),
+        nV = map(mask -> max(sum_mpi(mask), 1), maskRi), nP = max(sum_mpi(maskP), 1),
+        damping = AdjointDamping(damping_masks),
+    )
+end
+
+# One reverse sweep through the masked forward kernels, in the reverse order of the forward
+# update: momentum residual, the converged stress/viscosity relation, strain rate and
+# continuity residual, boundary conditions.
+# Seeds are set by the caller. The adjoint pressure residual of eliminated cells is dropped.
+function variational_adjoint_residual!(
+        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, _di, ni, dt,
+        λ_relaxation, free_surface, air_phase, maskP, constitutive_scratch,
+        viscosity_cutoff,
     )
     enzyme_compute_PH_residual_V!(
-        stokes, stokes_ad, ρg, _di, ni, rheology, phase_ratios, args;
-        free_surface_dt = dt * free_surface, update_material,
+        stokes, stokes_ad, ρg, ϕ, _di, ni, rheology, phase_ratios, args;
+        free_surface_dt = dt * free_surface, air_phase,
     )
     enzyme_compute_stress_DRYEL!(
-        stokes, stokes_ad, rheology, phase_ratios, λ_relaxation, dt, args,
-        viscosity_cutoff, linear_viscosity, constitutive_scratch,
+        stokes, stokes_ad, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+        viscosity_cutoff, constitutive_scratch; air_phase,
     )
-    enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, _di, ni, dt, args)
+    enzyme_compute_∇V_strain_rate_RP!(stokes, stokes_ad, dyrel, rheology, phase_ratios, ϕ, _di, ni, dt, args)
     enzyme_flow_bcs!(stokes, stokes_ad, flow_bcs)
+    # Keep the pressure adjoint zero in cells eliminated from the variational system.
+    stokes_ad.P .*= maskP
     return nothing
 end

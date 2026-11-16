@@ -136,9 +136,9 @@ drives the flow: the larger of the buoyancy anomaly (RMS deviation of `ρg` from
 `max τII / lx`, not `Pspan / lx` as the other Stokes solvers do, because in a gravity-driven model
 the pressure span is mostly hydrostatic. A nonlinear viscosity must also satisfy η = h(τ(η)).
 The Gershgorin bound and DYREL parameters refresh every `nout` inner iterations. The
-variational adjoint differentiates the converged stress-based viscosity law; its stress
-pullback includes the harmonic interpolation from center viscosity to vertex stress.
-Nonlinear material-parameter sensitivities are not yet available.
+adjoint (`adjoint = true`) exists for `solve_VariationalDYREL!` only, in 2D on one rank. It
+differentiates the converged stress-based viscosity law; its stress pullback includes the
+harmonic interpolation from center viscosity to vertex stress.
 
 ## `heatdiffusion_PT!` — pseudo-transient thermal diffusion
 

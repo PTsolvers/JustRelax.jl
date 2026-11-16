@@ -197,6 +197,8 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
 15. ⬜ `test/test_dyrel.jl` uses an undefined `JR3` (pre-existing).
 16. ⬜ Typos "caclulate feedbck" in `Enzyme_kernels.jl` and `Enzyme_kernels_VS.jl`; the `typos`
     CI check will likely flag them.
+20. ✅ **Only the variational solver has an adjoint.** The adjoint of `solve_DYREL!` is removed;
+    `solve_VariationalDYREL!` with a `RockRatio` of ones covers problems without air.
 
 ## Checked and correct
 

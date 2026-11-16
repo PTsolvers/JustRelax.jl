@@ -23,6 +23,8 @@ end
     grid = Geometry(ni, (3.0, 2.0))
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
     ρg = (@zeros(ni...), @zeros(ni...))
     ρg[2] .= reshape(collect(1.0:prod(ni)), ni)
     Ry_seed = reshape(cos.(1:length(adjoint.R.Ry)), size(adjoint.R.Ry))
@@ -30,7 +32,7 @@ end
     free_surface_dt = 0.3
 
     JustRelax2D.enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, grid._di, ni; free_surface_dt
+        stokes, adjoint, ρg, ϕ, grid._di, ni; free_surface_dt
     )
 
     expected = zero(adjoint.V.Vy)
@@ -50,6 +52,8 @@ end
     @parallel (@idx ni) _buoyancy_test_phases!(phases.center)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
     ρg = (@zeros(ni...), @zeros(ni...))
     stokes.P .= reshape(collect(1.0:prod(ni)), ni) ./ 10
     T = reshape(collect(1.0:20.0), ni .+ 2) ./ 10
@@ -89,7 +93,7 @@ end
             adjoint.dρgx .= 123.0
             adjoint.ρ .= 123.0
             JustRelax2D.enzyme_compute_PH_residual_V!(
-                stokes, adjoint, ρg, grid._di, ni, rheology, phases, args
+                stokes, adjoint, ρg, ϕ, grid._di, ni, rheology, phases, args
             )
             isnothing(previous) || @test adjoint.P ≈ previous
             previous = copy(adjoint.P)
@@ -108,7 +112,7 @@ end
         adjoint.P .= 0.37
         adjoint.R.Rx .= seedx
         adjoint.R.Ry .= seedy
-        JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
+        JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ, grid._di, ni)
         if pressure_dependent
             @test maximum(abs, adjoint.P .- previous) > 1.0e-3
         else

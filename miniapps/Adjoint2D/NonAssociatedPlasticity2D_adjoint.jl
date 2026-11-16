@@ -124,11 +124,14 @@ function non_associated_plasticity_adjoint(
     gradients = material_controls(backend, ni, (:C, :ϕ); nphases = length(rheology))
 
     # Forward and adjoint solve ----------------------
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-8)
+    # rock everywhere (ϕ = 1)
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-8)
     converged, message, forward_iterations = true, "", 0
     try
-        out = solve_DYREL!(
-            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+        out = solve_VariationalDYREL!(
+            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
             free_surface = true, verbose_PH = verbose, verbose_DR = false,
             iterMax = 1.0e5, total_iterMax = 2.0e5, nout = 50, rel_drop = 0.5,
             linear_viscosity = true, adjoint = true, observation, gradients,

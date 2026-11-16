@@ -55,14 +55,11 @@ include("../../DYREL/adjoint/adjoint_solver_utils.jl")
 include("../../DYREL/adjoint/Enzyme_pointwise.jl")
 include("../../DYREL/adjoint/Enzyme_kernels.jl")
 include("../../DYREL/adjoint/Enzyme_boundary_kernel.jl")
-include("../../DYREL/adjoint/Enzyme_kernels_VS.jl")
 include("../../DYREL/adjoint/Enzyme_gradients_kernels.jl")
 include("../../DYREL/adjoint/sensitivity_utils.jl")
 include("../../DYREL/adjoint/sensitivities_adjoint.jl")
-include("../../DYREL/adjoint/sensitivities_adjoint_VS.jl")
 include("../../DYREL/adjoint/objective_function.jl")
 include("../../DYREL/adjoint/solver_adjoint.jl")
-include("../../DYREL/adjoint/solver_adjoint_VS.jl")
 
 @parallel_indices (i, j) function _apply_free_surface_diagonal_AMDGPU!(
         Dy, λmaxVy, ρgy, di_center, dt

@@ -53,13 +53,12 @@ observed_sum(field, mask) =
 # viscosity left in `stokes` after the solve. `solves` time steps run on the same arrays; before
 # each, λ is kept (`λ_start = :previous`), scaled by 1000 (`:scaled`), zeroed (`:zero`) or
 # poisoned with NaN (`:nan`).
-# With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead. With a
-# `compressibility` β the density is ρ (1 + β P); `update_material` goes to the standard solver.
+# With an `activation_volume`, both phases creep with η ∝ exp(V P / R T) instead.
 function sinking_block(
-        igg; observation, variational = false, adjoint = false, parameter = :ρ,
+        igg; observation, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
         solves = 1, λ_start = :previous, adjoint_ϵ = nothing, activation_volume = nothing,
-        compressibility = nothing, update_material = true, adjoint_kwargs = (;),
+        adjoint_kwargs = (;),
     )
     ni = (24, 24)
     grid = Geometry(ni, (1.0, 1.0); origin = (0.0, 0.0))
@@ -69,8 +68,7 @@ function sinking_block(
         DislocationCreep(; n = 1.0, r = 0.0, A = 0.5 / η, E = 0.0, V = activation_volume)
     material(phase, ρ, η) = SetMaterialParams(;
         Phase = phase,
-        Density = isnothing(compressibility) ? ConstantDensity(; ρ) :
-            PT_Density(; ρ0 = ρ, β = compressibility, α = 0.0, T0 = 0.0),
+        Density = ConstantDensity(; ρ),
         Elasticity = elasticity,
         CompositeRheology = CompositeRheology((viscous(η), elasticity)),
         Gravity = ConstantGravity(; g = 1.0),
@@ -96,28 +94,17 @@ function sinking_block(
     solver_kwargs = (;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
         nout = 50, linear_viscosity, adjoint, observation, gradients, adjoint_ϵ,
-        adjoint_kwargs,
+        adjoint_kwargs, η_multiplier,
     )
-    if variational
-        ϕ = RockRatio(backend, ni)
-        foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
-        dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-9)
-        for _ in 1:solves
-            set_adjoint_start!(stokes_ad, λ_start)
-            solve_VariationalDYREL!(
-                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,
-                dt, igg; solver_kwargs...,
-            )
-        end
-    else
-        dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-9)
-        for _ in 1:solves
-            set_adjoint_start!(stokes_ad, λ_start)
-            solve_DYREL!(
-                stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid,
-                dt, igg; solver_kwargs..., η_multiplier, update_material,
-            )
-        end
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-9)
+    for _ in 1:solves
+        set_adjoint_start!(stokes_ad, λ_start)
+        solve_VariationalDYREL!(
+            stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,
+            dt, igg; solver_kwargs...,
+        )
     end
 
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
@@ -174,9 +161,11 @@ function plastic_shear(
     flow_bcs!(stokes, flow_bcs)
 
     gradients = material_controls(backend, ni, (:C,); nphases = length(rheology))
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ = 1.0e-10)
-    solve_DYREL!(
-        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ = 1.0e-10)
+    solve_VariationalDYREL!(
+        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax = 4.0e5,
         nout = 50, rel_drop = 0.5, λ_relaxation_PH = λ_relaxation,
         λ_relaxation_DR = λ_relaxation, viscosity_relaxation = 1, linear_viscosity = true,
@@ -203,53 +192,35 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     init_mpi = JustRelax.MPI.Initialized() ? false : true
     igg = IGG(init_global_grid(24, 24, 1; init_MPI = init_mpi)...)
 
-    for variational in (false, true), field in (:Vy, :P)
+    for field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        adjoint_gradient = @suppress sinking_block(igg; observation, variational, adjoint = true).gradient
+        adjoint_gradient = @suppress sinking_block(igg; observation, adjoint = true).gradient
         fd = central_difference(1.2, 1.0e-4) do ρ_block
-            @suppress sinking_block(igg; observation, variational, ρ_block).J
+            @suppress sinking_block(igg; observation, ρ_block).J
         end
-        @testset "density, $(variational ? "variational" : "standard") $field" begin
+        @testset "density, $field" begin
             @test adjoint_gradient ≈ fd rtol = 1.0e-6
         end
     end
 
     @testset "viscosity" begin
         # J depends only weakly on the block viscosity (d ln J/d ln η ≈ 5e-3 here, less for a
-        # stiffer block), so the difference quotient amplifies the forward residual; a larger
-        # step keeps that below the tolerance.
+        # stiffer block), so the difference quotient amplifies the forward residual and needs a
+        # large step, whose truncation error (2e-5 at h = 1e-3) Richardson extrapolation removes.
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
         adjoint_gradient = @suppress sinking_block(
             igg; observation, adjoint = true, parameter = :η, η_block = 0.5,
         ).gradient
-        fd = central_difference(0.5, 1.0e-3) do η_block
+        fd(h) = central_difference(0.5, h) do η_block
             @suppress sinking_block(igg; observation, η_block).J
         end
-        @test adjoint_gradient ≈ fd rtol = 1.0e-6
+        @test adjoint_gradient ≈ (4 * fd(5.0e-4) - fd(1.0e-3)) / 3 rtol = 1.0e-6
     end
 
-    # With `update_material = false` the forward keeps the caller's ρg, so the adjoint must not
-    # differentiate ρg(P) although the density depends on pressure. `sinking_block` computes η
-    # from the rheology, so the η gradient holds; the solver warns that it assumes this.
-    @testset "viscosity, fixed buoyancy" begin
+    @testset "adjoint DYREL state" begin
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        case = (; observation, compressibility = 0.5, update_material = false)
-        # `@test_logs` inside `@suppress`, which would otherwise swallow the warning
-        adjoint_gradient = @suppress(
-            @test_logs (:warn, r"update_material = false: the gradients of η") match_mode = :any sinking_block(
-                igg; case..., adjoint = true, parameter = :η, η_block = 0.5,
-            )
-        ).gradient
-        fd = central_difference(0.5, 1.0e-3) do η_block
-            @suppress sinking_block(igg; case..., η_block).J
-        end
-        @test adjoint_gradient ≈ fd rtol = 1.0e-6
-    end
-
-    @testset "adjoint DYREL state, $(variational ? "variational" : "standard")" for variational in (false, true)
-        observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        forward = @suppress sinking_block(igg; observation, variational)
-        coupled = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        forward = @suppress sinking_block(igg; observation)
+        coupled = @suppress sinking_block(igg; observation, adjoint = true)
         # the adjoint solve leaves the forward DYREL state as the forward solve left it
         for name in (:cVx, :cVy, :dτVx, :dτVy, :βVx, :αVx, :dVxdτ)
             @test Array(getfield(coupled.dyrel, name)) == Array(getfield(forward.dyrel, name))
@@ -267,11 +238,11 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test next.Dx !== coupled.dyrel.Dx
     end
 
-    @testset "local adjoint penalty, $(variational ? "variational" : "standard")" for variational in (false, true), field in (:Vy, :P)
+    @testset "local adjoint penalty, $field" for field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        baseline = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        baseline = @suppress sinking_block(igg; observation, adjoint = true)
         local_result = @suppress sinking_block(
-            igg; observation, variational, adjoint = true,
+            igg; observation, adjoint = true,
             adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 20.0),
         )
         @test local_result.J == baseline.J
@@ -286,56 +257,56 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     end
 
     # BiCGStab replaces only the inner velocity iteration: same gradient, same forward state.
-    @testset "BiCGStab inner solver, $(variational ? "variational" : "standard") $field" for variational in (false, true), field in (:Vy, :P)
+    @testset "BiCGStab inner solver, $field" for field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        baseline = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        baseline = @suppress sinking_block(igg; observation, adjoint = true)
         krylov = @suppress sinking_block(
-            igg; observation, variational, adjoint = true,
+            igg; observation, adjoint = true,
             adjoint_kwargs = (; inner_solver = :bicgstab),
         )
         @test krylov.J == baseline.J
         @test krylov.η == baseline.η
         @test krylov.gradient ≈ baseline.gradient rtol = 1.0e-6
         @test_throws ArgumentError @suppress sinking_block(
-            igg; observation, variational, adjoint = true,
+            igg; observation, adjoint = true,
             adjoint_kwargs = (; inner_solver = :unknown),
         )
         # recycled deflation changes the iteration, not the result
         deflated = @suppress sinking_block(
-            igg; observation, variational, adjoint = true, adjoint_kwargs = (; deflation = 4),
+            igg; observation, adjoint = true, adjoint_kwargs = (; deflation = 4),
         )
         @test deflated.gradient ≈ baseline.gradient rtol = 1.0e-6
         @test_throws ArgumentError @suppress sinking_block(
-            igg; observation, variational, adjoint = true,
+            igg; observation, adjoint = true,
             adjoint_kwargs = (; deflation = 4, inner_solver = :dr),
         )
     end
 
     # The viscosity depends on the solved pressure only, so its pullback must reach λP.
-    @testset "pressure-dependent viscosity, $(variational ? "variational" : "standard")" for variational in (false, true)
+    @testset "pressure-dependent viscosity" begin
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
         activation_volume = 8.3145 # V P / R T = P at T = 1
         solution = @suppress sinking_block(
-            igg; observation, variational, adjoint = true, activation_volume,
+            igg; observation, adjoint = true, activation_volume,
         )
         fd = central_difference(1.2, 1.0e-4) do ρ_block
-            @suppress(sinking_block(igg; observation, variational, ρ_block, activation_volume)).J
+            @suppress(sinking_block(igg; observation, ρ_block, activation_volume)).J
         end
         @test solution.gradient ≈ fd rtol = 1.0e-6
     end
 
     # a looser adjoint tolerance changes the gradient, not the forward solution
-    @testset "adjoint tolerance, $(variational ? "variational" : "standard")" for variational in (false, true)
+    @testset "adjoint tolerance" begin
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
-        tight = @suppress sinking_block(igg; observation, variational, adjoint = true)
+        tight = @suppress sinking_block(igg; observation, adjoint = true)
         loose = @suppress sinking_block(
-            igg; observation, variational, adjoint = true, adjoint_ϵ = 1.0e-3,
+            igg; observation, adjoint = true, adjoint_ϵ = 1.0e-3,
         )
         @test loose.J == tight.J
         @test loose.gradient != tight.gradient
         @test loose.gradient ≈ tight.gradient rtol = 1.0e-2
         options = @suppress sinking_block(
-            igg; observation, variational, adjoint = true, adjoint_kwargs = (; ϵ = 1.0e-3),
+            igg; observation, adjoint = true, adjoint_kwargs = (; ϵ = 1.0e-3),
         )
         @test options.gradient == loose.gradient
     end
@@ -356,11 +327,11 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     end
 
     # Every adjoint solve starts from zero, whatever λ the previous solve left behind.
-    @testset "adjoint start, $(variational ? "variational" : "standard") $field" for variational in (false, true), field in (:Vy, :P)
+    @testset "adjoint start, $field" for field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
         warm, scaled, cold, poisoned = map((:previous, :scaled, :zero, :nan)) do λ_start
             @suppress sinking_block(
-                igg; observation, variational, adjoint = true, solves = 2, λ_start,
+                igg; observation, adjoint = true, solves = 2, λ_start,
             ).gradient
         end
         @test warm ≈ cold rtol = 1.0e-6
@@ -369,13 +340,13 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     end
 
     # Sensitivities of an unconverged forward or adjoint state are not returned.
-    @testset "unconverged solve, $(variational ? "variational" : "standard")" for variational in (false, true)
+    @testset "unconverged solve" begin
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
         @test_throws "adjoint needs a converged forward state" @suppress sinking_block(
-            igg; observation, variational, adjoint = true, total_iterMax = 10,
+            igg; observation, adjoint = true, total_iterMax = 10,
         )
         @test_throws "adjoint did not converge" @suppress sinking_block(
-            igg; observation, variational, adjoint = true, adjoint_kwargs = (; total_iterMax = 10),
+            igg; observation, adjoint = true, adjoint_kwargs = (; total_iterMax = 10),
         )
     end
 

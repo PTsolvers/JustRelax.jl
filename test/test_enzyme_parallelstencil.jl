@@ -11,9 +11,19 @@ using ParallelStencil
 
 const Enzyme = JustRelax2D.Enzyme
 
+# the masked kernels average the rock viscosity over MPI; no global grid is set up
+JustRelax.MPI.Initialized() || JustRelax.MPI.Init()
+
 @parallel_indices (i, j) function _init_enzyme_phase!(phase)
     @index phase[1, i, j] = 1.0
     return nothing
+end
+
+# The adjoint works on the variational system; without air, rock fills the domain.
+function _rock(phases, ni)
+    ϕ = RockRatio(CPUBackend, ni)
+    update_rock_ratio!(ϕ, phases, 0)
+    return ϕ
 end
 
 @testset "Variational DYREL stress-viscosity pullback" begin
@@ -46,12 +56,15 @@ end
     end
     objective()
     adjoint.viscosity.η .= weights
-    JustRelax2D.enzyme_compute_viscosity_point!(
-        copy(stokes.viscosity.η), adjoint.viscosity.η, phases.center,
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-        (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-        args, rheology, (-Inf, Inf), JustRelax2D.compute_viscosity_τII,
-        JustRelax2D.local_viscosity_args,
+    JustRelax2D.enzyme_reverse_pointwise!(
+        JustRelax2D.compute_viscosity_kernel_point!, ni,
+        (
+            copy(stokes.viscosity.η) => adjoint.viscosity.η, 1.0 => nothing,
+            phases.center => nothing, stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy,
+            stokes.τ.xy_c => adjoint.τ.xy_c, args => nothing, rheology => nothing, 0 => nothing,
+            (-Inf, Inf) => nothing, JustRelax2D.compute_viscosity_τII => nothing,
+            JustRelax2D.local_viscosity_args => nothing,
+        ),
     )
 
     function finite_difference!(field, index)
@@ -96,37 +109,19 @@ end
     stokes.τ.yy_v .= -0.15
     stokes.τ.xy .= 0.1
 
-    function objective(test_rheology)
-        JustRelax2D.compute_viscosity_τII!(
-            stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 1.0,
-        )
-        return sum(stokes.viscosity.η) + sum(stokes.viscosity.ηv)
-    end
-
-    objective(rheology)
-    adjoint.viscosity.η .= 1.0
-    adjoint.viscosity.ηv .= 1.0
-    gradients = material_controls(CPUBackend, ni, (:η0,); nphases = 1)
-    JustRelax2D.compute_viscosity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients,
-    )
-
-    h = 1.0e-6
-    finite_difference = (objective(make_rheology(2.0 + h)) - objective(make_rheology(2.0 - h))) / (2h)
-    predicted = sum(gradients.η0.center) + sum(gradients.η0.vertex)
-    @test predicted ≈ finite_difference rtol = 1.0e-5
-
     center_objective(test_rheology) = begin
         JustRelax2D.compute_viscosity_τII!(
             stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 1.0,
         )
         return sum(stokes.viscosity.η)
     end
+    center_objective(rheology)
+    adjoint.viscosity.η .= 1.0
     gradients = material_controls(CPUBackend, ni, (:η0,); nphases = 1)
     JustRelax2D.compute_viscosity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
-        include_vertex = false,
+        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients,
     )
+    h = 1.0e-6
     center_fd = (
         center_objective(make_rheology(2.0 + h)) - center_objective(make_rheology(2.0 - h))
     ) / (2h)
@@ -154,21 +149,23 @@ end
     return nothing
 end
 
-function _elastic_residual_objective!(stokes, adjoint, rheology, phases, ρg, grid, dt)
-    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt)
-    @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
-        stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
-        stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-        grid._di.center, grid._di.vertex,
-    )
+function _elastic_residual_objective!(stokes, adjoint, rheology, phases, ϕ, ρg, grid, dt)
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, dt)
+    _momentum_residual!(stokes, ρg, ϕ, grid)
     return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
 end
 
-function _continuity_residual_objective!(stokes, adjoint, dyrel, rheology, phases, grid, dt)
-    JustRelax2D.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phases, 1.0, dt)
+# the masked momentum residual, without the free-surface term
+_momentum_residual!(stokes, ρg, ϕ, grid) = @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
+    stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy, stokes.P, stokes.ΔPψ,
+    stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg..., ϕ, grid._di.center, grid._di.vertex, 0.0,
+)
+
+function _continuity_residual_objective!(stokes, adjoint, dyrel, rheology, phases, ϕ, grid, dt)
+    JustRelax2D.compute_bulk_viscosity_and_penalty!(dyrel, stokes, rheology, phases, ϕ, 1.0, dt)
     JustRelax2D.compute_∇V_strain_rate_RP!(
-        stokes, dyrel, rheology, phases, grid._di, size(stokes.P), dt, false
+        stokes, dyrel, rheology, phases, ϕ, grid._di, size(stokes.P), dt, false
     )
     return -sum(stokes.R.RP .* adjoint.λP)
 end
@@ -224,110 +221,13 @@ function _plastic_rheology(parameters)
 end
 
 function _linear_viscosity_residual_objective!(
-        stokes, adjoint, rheology, phases, args, ρg, grid, dt
+        stokes, adjoint, rheology, phases, ϕ, args, ρg, grid, dt
     )
-    compute_viscosity!(stokes, phases, args, rheology, (-Inf, Inf))
-    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, 1.0, dt)
-    @parallel (@idx size(stokes.P)) JustRelax2D.compute_PH_residual_V!(
-        stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
-        stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-        grid._di.center, grid._di.vertex,
-    )
+    compute_viscosity!(stokes, phases, ϕ, args, rheology, (-Inf, Inf))
+    JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phases, ϕ, 1.0, dt)
+    _momentum_residual!(stokes, ρg, ϕ, grid)
     return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
         sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)]))
-end
-
-@testset "Normal DYREL nonlinear constitutive pullback" begin
-    ni = (3, 3)
-    stokes = StokesArrays(CPUBackend, ni)
-    adjoint = AdjointStokesArrays(CPUBackend, ni)
-    phases = PhaseRatios(JustPIC.CPU, 1, ni)
-    @parallel (@idx ni) _init_enzyme_phase!(phases.center)
-    @parallel (@idx ni .+ 1) _init_enzyme_phase!(phases.vertex)
-    powerlaw_parameters = (; η0 = 2.0, n = 3.0, ε0 = 1.0)
-    make_rheology(parameters = powerlaw_parameters) = (
-        SetMaterialParams(;
-            Phase = 1,
-            CompositeRheology = CompositeRheology((PowerlawViscous(; parameters...),)),
-        ),
-    )
-    rheology = make_rheology()
-    args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt = Inf)
-    stokes.ε.xx .= 0.3
-    stokes.ε.yy .= -0.1
-    stokes.ε.xy .= 0.2
-    center_weights = reshape(collect(1.0:9.0), ni...)
-    vertex_weights = reshape(collect(1.0:16.0), (ni .+ 1)...)
-
-    function converged_objective(test_rheology = rheology)
-        stokes.viscosity.η .= 2.0
-        stokes.viscosity.ηv .= 2.0
-        for _ in 1:200
-            JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, 1.0, 1.0)
-            JustRelax2D.compute_viscosity_τII!(
-                stokes, phases, args, test_rheology, (-Inf, Inf); relaxation = 0.5,
-            )
-        end
-        JustRelax2D.compute_stress_DRYEL!(stokes, test_rheology, phases, 1.0, 1.0)
-        return sum(center_weights .* stokes.τ.xx) + sum(vertex_weights .* stokes.τ.xy)
-    end
-
-    converged_objective()
-    adjoint.τ.xx .= center_weights
-    adjoint.τ.xy .= vertex_weights
-    scratch = JustRelax2D.implicit_viscosity_scratch(stokes)
-    JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phases, 1.0, 1.0, args, (-Inf, Inf), false, scratch,
-    )
-    dεxx = adjoint.ε.xx[2, 2]
-    dεxy = adjoint.ε.xy[2, 2]
-
-    function finite_difference!(field, index)
-        h = 1.0e-6
-        field[index...] += h
-        plus = converged_objective()
-        field[index...] -= 2h
-        minus = converged_objective()
-        field[index...] += h
-        return (plus - minus) / (2h)
-    end
-    @test dεxx ≈ finite_difference!(stokes.ε.xx, (2, 2)) rtol = 1.0e-5
-    @test dεxy ≈ finite_difference!(stokes.ε.xy, (2, 2)) rtol = 1.0e-5
-
-    # Material gradients use the same implicit viscosity seed as the strain-rate pullback.
-    converged_objective()
-    adjoint.τ.xx .= center_weights
-    adjoint.τ.yy .= 0
-    adjoint.τ.xy_c .= 0
-    adjoint.τ.xx_v .= 0
-    adjoint.τ.yy_v .= 0
-    adjoint.τ.xy .= vertex_weights
-    adjoint.τ.II .= 0
-    adjoint.θ .= 0
-    adjoint.viscosity.η .= 0
-    adjoint.viscosity.ηv .= 0
-    JustRelax2D.enzyme_compute_implicit_viscosity_τII!(
-        scratch, stokes, adjoint, rheology, phases, 1.0, 1.0, args, (-Inf, Inf),
-    )
-    gradients = material_controls(
-        CPUBackend, ni, keys(powerlaw_parameters); nphases = 1
-    )
-    JustRelax2D.compute_viscosity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
-        viscosity_seed = (scratch.η, scratch.ηv),
-    )
-    for name in keys(powerlaw_parameters)
-        h = 1.0e-6
-        value = powerlaw_parameters[name]
-        plus = merge(powerlaw_parameters, NamedTuple{(name,)}((value + h,)))
-        minus = merge(powerlaw_parameters, NamedTuple{(name,)}((value - h,)))
-        finite_difference = (
-            converged_objective(make_rheology(plus)) -
-                converged_objective(make_rheology(minus))
-        ) / (2h)
-        predicted = sum(gradients[name].center) + sum(gradients[name].vertex)
-        @test predicted ≈ finite_difference rtol = 1.0e-5
-    end
 end
 
 @testset "Variational DYREL nonlinear constitutive pullback" begin
@@ -407,7 +307,7 @@ end
     )
     JustRelax2D.compute_viscosity_parameter_gradients!(
         stokes, adjoint, phases, rheology, args, (-Inf, Inf), gradients;
-        viscosity_seed = (scratch.η, adjoint.viscosity.ηv),
+        viscosity_seed = scratch.η,
     )
     for name in keys(powerlaw_parameters)
         h = 1.0e-6
@@ -433,6 +333,7 @@ end
     phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_G_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_G_gradient_phases!(phases.vertex)
+    ϕ = _rock(phases, ni)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
@@ -465,12 +366,12 @@ end
             gradient.vertex .= 123.0
         end
         baseline = _elastic_residual_objective!(
-            stokes, adjoint, rheology, phases, ρg, grid, dt
+            stokes, adjoint, rheology, phases, ϕ, ρg, grid, dt
         )
         @test isfinite(baseline)
         JustRelax2D.compute_sensitivities!(
-            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-            (; me = 0), gradients,
+            stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
+            (; me = 0), gradients, (;),
         )
         for (name, modulus_values) in ((:G, moduli), (:Kb, bulk_moduli))
             gradient = gradients[name]
@@ -492,10 +393,10 @@ end
                     _elastic_rheology(minus_values, bulk_moduli) :
                     _elastic_rheology(moduli, minus_values)
                 plus = _elastic_residual_objective!(
-                    stokes, adjoint, plus_rheology, phases, ρg, grid, dt
+                    stokes, adjoint, plus_rheology, phases, ϕ, ρg, grid, dt
                 )
                 minus = _elastic_residual_objective!(
-                    stokes, adjoint, minus_rheology, phases, ρg, grid, dt
+                    stokes, adjoint, minus_rheology, phases, ϕ, ρg, grid, dt
                 )
                 predicted = sum(@view gradient.center[p, :, :])
                 @test predicted ≈ (plus - minus) / (2h) rtol = 1.0e-5 atol = 1.0e-8
@@ -515,6 +416,7 @@ end
     phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_G_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_G_gradient_phases!(phases.vertex)
+    ϕ = _rock(phases, ni)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     dyrel = DYREL(CPUBackend, ni)
@@ -533,17 +435,17 @@ end
     adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
     adjoint.λP .= reshape(sin.(1:length(adjoint.λP)), ni)
     objective(Kb) = _elastic_residual_objective!(
-        stokes, adjoint, _elastic_rheology(moduli, Kb), phases, ρg, grid, dt
+        stokes, adjoint, _elastic_rheology(moduli, Kb), phases, ϕ, ρg, grid, dt
     ) + _continuity_residual_objective!(
-        stokes, adjoint, dyrel, _elastic_rheology(moduli, Kb), phases, grid, dt
+        stokes, adjoint, dyrel, _elastic_rheology(moduli, Kb), phases, ϕ, grid, dt
     )
 
     rheology = _elastic_rheology(moduli, bulk_moduli)
     gradients = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
     objective(bulk_moduli)
     JustRelax2D.compute_sensitivities!(
-        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-        (; me = 0), gradients,
+        stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), gradients, (;),
     )
     @test all(isfinite, gradients.Kb.center)
     for p in eachindex(bulk_moduli)
@@ -562,10 +464,8 @@ end
     normal = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
     variational = material_controls(CPUBackend, ni, (:Kb,); nphases = length(rheology))
     JustRelax2D.compute_continuity_parameter_gradients!(
-        stokes, adjoint, phases, rheology, (;), dt, normal, grid._di,
+        stokes, adjoint, phases, rheology, (;), dt, normal, grid._di, ϕ,
     )
-    ϕ = RockRatio(CPUBackend, ni)
-    update_rock_ratio!(ϕ, phases, 0)
     ϕ.center .= reshape([0.0, 0.25, 0.5, 0.75, 1.0, 0.4], ni)
     JustRelax2D.compute_continuity_parameter_gradients!(
         stokes, adjoint, phases, rheology, (;), dt, variational, grid._di, ϕ,
@@ -583,6 +483,7 @@ end
     phases = PhaseRatios(JustPIC.CPU, 2, ni)
     @parallel (@idx ni) _init_η_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_η_gradient_phases!(phases.vertex)
+    ϕ = _rock(phases, ni)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
@@ -597,10 +498,10 @@ end
     adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
 
     _linear_viscosity_residual_objective!(
-        stokes, adjoint, rheology, phases, args, ρg, grid, dt
+        stokes, adjoint, rheology, phases, ϕ, args, ρg, grid, dt
     )
     JustRelax2D.compute_sensitivities!(
-        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+        stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
         (; me = 0), gradients, args,
     )
     @test all(isfinite, gradients.η.center)
@@ -613,11 +514,11 @@ end
         minus_values = Base.setindex(values, values[p] - h, p)
         plus = _linear_viscosity_residual_objective!(
             stokes, adjoint, _linear_viscosity_rheology(plus_values), phases,
-            args, ρg, grid, dt,
+            ϕ, args, ρg, grid, dt,
         )
         minus = _linear_viscosity_residual_objective!(
             stokes, adjoint, _linear_viscosity_rheology(minus_values), phases,
-            args, ρg, grid, dt,
+            ϕ, args, ρg, grid, dt,
         )
         @test sum(gradients.η.center[p, :, :]) ≈ (plus - minus) / (2h) rtol = 1.0e-6 atol = 1.0e-8
     end
@@ -635,6 +536,7 @@ end
     phases = PhaseRatios(JustPIC.CPU, 2, ni)
     @parallel (@idx ni) _init_η_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_η_gradient_phases!(phases.vertex)
+    ϕ = _rock(phases, ni)
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
@@ -658,13 +560,13 @@ end
     adjoint.λV.Vy .= reshape(cos.(1:length(adjoint.λV.Vy)), size(adjoint.λV.Vy))
 
     baseline = _elastic_residual_objective!(
-        stokes, adjoint, rheology, phases, ρg, grid, dt
+        stokes, adjoint, rheology, phases, ϕ, ρg, grid, dt
     )
     @test isfinite(baseline)
     @test any(>(0), stokes.λ)
     JustRelax2D.compute_sensitivities!(
-        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-        (; me = 0), gradients,
+        stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), gradients, (;),
     )
     for gradient in values(gradients)
         @test all(isfinite, gradient.center)
@@ -683,12 +585,12 @@ end
         plus = _elastic_residual_objective!(
             stokes, adjoint,
             _plastic_rheology(Base.setindex(parameters, plus_phase, p)),
-            phases, ρg, grid, dt,
+            phases, ϕ, ρg, grid, dt,
         )
         minus = _elastic_residual_objective!(
             stokes, adjoint,
             _plastic_rheology(Base.setindex(parameters, minus_phase, p)),
-            phases, ρg, grid, dt,
+            phases, ϕ, ρg, grid, dt,
         )
         @test sum(gradients[name].center[p, :, :]) ≈
             (plus - minus) / (2h) rtol = 1.0e-5 atol = 1.0e-8
@@ -700,11 +602,11 @@ end
         CPUBackend, ni, (:G, :C); nphases = length(rheology)
     )
     _elastic_residual_objective!(
-        stokes, adjoint, rheology, phases, ρg, grid, dt
+        stokes, adjoint, rheology, phases, ϕ, ρg, grid, dt
     )
     JustRelax2D.compute_sensitivities!(
-        stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
-        (; me = 0), mixed_gradients,
+        stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
+        (; me = 0), mixed_gradients, (;),
     )
     @test mixed_gradients.C.center ≈ C_gradient
     @test any(!iszero, mixed_gradients.G.center)
@@ -733,6 +635,7 @@ end
     phases = PhaseRatios(JustPIC.CPU, 3, ni)
     @parallel (@idx ni) _init_α_gradient_phases!(phases.center)
     @parallel (@idx ni .+ 1) _init_α_gradient_phases!(phases.vertex)
+    ϕ = _rock(phases, ni)
     names = (:ρ0, :α, :β, :T0, :P0, :ρ, :g)
     requested = names
     gradients = material_controls(CPUBackend, ni, requested; nphases = 3)
@@ -771,7 +674,7 @@ end
             )
             compute_ρg!(ρg, phases, test_rheology, args)
             JustRelax2D.compute_∇V_strain_rate_RP!(
-                stokes, dyrel, test_rheology, phases, grid._di, ni, dt, false; args...
+                stokes, dyrel, test_rheology, phases, ϕ, grid._di, ni, dt, false; args...
             )
             local_args = JustRelax2D.getindex_NamedTuple(args, Tuple(I)...)
             ratio = phases.center[I][p]
@@ -784,18 +687,14 @@ end
                         JustRelax2D.get_thermal_expansion(models[p])
                 ) * args.ΔT[Tuple(I + CartesianIndex(1, 1))...] / dt
             end
-            @parallel (@idx ni) JustRelax2D.compute_PH_residual_V!(
-                stokes.R.Rx, stokes.R.Ry, stokes.P, stokes.ΔPψ,
-                stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-                grid._di.center, grid._di.vertex,
-            )
+            _momentum_residual!(stokes, ρg, ϕ, grid)
             return -sum(stokes.R.Rx .* @view(adjoint.λV.Vx[2:(end - 1), 2:(end - 1)])) -
                 sum(stokes.R.Ry .* @view(adjoint.λV.Vy[2:(end - 1), 2:(end - 1)])) -
                 sum(stokes.R.RP .* adjoint.λP)
         end
         objective()
         JustRelax2D.compute_sensitivities!(
-            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+            stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
             (; me = 0), gradients, args,
         )
         density_gradient = copy(adjoint.ρ)
@@ -826,7 +725,7 @@ end
         end
         objective()
         JustRelax2D.compute_sensitivities!(
-            stokes, adjoint, ρg, phases, rheology, grid._di, ni, 1.0, dt,
+            stokes, adjoint, ρg, phases, ϕ, rheology, grid._di, ni, 1.0, dt,
             (; me = 0), gradients, args,
         )
         @test all(name -> gradients[name].center ≈ saved[name].center, names)
@@ -837,10 +736,8 @@ end
     variational_thermal = material_controls(CPUBackend, ni, (:α,); nphases = 3)
     JustRelax2D.compute_continuity_parameter_gradients!(
         stokes, adjoint, phases, rheology, thermal_args, dt, normal_thermal,
-        grid._di,
+        grid._di, ϕ,
     )
-    ϕ = RockRatio(CPUBackend, ni)
-    update_rock_ratio!(ϕ, phases, 0)
     ϕ.center .= reshape([0.0, 0.25, 0.5, 0.75, 1.0, 0.4], ni)
     JustRelax2D.compute_continuity_parameter_gradients!(
         stokes, adjoint, phases, rheology, thermal_args, dt, variational_thermal,
@@ -871,6 +768,8 @@ end
     dyrel.ηb .= 1.0
 
     phase_ratios = (; center = nothing)
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
     # Seed L = sum(εxx) + sum(εyy) + sum(εxy) + sum(RP).
     adjoint.ε.xx .= 1.0
     adjoint.ε.yy .= 1.0
@@ -883,6 +782,7 @@ end
         dyrel,
         nothing,
         phase_ratios,
+        ϕ,
         grid._di,
         ni,
         1.0,
@@ -921,10 +821,12 @@ end
     stokes = StokesArrays(CPUBackend, ni)
     adjoint = AdjointStokesArrays(CPUBackend, ni)
     ρg = (@zeros(ni...), @zeros(ni...))
+    ϕ = RockRatio(CPUBackend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
 
     adjoint.R.Rx .= 1.0
     adjoint.R.Ry .= 1.0
-    JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
+    JustRelax2D.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ, grid._di, ni)
     @test any(!iszero, adjoint.P)
     @test any(!iszero, adjoint.τ.xy)
     @test any(!iszero, adjoint.dρgx)
@@ -971,18 +873,6 @@ end
     @test stokes.τ.xx ≈ τxx_default
     @test stokes.τ.xy ≈ τxy_default
 
-    adjoint.τ.xx .= 1.0
-    adjoint.τ.yy .= 1.0
-    adjoint.τ.xy .= 1.0
-    JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, 1.0, 1.0,
-        (;), (-Inf, Inf), true, nothing,
-    )
-    @test any(!iszero, adjoint.ε.xx)
-    @test any(!iszero, adjoint.ε.xy)
-
-    ϕ = RockRatio(CPUBackend, ni)
-    update_rock_ratio!(ϕ, phase_ratios, 0)
     JustRelax2D.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, 1.0)
     adjoint.τ.xx .= 1.0
     adjoint.τ.xy .= 1.0
@@ -1012,14 +902,14 @@ end
     # Converge the separated stress and viscosity updates before differentiating the final state.
     for _ in 1:100
         JustRelax2D.compute_stress_DRYEL!(
-            stokes, nonlinear_rheology, phase_ratios, 1.0, 1.0
+            stokes, nonlinear_rheology, phase_ratios, ϕ, 1.0, 1.0
         )
-        JustRelax2D.compute_viscosity_τII!(
-            stokes, phase_ratios, nonlinear_args, nonlinear_rheology, (-Inf, Inf);
+        JustRelax2D.update_viscosity_τII!(
+            stokes, phase_ratios, ϕ, nonlinear_args, nonlinear_rheology, (-Inf, Inf);
             relaxation = 0.5,
         )
     end
-    nonlinear_scratch = JustRelax2D.implicit_viscosity_scratch(stokes)
+    nonlinear_scratch = JustRelax2D.implicit_viscosity_scratch(stokes, ϕ)
     # The final-state nonlinear path starts with the stress seed supplied by the momentum
     # residual. Viscosity is a locally eliminated constitutive variable, so a stale viscosity
     # seed must be ignored. The adjoint interface therefore has no relaxation argument.
@@ -1036,8 +926,8 @@ end
     adjoint.viscosity.η .= 123.0
     adjoint.viscosity.ηv .= 123.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, nonlinear_rheology, phase_ratios, 1.0, 1.0,
-        nonlinear_args, (-Inf, Inf), false, nonlinear_scratch,
+        stokes, adjoint, nonlinear_rheology, phase_ratios, ϕ, 1.0, 1.0,
+        nonlinear_args, (-Inf, Inf), nonlinear_scratch,
     )
     @test any(!iszero, adjoint.ε.xx)
     @test any(!iszero, adjoint.ε.xy)
@@ -1057,8 +947,8 @@ end
     adjoint.viscosity.η .= -456.0
     adjoint.viscosity.ηv .= -456.0
     JustRelax2D.enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, nonlinear_rheology, phase_ratios, 1.0, 1.0,
-        nonlinear_args, (-Inf, Inf), false, nonlinear_scratch,
+        stokes, adjoint, nonlinear_rheology, phase_ratios, ϕ, 1.0, 1.0,
+        nonlinear_args, (-Inf, Inf), nonlinear_scratch,
     )
     @test adjoint.ε.xx ≈ nonlinear_εxx
     @test adjoint.ε.xy ≈ nonlinear_εxy

@@ -123,7 +123,9 @@ Examples of a set of miniapps using this solver can be found in [this folder](ht
 
 ### Adjoint backends
 
-The 2D standard and variational DYREL adjoints use the same backend as the forward solve.
+Gradients come from the adjoint of the 2D variational solver, `solve_VariationalDYREL!`;
+`solve_DYREL!` has no adjoint. For a problem without air, give it a `RockRatio` filled with
+ones. The adjoint uses the same backend as the forward solve.
 Load `CUDA` or `AMDGPU` before `JustRelax`, then allocate both the forward and adjoint
 states on that backend:
 
@@ -134,7 +136,7 @@ gradients = material_controls(backend, ni, (:ρ0,); nphases = length(rheology))
 ```
 
 Here `backend` is `CPUBackend`, `CUDABackend`, or `AMDGPUBackend`. Pass `stokes_ad`
-as the second argument of the forward solver with `adjoint = true` and an `observation`.
+as the second argument of `solve_VariationalDYREL!` with `adjoint = true` and an `observation`.
 Weighted observations must store their weights on the same backend as the solver arrays.
 
 Each entry of `gradients` holds `center`, the discrete derivative of the objective with
@@ -175,13 +177,12 @@ default is `deflation = 0`.
 
 ### Local penalty for the adjoint
 
-Both 2D DYREL adjoints use their own numerical penalty, set through `adjoint_kwargs`:
+The adjoint uses its own numerical penalty, set through `adjoint_kwargs`:
 
 ```julia
 adjoint_kwargs = (; penalty_scaling = :local, penalty_factor = 320.0)  # the default
 adjoint_kwargs = (; penalty_scaling = :global)                         # the forward penalty
-# Include this keyword in solve_DYREL!(...; adjoint = true, ...) or
-# solve_VariationalDYREL!(...; adjoint = true, ...).
+# Include this keyword in solve_VariationalDYREL!(...; adjoint = true, ...).
 ```
 
 With the default `:local`, the numerical scale is `penalty_factor * η` at each cell, where

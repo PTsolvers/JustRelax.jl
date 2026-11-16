@@ -267,6 +267,8 @@ end
         @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
 
         # --- fused adjoint Schur correction + preconditioning + update ---
+        rock = RockRatio(backend, ni)
+        foreach(A -> fill!(A, 1.0), (rock.center, rock.vertex, rock.Vx, rock.Vy))
         adjoint = JustRelax2D.AdjointStokesArrays(backend, ni)
         adjoint.P .= 1.0
         adjoint.V.Vx .= 1.0
@@ -329,7 +331,7 @@ end
             dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
-            _di.center,
+            rock, _di.center,
         )
 
         @test Array(adjoint.V.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx
@@ -366,7 +368,7 @@ end
             dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
-            _di_nonuniform,
+            rock, _di_nonuniform,
         )
 
         @test Array(adjoint.V.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx
@@ -398,29 +400,19 @@ end
     JR2K.seed_observation!(observation)
     @test all(==(-1.0), Array(adjoint.P))
 
-    # Exercise deferred Enzyme differentiation inside the selected device kernel.
+    # Exercise deferred Enzyme differentiation inside the selected device kernel, with all
+    # rows in rock.
+    ϕ = RockRatio(backend, ni)
+    foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
     adjoint.R.Rx .= 1.0
     adjoint.R.Ry .= 1.0
     ρg = (TA(zeros(ni)), TA(ones(ni)))
-    JR2K.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, grid._di, ni)
+    JR2K.enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ, grid._di, ni)
     @test any(!iszero, Array(adjoint.τ.xy))
-    @test any(!iszero, Array(adjoint.ρ))
     @test all(isfinite, Array(adjoint.P))
     expected_density = fill(-1.0, ni)
     expected_density[:, [1, end]] .= -0.5
     @test Array(adjoint.ρ) ≈ expected_density
-
-    # With all rows in rock, the variational pullback agrees with the standard one.
-    ϕ = RockRatio(backend, ni)
-    for field in (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy)
-        fill!(field, 1.0)
-    end
-    masked_adjoint = AdjointStokesArrays(backend, ni)
-    masked_adjoint.R.Rx .= 1.0
-    masked_adjoint.R.Ry .= 1.0
-    JR2K.enzyme_compute_PH_residual_V!(stokes, masked_adjoint, ρg, ϕ, grid._di, ni)
-    @test Array(masked_adjoint.ρ) ≈ expected_density
-    @test Array(masked_adjoint.τ.xy) ≈ Array(adjoint.τ.xy)
 end
 
 
@@ -433,19 +425,13 @@ end
     foreach(A -> fill!(A, 1.0), (ϕ.center, ϕ.vertex, ϕ.Vx, ϕ.Vy))
     grid = Geometry(ni, (1.0, 1.0))
     ηb = similar(stokes.P)
-    for bulk in (5.0, Inf), seed in (1.0, 1.0e15), variational in (false, true)
+    for bulk in (5.0, Inf), seed in (1.0, 1.0e15)
         fill!(ηb, bulk)
         adjoint = AdjointStokesArrays(backend, ni)
         adjoint.R.RP .= seed
-        if variational
-            JR2K.enzyme_compute_∇V_strain_rate_RP!(
-                stokes, adjoint, (; ηb), (), phases, ϕ, grid._di, ni, 3.0e11, (;)
-            )
-        else
-            JR2K.enzyme_compute_∇V_strain_rate_RP!(
-                stokes, adjoint, (; ηb), (), phases, grid._di, ni, 3.0e11, (;)
-            )
-        end
+        JR2K.enzyme_compute_∇V_strain_rate_RP!(
+            stokes, adjoint, (; ηb), (), phases, ϕ, grid._di, ni, 3.0e11, (;)
+        )
         @test Array(adjoint.P) ≈ fill(-seed / bulk, ni)
         @test all(isfinite, Array(adjoint.V.Vx))
         @test all(isfinite, Array(adjoint.V.Vy))

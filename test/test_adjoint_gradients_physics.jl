@@ -129,11 +129,16 @@ function plastic_shear(igg, p, names; plasticity, adjoint = false, ϵ = 1.0e-10,
     # Vx lives on x-faces, with a ghost row below and above the domain
     yVx = [yv[1]; (yv[1:(end - 1)] .+ yv[2:end]) ./ 2; yv[end]]
     weights = [exp(-((x - 0.7)^2 + (y - 0.6)^2) / 0.02) for x in xv, y in yVx]
+    # the boundary faces and the ghost rows are not unknowns
+    weights[[1, end], :] .= 0.0
+    weights[:, [1, end]] .= 0.0
     observation = (; field = :Vx, weights = TA(weights))
     gradients = material_controls(backend, ni, names; nphases = length(rheology))
-    dyrel = DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt; ϵ)
-    solve_DYREL!(
-        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, rheology, args, grid, dt, igg;
+    ϕ = RockRatio(backend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, 0)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt; ϵ)
+    solve_VariationalDYREL!(
+        stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid, dt, igg;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax = 4.0e5,
         nout = 50, rel_drop = 0.5, viscosity_relaxation = 0.5, linear_viscosity = false,
         viscosity_cutoff = (1.0e-2, 1.0e2), adjoint, observation, gradients,

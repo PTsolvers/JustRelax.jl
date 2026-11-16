@@ -1,14 +1,24 @@
 using Enzyme
 
+## ENZYME WRAPPERS FOR THE VARIATIONAL (RockRatio ϕ) DYREL KERNELS
+#
+# Reverse-mode counterparts of the masked kernels used by `_solve_VariationalDYREL!`
+# (solver_VS.jl). `ϕ::JustRelax.RockRatio` is always `Enzyme.Const`: the rock ratio, the
+# validity masks derived from it and the marker chain are frozen during a step's adjoint.
+# Rows and cells the forward kernels mask out write constants, so their reverse seeds are
+# dropped by the differentiation itself; masking of the adjoint unknowns is left to the caller.
+# 2D only, like the variational DYREL solver.
+
 """
     enzyme_compute_∇V_strain_rate_RP!(
-        stokes, adjoint, dyrel, rheology, phase_ratios, _di, ni, dt, args;
+        stokes, adjoint, dyrel, rheology, phase_ratios, ϕ::RockRatio, _di, ni, dt, args;
         do_strain_rate=true,
     )
 
-`adjoint.ε` and `adjoint.R.RP` seed the strain-rate and pressure-residual outputs. The
-resulting reverse-mode derivatives accumulate in `adjoint.V` and `adjoint.P`; all remaining
-inputs are constant.
+`adjoint.ε` and `adjoint.R.RP` seed the strain-rate and pressure-residual outputs of the masked
+kernel. The resulting reverse-mode derivatives accumulate
+in `adjoint.V` and `adjoint.P`. The rock-fraction scaling of the continuity residual is
+differentiated along with it.
 """
 function enzyme_compute_∇V_strain_rate_RP!(
         stokes,
@@ -16,6 +26,7 @@ function enzyme_compute_∇V_strain_rate_RP!(
         dyrel,
         rheology,
         phase_ratios,
+        ϕ::JustRelax.RockRatio,
         _di,
         ni,
         dt,
@@ -39,6 +50,7 @@ function enzyme_compute_∇V_strain_rate_RP!(
             stokes.P0 => nothing,
             stokes.Q => nothing,
             dyrel.ηb => nothing,
+            ϕ => nothing,
             _di.vertex => nothing,
             _di.velocity[1] => nothing,
             _di.velocity[2] => nothing,
@@ -54,19 +66,20 @@ function enzyme_compute_∇V_strain_rate_RP!(
 end
 
 """
-    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni)
+    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ::RockRatio, _di, ni; free_surface_dt=0)
 
-Differentiate the two-dimensional momentum-residual kernel.
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the outputs. The resulting
-reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
-`adjoint.dρgx`, and `adjoint.ρ`.
+Differentiate the masked Powell–Hestenes momentum residual, including the ϕ-weighted
+free-surface stabilization term (`free_surface_dt = dt * free_surface`; `0` disables it).
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the residual outputs. The resulting reverse-mode
+derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`, `adjoint.dρgx`, and
+`adjoint.ρ`.
 
 Only this momentum-residual function is differentiated with Enzyme. The transpose of the
 Schur-complement correction is applied separately by `update_adjoint_V_damping_DR!`.
 enzyme_compute_PH_residual_V! is also used in the gradient calculation after the adjoint solve.
 """
 function enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni; free_surface_dt = 0
+        stokes, adjoint, ρg, ϕ::JustRelax.RockRatio, _di, ni; free_surface_dt = 0
     )
     enzyme_reverse_pointwise!(
         compute_PH_residual_V_point!,
@@ -83,6 +96,7 @@ function enzyme_compute_PH_residual_V!(
             stokes.τ.xy => adjoint.τ.xy,
             ρg[1] => adjoint.dρgx,
             ρg[2] => adjoint.ρ,
+            ϕ => nothing,
             _di.center => nothing,
             _di.vertex => nothing,
             free_surface_dt => nothing,
@@ -93,22 +107,299 @@ end
 
 """
     enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args; update_material = true
+        stokes, adjoint, ρg, ϕ::RockRatio, _di, ni, rheology, phases, args;
+        free_surface_dt=0, air_phase=0,
     )
 
-`adjoint.R.Rx` and `adjoint.R.Ry` seed the momentum-residual outputs. The resulting
+`adjoint.R.Rx` and `adjoint.R.Ry` seed the masked momentum-residual outputs. The resulting
 reverse-mode derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`,
 `adjoint.dρgx`, and `adjoint.ρ`; the buoyancy derivative is additionally propagated through
-the pressure-dependent density into `adjoint.P`, unless `update_material = false`, for which
-the forward keeps ρg fixed. The adjoint solver requires `args.P === stokes.P`.
+the pressure-dependent density into `adjoint.P`. `air_phase` must match the forward
+`update_ρg!` call, which drops that phase from the density average. The adjoint solver requires
+`args.P === stokes.P`.
 """
 function enzyme_compute_PH_residual_V!(
-        stokes, adjoint, ρg, _di, ni, rheology, phases, args; free_surface_dt = 0,
-        update_material = true,
+        stokes, adjoint, ρg, ϕ::JustRelax.RockRatio, _di, ni, rheology, phases, args;
+        free_surface_dt = 0, air_phase::Integer = 0,
     )
     zero_buoyancy_adjoint!(adjoint)
-    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, _di, ni; free_surface_dt)
-    update_material && enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni)
+    enzyme_compute_PH_residual_V!(stokes, adjoint, ρg, ϕ, _di, ni; free_surface_dt)
+    enzyme_compute_ρg!(ρg, adjoint, phases, rheology, args, ni; air_phase)
+    return nothing
+end
+
+"""
+    enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ::RockRatio, λ_relaxation, dt, args,
+    )
+
+Differentiate the masked variational DYREL stress kernel. `adjoint.τ` and `adjoint.θ` seed the
+stress and plastic-pressure-correction outputs; reverse-mode derivatives accumulate in
+`adjoint.ε`, `adjoint.P`, and `adjoint.viscosity.η`.
+
+The variational solver stores only center viscosity. A vertex stress
+uses `harm_clamped(η)` of four surrounding centers. Reversing the stress kernel therefore maps
+both center- and vertex-stress seeds into the center field `adjoint.viscosity.η`; there is no
+independent vertex-viscosity adjoint.
+
+For nonlinear viscosity, `enzyme_compute_variational_stress_DRYEL!` first forms the implicit
+center-viscosity seed η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F), including the transpose of `harm_clamped`,
+and adds (∂η/∂τ)ᵀ η̄ to the stress seeds, from local derivatives computed once per adjoint
+solve (`implicit_viscosity_scratch`). It then reverses the stress kernel with the corrected
+stress seeds.
+"""
+function enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt,
+        args = (;),
+    )
+    enzyme_reverse_stress_DRYEL!(
+        stokes, rheology, phase_ratios, ϕ, λ_relaxation, dt, args;
+        τ_bar = (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
+        τv_bar = (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
+        τII_bar = adjoint.τ.II,
+        ε_bar = (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
+        P_bar = adjoint.P,
+        η_bar = adjoint.viscosity.η,
+        θ_bar = adjoint.θ,
+    )
+    return nothing
+end
+
+# Select the same linear or implicit nonlinear constitutive pullback as the forward solve.
+# Nonlinear solves allocate `constitutive_scratch`; linear solves pass `nothing`.
+function enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt,
+        args, viscosity_cutoff, constitutive_scratch; air_phase::Integer = 0,
+    )
+    fill!(adjoint.viscosity.η, 0)
+    if isnothing(constitutive_scratch)
+        enzyme_compute_stress_DRYEL!(
+            stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+        )
+    else
+        enzyme_compute_variational_stress_DRYEL!(
+            constitutive_scratch, stokes, adjoint, rheology, phase_ratios, ϕ,
+            λ_relaxation, dt, args, viscosity_cutoff; air_phase,
+        )
+    end
+    return nothing
+end
+
+function enzyme_reverse_stress_DRYEL!(
+        stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio, λ_relaxation, dt, args;
+        τ_bar = nothing, τv_bar = nothing, τII_bar = nothing, ε_bar = nothing,
+        P_bar = nothing, η_bar = nothing, θ_bar = nothing,
+    )
+    enzyme_reverse_pointwise!(
+        compute_stress_DRYEL_point!,
+        size(phase_ratios.vertex),
+        (
+            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => τ_bar,
+            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy) => τv_bar,
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
+            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy) => nothing,
+            stokes.τ.II => τII_bar,
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => ε_bar,
+            (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
+            stokes.EII_pl => nothing,
+            stokes.ε_vol_pl => nothing,
+            stokes.P => P_bar,
+            fluid_pressure(args, stokes.P) => nothing,
+            stokes.λ => nothing,
+            stokes.λv => nothing,
+            stokes.viscosity.η => η_bar,
+            stokes.viscosity.η_vep => nothing,
+            stokes.ΔPψ => θ_bar,
+            ϕ => nothing,
+            rheology => nothing,
+            phase_ratios.center => nothing,
+            phase_ratios.vertex => nothing,
+            λ_relaxation => nothing,
+            dt => nothing,
+            periodic_dims(stokes) => nothing,
+        );
+        periodic = periodic_dims(stokes),
+    )
+    return nothing
+end
+
+"""
+    implicit_viscosity_scratch(stokes, ϕ::JustRelax.RockRatio)
+
+Storage of the implicit viscosity pullback of the variational DYREL adjoint, computed once per
+adjoint solve and stress relaxation (`ensure_constitutive_tangent!`). There is no vertex
+viscosity: a vertex stress reads the harmonic mean H of the four surrounding center
+viscosities.
+
+- `s`: ∂(τxx, τyy, τxy, τII, ΔPψ)/∂η at centers, `s_v`: ∂(τxx, τyy, τxy)/∂H at vertices;
+- `v`: ∂η/∂(τxx, τyy, τxy), `vP`: ∂η/∂P; `feedback`: F = (∂η/∂τ)(∂τ/∂η) at centers.
+
+`η` receives the implicit viscosity seed, which the material gradients reuse.
+"""
+function implicit_viscosity_scratch(stokes, ::JustRelax.RockRatio)
+    center() = similar(stokes.viscosity.η)
+    vertex() = similar(stokes.viscosity.ηv)
+    return (;
+        η_target = copy(stokes.viscosity.η),
+        η = center(),
+        feedback = center(),
+        feedback_λ = Ref{Any}(nothing),
+        s = ntuple(_ -> center(), 5),
+        s_v = ntuple(_ -> vertex(), 3),
+        v = ntuple(_ -> center(), 3),
+        vP = center(),
+        H = vertex(),
+        H_seed = vertex(),
+        direct = center(),
+    )
+end
+
+# Harmonic mean of the center viscosities around a vertex, as read by the vertex stress.
+@inline function vertex_viscosity_point!(H, η, periodic, I::Vararg{Integer, 2})
+    Ic = clamped_indices(size(η), periodic, I...)
+    @inbounds H[I...] = harm_clamped(η, Ic...)
+    return nothing
+end
+
+@parallel_indices (I...) function vertex_viscosity!(H, η, periodic)
+    vertex_viscosity_point!(H, η, periodic, I...)
+    return nothing
+end
+
+# The vertex part of (∂τ/∂η)ᵀ τ̄, before it is spread to the centers.
+@parallel_indices (I...) function vertex_viscosity_seed!(H̄, τ̄_v, s_v)
+    @inbounds H̄[I...] = s_v[1][I...] * τ̄_v[1][I...] + s_v[2][I...] * τ̄_v[2][I...] +
+        s_v[3][I...] * τ̄_v[3][I...]
+    return nothing
+end
+
+function enzyme_compute_variational_stress_DRYEL!(
+        scratch, stokes, adjoint, rheology, phase_ratios,
+        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
+        air_phase::Integer = 0,
+    )
+    enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
+    )
+    enzyme_compute_stress_DRYEL!(
+        stokes, adjoint, rheology, phase_ratios, ϕ, λ_relaxation, dt, args,
+    )
+    return nothing
+end
+
+function compute_constitutive_tangent!(
+        scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
+    )
+    # ∂τ/∂η with the tangent η̇ = η: H is homogeneous of degree one, so then Ḣ = H, and the
+    # center and vertex derivatives follow by division
+    copyto!(scratch.η, stokes.viscosity.η)
+    enzyme_forward_pointwise!(
+        compute_stress_DRYEL_point!,
+        size(phase_ratios.vertex),
+        (
+            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => scratch.s[1:3],
+            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy) => scratch.s_v,
+            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
+            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy) => nothing,
+            stokes.τ.II => scratch.s[4],
+            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => nothing,
+            (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
+            stokes.EII_pl => nothing,
+            stokes.ε_vol_pl => nothing,
+            stokes.P => nothing,
+            fluid_pressure(args, stokes.P) => nothing,
+            stokes.λ => nothing,
+            stokes.λv => nothing,
+            stokes.viscosity.η => scratch.η,
+            stokes.viscosity.η_vep => nothing,
+            stokes.ΔPψ => scratch.s[5],
+            ϕ => nothing,
+            rheology => nothing,
+            phase_ratios.center => nothing,
+            phase_ratios.vertex => nothing,
+            λ_relaxation => nothing,
+            dt => nothing,
+            periodic_dims(stokes) => nothing,
+        ),
+    )
+    @parallel (@idx size(scratch.H)) vertex_viscosity!(
+        scratch.H, stokes.viscosity.η, periodic_dims(stokes),
+    )
+    foreach(A -> A ./= stokes.viscosity.η, scratch.s)
+    foreach(A -> A ./= scratch.H, scratch.s_v)
+    viscosity_tangent!(
+        scratch.v, scratch.vP, scratch.η_target, phase_ratios.center,
+        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c), stokes, args, rheology, cutoff,
+        local_viscosity_args; air_phase,
+    )
+    # the viscosity reads only center stresses, so the vertex stresses do not feed back
+    compute_viscosity_feedback!(scratch.feedback, scratch.v, scratch.s)
+    scratch.feedback_λ[] = λ_relaxation
+    return nothing
+end
+
+# The outer and inner iterations may use different stress relaxations; recompute only then.
+function ensure_constitutive_tangent!(
+        scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
+    )
+    isequal(scratch.feedback_λ[], λ_relaxation) || compute_constitutive_tangent!(
+        scratch, stokes, rheology, phase_ratios, ϕ, λ_relaxation, dt, args, cutoff;
+        air_phase,
+    )
+    return nothing
+end
+
+function compute_constitutive_tangent_amplification!(
+        scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
+        λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
+    )
+    ensure_constitutive_tangent!(
+        scratch, stokes, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
+    )
+    feedback_max = maximum_mpi(scratch.feedback)
+    isfinite(feedback_max) && feedback_max < 1 || error(
+        "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
+    )
+    unit_amplification = one(eltype(scratch.η))
+    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.feedback)))
+    return nothing
+end
+
+# Form the corrected stress seeds and the implicit center-viscosity seed, which the material
+# gradients reuse. The final reverse through the stress kernel is done by the caller.
+function enzyme_prepare_variational_implicit_viscosity_τII!(
+        scratch, stokes, adjoint, rheology, phase_ratios,
+        ϕ::JustRelax.RockRatio, λ_relaxation, dt, args, cutoff;
+        air_phase::Integer = 0,
+    )
+    ensure_constitutive_tangent!(
+        scratch, stokes, rheology, phase_ratios, ϕ,
+        λ_relaxation, dt, args, cutoff; air_phase,
+    )
+    # vertex stresses reach η through H: spread their part over the four centers
+    @parallel (@idx size(scratch.H_seed)) vertex_viscosity_seed!(
+        scratch.H_seed, (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy), scratch.s_v,
+    )
+    fill!(scratch.direct, 0)
+    enzyme_reverse_pointwise!(
+        vertex_viscosity_point!,
+        size(scratch.H),
+        (
+            scratch.H => scratch.H_seed,
+            stokes.viscosity.η => scratch.direct,
+            periodic_dims(stokes) => nothing,
+        );
+        periodic = periodic_dims(stokes),
+    )
+    τ̄ = (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c, adjoint.τ.II, adjoint.θ)
+    @parallel (@idx size(scratch.η)) implicit_viscosity_seed!(
+        scratch.η, scratch.direct, τ̄, scratch.s, scratch.v, adjoint.P, scratch.vP,
+        scratch.feedback,
+    )
     return nothing
 end
 
@@ -147,192 +438,6 @@ function enzyme_compute_ρg!(
     return nothing
 end
 
-"""
-    enzyme_compute_stress_DRYEL!(
-        stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, args,
-        viscosity_cutoff, linear_viscosity, constitutive_scratch,
-    )
-
-Differentiate the separate two-dimensional stress kernel used by the normal DYREL solver.
-The incoming stress seeds in `adjoint.τ` come from the momentum-residual pullback. For linear
-viscosity they are pulled back through `compute_stress_DRYEL_point!` directly:
-
-```
-τ_bar = (∂momentum_residual/∂τ)' residual_seed
-ε_bar += (∂τ/∂ε)' τ_bar
-P_bar += (∂τ/∂P)' τ_bar.
-```
-
-For nonlinear viscosity, the converged local state satisfies
-
-```
-τ = stress(ε, P, η)
-η = viscosity(τII(τ)).
-```
-
-Each location's viscosity feeds back only through its own stress, so the implicit pullback is
-local: η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F) with F = (∂η/∂τ)(∂τ/∂η), then τ̄ += (∂η/∂τ)ᵀ η̄ and
-P̄ += (∂η/∂P)ᵀ η̄. These local derivatives are fixed during an adjoint solve and computed once
-(`implicit_viscosity_scratch`), so an iteration reverses only the stress kernel, with the
-corrected stress seeds. The forward viscosity relaxation and its iteration history are not
-differentiated.
-"""
-function enzyme_compute_stress_DRYEL!(
-        stokes,
-        adjoint,
-        rheology,
-        phase_ratios,
-        λ_relaxation,
-        dt,
-        args,
-        viscosity_cutoff,
-        linear_viscosity,
-        constitutive_scratch,
-    )
-    # These are local constitutive scratch fields, not additional adjoint unknowns. Clear values
-    # left by the preceding global λV/λP iteration before forming the current implicit pullback.
-    fill!(adjoint.viscosity.η, 0)
-    fill!(adjoint.viscosity.ηv, 0)
-
-    if !linear_viscosity
-        enzyme_compute_implicit_viscosity_τII!(
-            constitutive_scratch, stokes, adjoint, rheology, phase_ratios,
-            λ_relaxation, dt, args, viscosity_cutoff,
-        )
-    end
-
-    # Step 3: pull the corrected stress seeds through τ = stress(ε, P, η). This produces the
-    # strain-rate and pressure terms used by the λV/λP adjoint iteration.
-    enzyme_reverse_stress_DRYEL!(
-        stokes, rheology, phase_ratios, λ_relaxation, dt, args;
-        τ_bar = (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-        τv_bar = (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-        τII_bar = adjoint.τ.II,
-        ε_bar = (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
-        P_bar = adjoint.P,
-        η_bar = adjoint.viscosity.η,
-        ηv_bar = adjoint.viscosity.ηv,
-        θ_bar = adjoint.θ,
-    )
-    return nothing
-end
-
-function enzyme_reverse_stress_DRYEL!(
-        stokes, rheology, phase_ratios, λ_relaxation, dt, args;
-        τ_bar = nothing, τv_bar = nothing, τII_bar = nothing, ε_bar = nothing,
-        P_bar = nothing, η_bar = nothing, ηv_bar = nothing, θ_bar = nothing,
-    )
-    enzyme_reverse_pointwise!(
-        compute_stress_DRYEL_point!,
-        size(phase_ratios.vertex),
-        (
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => τ_bar,
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy) => τv_bar,
-            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
-            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy) => nothing,
-            stokes.τ.II => τII_bar,
-            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => ε_bar,
-            (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
-            stokes.EII_pl => nothing,
-            stokes.ε_vol_pl => nothing,
-            stokes.P => P_bar,
-            fluid_pressure(args, stokes.P) => nothing,
-            stokes.λ => nothing,
-            stokes.λv => nothing,
-            stokes.viscosity.η => η_bar,
-            stokes.viscosity.ηv => ηv_bar,
-            stokes.viscosity.η_vep => nothing,
-            stokes.ΔPψ => θ_bar,
-            rheology => nothing,
-            phase_ratios.center => nothing,
-            phase_ratios.vertex => nothing,
-            λ_relaxation => nothing,
-            dt => nothing,
-            periodic_dims(stokes) => nothing,
-        );
-        periodic = periodic_dims(stokes),
-    )
-    return nothing
-end
-
-# Reverse one pointwise viscosity evaluation. `η_adjoint` seeds its viscosity output and Enzyme
-# adds `(∂η/∂τ)'η̄` to `tensor_adjoint`, and `(∂η/∂P)'η̄` to `P_adjoint` when it is given.
-# `η_target` is a copy of the converged forward viscosity, so differentiating this scratch
-# output does not overwrite the forward state.
-function enzyme_compute_viscosity_point!(
-        η_target, η_adjoint, ratios, tensor, tensor_adjoint, args, rheology, cutoff,
-        fn_viscosity, fn_args; air_phase::Integer = 0, P_adjoint = nothing,
-    )
-    if !isnothing(P_adjoint)
-        # `args.P` goes in as an argument of its own, so that its shadow can be seeded
-        enzyme_reverse_pointwise!(
-            compute_viscosity_pressure_point!,
-            size(η_target),
-            (
-                η_target => η_adjoint,
-                one(eltype(η_target)) => nothing,
-                ratios => nothing,
-                tensor[1] => tensor_adjoint[1],
-                tensor[2] => tensor_adjoint[2],
-                tensor[3] => tensor_adjoint[3],
-                args.P => P_adjoint,
-                merge(args, (; P = nothing)) => nothing,
-                rheology => nothing,
-                air_phase => nothing,
-                cutoff => nothing,
-                fn_viscosity => nothing,
-                fn_args => nothing,
-            ),
-        )
-        return nothing
-    end
-    enzyme_reverse_pointwise!(
-        compute_viscosity_kernel_point!,
-        size(η_target),
-        (
-            η_target => η_adjoint,
-            one(eltype(η_target)) => nothing,
-            ratios => nothing,
-            tensor[1] => tensor_adjoint[1],
-            tensor[2] => tensor_adjoint[2],
-            tensor[3] => tensor_adjoint[3],
-            args => nothing,
-            rheology => nothing,
-            air_phase => nothing,
-            cutoff => nothing,
-            fn_viscosity => nothing,
-            fn_args => nothing,
-        ),
-    )
-    return nothing
-end
-
-function enzyme_compute_viscosity_τII!(
-        viscosity_target, viscosity_seed, stress_seed, stokes, phase_ratios, args,
-        rheology, cutoff;
-        air_phase::Integer = 0, P_bar = nothing,
-    )
-    η_target, ηv_target = viscosity_target
-    η_bar, ηv_bar = viscosity_seed
-    τ_bar, τv_bar = stress_seed
-    P_adjoint = viscosity_pressure_adjoint(args, stokes, P_bar)
-    enzyme_compute_viscosity_point!(
-        η_target, η_bar, phase_ratios.center,
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c),
-        τ_bar,
-        args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args;
-        air_phase, P_adjoint,
-    )
-    enzyme_compute_viscosity_point!(
-        ηv_target, ηv_bar, phase_ratios.vertex,
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy),
-        τv_bar,
-        args, rheology, cutoff, compute_viscosity_τII, local_viscosity_args_vertex;
-        air_phase, P_adjoint,
-    )
-    return nothing
-end
-
 # The viscosity depends on the solved pressure only when `args.P` is `stokes.P`; any other
 # pressure in `args` is a fixed input.
 viscosity_pressure_adjoint(_, _, ::Nothing) = nothing
@@ -348,41 +453,6 @@ viscosity_pressure_adjoint(args, stokes, P_bar) =
         fn_viscosity, fn_args, I...,
     )
     return nothing
-end
-
-"""
-    implicit_viscosity_scratch(stokes)
-
-Storage of the implicit viscosity pullback of the normal DYREL adjoint. The forward state does
-not change during an adjoint solve, so the local derivatives are computed once per solve and
-stress relaxation (`ensure_constitutive_tangent!`):
-
-- `s`: ∂(τxx, τyy, τxy, τII, ΔPψ)/∂η at centers, `s_v`: ∂(τxx, τyy, τxy)/∂ηv at vertices;
-- `v`, `v_v`: ∂η/∂(τxx, τyy, τxy); `vP`, `vP_v`: ∂η/∂P (at a vertex, of its averaged P);
-- `feedback`, `feedback_v`: F = (∂η/∂τ)(∂τ/∂η).
-
-`η` and `ηv` receive the implicit viscosity seeds, which the material gradients reuse.
-"""
-function implicit_viscosity_scratch(stokes)
-    center() = similar(stokes.viscosity.η)
-    vertex() = similar(stokes.viscosity.ηv)
-    return (;
-        η_target = copy(stokes.viscosity.η),
-        ηv_target = copy(stokes.viscosity.ηv),
-        η = center(),
-        ηv = vertex(),
-        feedback = center(),
-        feedback_v = vertex(),
-        feedback_λ = Ref{Any}(nothing),
-        s = ntuple(_ -> center(), 5),
-        s_v = ntuple(_ -> vertex(), 3),
-        v = ntuple(_ -> center(), 3),
-        v_v = ntuple(_ -> vertex(), 3),
-        vP = center(),
-        vP_v = vertex(),
-        P_v = vertex(),
-        P_v_seed = vertex(),
-    )
 end
 
 # ∂η/∂τ and ∂η/∂P of one viscosity evaluation, by forward sweeps with unit tangents.
@@ -432,90 +502,13 @@ function compute_viscosity_feedback!(F, v, s)
     return nothing
 end
 
-function compute_constitutive_tangent!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    # ∂τ/∂η: each stress reads only the viscosity at its own location
-    fill!(scratch.η, 1)
-    fill!(scratch.ηv, 1)
-    enzyme_forward_pointwise!(
-        compute_stress_DRYEL_point!,
-        size(phase_ratios.vertex),
-        (
-            (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c) => scratch.s[1:3],
-            (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy) => scratch.s_v,
-            (stokes.τ_o.xx, stokes.τ_o.yy, stokes.τ_o.xy_c) => nothing,
-            (stokes.τ_o.xx_v, stokes.τ_o.yy_v, stokes.τ_o.xy) => nothing,
-            stokes.τ.II => scratch.s[4],
-            (stokes.ε.xx, stokes.ε.yy, stokes.ε.xy) => nothing,
-            (stokes.ε_pl.xx, stokes.ε_pl.yy, stokes.ε_pl.xy) => nothing,
-            stokes.EII_pl => nothing,
-            stokes.ε_vol_pl => nothing,
-            stokes.P => nothing,
-            fluid_pressure(args, stokes.P) => nothing,
-            stokes.λ => nothing,
-            stokes.λv => nothing,
-            stokes.viscosity.η => scratch.η,
-            stokes.viscosity.ηv => scratch.ηv,
-            stokes.viscosity.η_vep => nothing,
-            stokes.ΔPψ => scratch.s[5],
-            rheology => nothing,
-            phase_ratios.center => nothing,
-            phase_ratios.vertex => nothing,
-            λ_relaxation => nothing,
-            dt => nothing,
-            periodic_dims(stokes) => nothing,
-        ),
-    )
-    viscosity_tangent!(
-        scratch.v, scratch.vP, scratch.η_target, phase_ratios.center,
-        (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c), stokes, args, rheology, cutoff,
-        local_viscosity_args,
-    )
-    viscosity_tangent!(
-        scratch.v_v, scratch.vP_v, scratch.ηv_target, phase_ratios.vertex,
-        (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy), stokes, args, rheology, cutoff,
-        local_viscosity_args_vertex,
-    )
-    compute_viscosity_feedback!(scratch.feedback, scratch.v, scratch.s)
-    compute_viscosity_feedback!(scratch.feedback_v, scratch.v_v, scratch.s_v)
-    scratch.feedback_λ[] = λ_relaxation
-    return nothing
-end
-
-# The outer and inner iterations may use different stress relaxations; recompute only then.
-function ensure_constitutive_tangent!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    isequal(scratch.feedback_λ[], λ_relaxation) || compute_constitutive_tangent!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    return nothing
-end
-
-function compute_constitutive_tangent_amplification!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    ensure_constitutive_tangent!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    feedback_max = max(maximum_mpi(scratch.feedback), maximum_mpi(scratch.feedback_v))
-    isfinite(feedback_max) && feedback_max < 1 || error(
-        "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
-    )
-    unit_amplification = one(eltype(scratch.η))
-    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.feedback)))
-    @. scratch.ηv = max(unit_amplification, abs(inv(1 - scratch.feedback_v)))
-    return nothing
-end
-
-# η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F), then τ̄ += (∂η/∂τ)ᵀ η̄ and P̄ += (∂η/∂P)ᵀ η̄, at one location.
-# `direct` holds the part of (∂τ/∂η)ᵀ τ̄ from stresses at other locations, if any.
+# η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F), then τ̄ += (∂η/∂τ)ᵀ η̄ and P̄ += (∂η/∂P)ᵀ η̄, at one center.
+# `direct` holds the part of (∂τ/∂η)ᵀ τ̄ that reaches the center through the vertex stresses.
 @parallel_indices (I...) function implicit_viscosity_seed!(
         η̄, direct, τ̄, s, v, P̄, vP, F,
     )
     @inbounds begin
-        seed = initial_seed(direct, η̄, I...)
+        seed = direct[I...]
         for k in eachindex(s)
             seed += s[k][I...] * τ̄[k][I...]
         end
@@ -526,40 +519,5 @@ end
         end
         P̄[I...] += vP[I...] * seed
     end
-    return nothing
-end
-
-@inline initial_seed(::Nothing, η̄, I::Vararg{Integer, N}) where {N} = zero(eltype(η̄))
-@inline initial_seed(direct, η̄, I::Vararg{Integer, N}) where {N} = @inbounds direct[I...]
-
-# The pressure that a vertex viscosity reads, averaged as by `local_viscosity_args_vertex`.
-@inline function vertex_viscosity_pressure_point!(P_v, P, I::Vararg{Integer, 2})
-    @inbounds P_v[I...] = local_viscosity_args_vertex((; P), I...).P
-    return nothing
-end
-
-function enzyme_compute_implicit_viscosity_τII!(
-        scratch, stokes, adjoint, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    ensure_constitutive_tangent!(
-        scratch, stokes, rheology, phase_ratios, λ_relaxation, dt, args, cutoff,
-    )
-    τ̄ = (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c, adjoint.τ.II, adjoint.θ)
-    τ̄_v = (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)
-    # a vertex viscosity reads the average pressure of its cells: seed it, then spread it
-    fill!(scratch.P_v_seed, 0)
-    @parallel (@idx size(scratch.η)) implicit_viscosity_seed!(
-        scratch.η, nothing, τ̄, scratch.s, scratch.v, adjoint.P, scratch.vP,
-        scratch.feedback,
-    )
-    @parallel (@idx size(scratch.ηv)) implicit_viscosity_seed!(
-        scratch.ηv, nothing, τ̄_v, scratch.s_v, scratch.v_v, scratch.P_v_seed,
-        scratch.vP_v, scratch.feedback_v,
-    )
-    enzyme_reverse_pointwise!(
-        vertex_viscosity_pressure_point!,
-        size(scratch.P_v),
-        (scratch.P_v => scratch.P_v_seed, stokes.P => adjoint.P),
-    )
     return nothing
 end

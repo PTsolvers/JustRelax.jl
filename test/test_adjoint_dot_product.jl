@@ -192,16 +192,9 @@ function setup(ni, bcs, rheology; air = false)
     ρg = (TA(pseudo_random(ni, 60)), 1.0 .+ 0.1 .* TA(pseudo_random(ni, 61)))
     dt = 0.5
     args = (; T = @zeros(ni .+ 2...), P = stokes.P, dt)
-    ϕ = if air
-        rock = RockRatio(backend, ni)
-        update_rock_ratio!(rock, phase_ratios, 2)
-        rock
-    else
-        nothing
-    end
-    dyrel = isnothing(ϕ) ?
-        DYREL(backend, stokes, rheology, phase_ratios, grid.di, dt) :
-        DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt)
+    ϕ = RockRatio(backend, ni)
+    update_rock_ratio!(ϕ, phase_ratios, air ? 2 : 0)
+    dyrel = DYREL(backend, stokes, rheology, phase_ratios, ϕ, grid.di, dt)
     return (; grid, stokes, adjoint, phase_ratios, ρg, dt, args, ϕ, dyrel, rheology, bcs, ni)
 end
 
@@ -230,77 +223,6 @@ end
 @testset "Adjoint pullbacks are transposes of the forward kernels" begin
     sizes = ((5, 4), (4, 5))
 
-    @testset "momentum residual, $name, ni = $ni" for (name, bcs) in pairs(flow_bcs_cases), ni in sizes
-        s = setup(ni, bcs, rheologies.viscoelastic)
-        (; stokes, adjoint, ρg, grid) = s
-        free_surface_dt = 0.3
-        forward!() = @parallel (@idx ni) JR2K.compute_PH_residual_V!(
-            stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, stokes.ΔPψ,
-            @stress(stokes)..., ρg..., grid._di.center, grid._di.vertex, free_surface_dt,
-        )
-        reverse!() = JR2K.enzyme_compute_PH_residual_V!(
-            stokes, adjoint, ρg, grid._di, ni; free_surface_dt
-        )
-        inputs = (
-            stokes.V.Vx => adjoint.V.Vx, stokes.V.Vy => adjoint.V.Vy, stokes.P => adjoint.P,
-            stokes.ΔPψ => adjoint.θ, stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy,
-            stokes.τ.xy => adjoint.τ.xy, ρg[1] => adjoint.dρgx, ρg[2] => adjoint.ρ,
-        )
-        outputs = (stokes.R.Rx => adjoint.R.Rx, stokes.R.Ry => adjoint.R.Ry)
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes, ρg), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-7
-    end
-
-    @testset "continuity and strain rate, $name, ni = $ni" for (name, bcs) in pairs(flow_bcs_cases), ni in sizes
-        s = setup(ni, bcs, rheologies.viscoelastic)
-        (; stokes, adjoint, dyrel, rheology, phase_ratios, grid, dt, args) = s
-        forward!() = JR2K.compute_∇V_strain_rate_RP!(
-            stokes, dyrel, rheology, phase_ratios, grid._di, ni, dt, true; args...
-        )
-        reverse!() = JR2K.enzyme_compute_∇V_strain_rate_RP!(
-            stokes, adjoint, dyrel, rheology, phase_ratios, grid._di, ni, dt, args
-        )
-        inputs = (stokes.V.Vx => adjoint.V.Vx, stokes.V.Vy => adjoint.V.Vy, stokes.P => adjoint.P)
-        outputs = (
-            stokes.ε.xx => adjoint.ε.xx, stokes.ε.yy => adjoint.ε.yy,
-            stokes.ε.xy => adjoint.ε.xy, stokes.R.RP => adjoint.R.RP,
-        )
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes,), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-7
-    end
-
-    @testset "stress, $rheology_name, $name, ni = $ni" for (rheology_name, rheology) in pairs(rheologies),
-            (name, bcs) in pairs(flow_bcs_cases), ni in sizes
-        s = setup(ni, bcs, rheology)
-        (; stokes, adjoint, phase_ratios, dt, args) = s
-        forward!() = JR2K.compute_stress_DRYEL!(
-            stokes, rheology, phase_ratios, 1.0, dt; Pf = JR2K.fluid_pressure(args, stokes.P)
-        )
-        reverse!() = JR2K.enzyme_reverse_stress_DRYEL!(
-            stokes, rheology, phase_ratios, 1.0, dt, args;
-            τ_bar = (adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c),
-            τv_bar = (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy),
-            τII_bar = adjoint.τ.II,
-            ε_bar = (adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy),
-            P_bar = adjoint.P, η_bar = adjoint.viscosity.η, ηv_bar = adjoint.viscosity.ηv,
-            θ_bar = adjoint.θ,
-        )
-        inputs = (
-            stokes.ε.xx => adjoint.ε.xx, stokes.ε.yy => adjoint.ε.yy, stokes.ε.xy => adjoint.ε.xy,
-            stokes.P => adjoint.P, stokes.viscosity.η => adjoint.viscosity.η,
-            stokes.viscosity.ηv => adjoint.viscosity.ηv,
-        )
-        outputs = (
-            stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy, stokes.τ.xy_c => adjoint.τ.xy_c,
-            stokes.τ.xx_v => adjoint.τ.xx_v, stokes.τ.yy_v => adjoint.τ.yy_v, stokes.τ.xy => adjoint.τ.xy,
-            stokes.τ.II => adjoint.τ.II, stokes.ΔPψ => adjoint.θ,
-        )
-        forward!()
-        rheology_name === :viscoelastic || @test any(>(0), Array(stokes.λ))
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes,), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-6
-    end
-
     @testset "pressure-dependent buoyancy, ni = $ni" for ni in sizes
         s = setup(ni, flow_bcs_cases.free_slip, rheologies.viscoelastic)
         (; stokes, adjoint, phase_ratios, ρg, args, rheology) = s
@@ -312,68 +234,10 @@ end
         @test Jv_w ≈ v_JTw rtol = 1.0e-7
     end
 
-    @testset "power-law viscosity, ni = $ni" for ni in sizes
-        rheology = (
-            SetMaterialParams(;
-                Phase = 1,
-                CompositeRheology = CompositeRheology((PowerlawViscous(; η0 = 2.0, n = 3.0, ε0 = 1.0),)),
-            ),
-            SetMaterialParams(;
-                Phase = 2,
-                CompositeRheology = CompositeRheology((PowerlawViscous(; η0 = 1.0, n = 2.0, ε0 = 1.0),)),
-            ),
-        )
-        s = setup(ni, flow_bcs_cases.free_slip, rheologies.viscoelastic)
-        (; stokes, adjoint, phase_ratios, args) = s
-        cutoff = (-Inf, Inf)
-        forward!() = compute_viscosity_τII!(stokes, phase_ratios, args, rheology, cutoff)
-        reverse!() = JR2K.enzyme_compute_viscosity_τII!(
-            (stokes.viscosity.η, stokes.viscosity.ηv),
-            (adjoint.viscosity.η, adjoint.viscosity.ηv),
-            ((adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c), (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
-            stokes, phase_ratios, args, rheology, cutoff,
-        )
-        inputs = (
-            stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy, stokes.τ.xy_c => adjoint.τ.xy_c,
-            stokes.τ.xx_v => adjoint.τ.xx_v, stokes.τ.yy_v => adjoint.τ.yy_v, stokes.τ.xy => adjoint.τ.xy,
-        )
-        outputs = (stokes.viscosity.η => adjoint.viscosity.η, stokes.viscosity.ηv => adjoint.viscosity.ηv)
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes,), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-7
-    end
-
-    @testset "pressure-dependent viscosity, ni = $ni" for ni in sizes
-        creep(A) = DislocationCreep(; n = 3.0, r = 0.0, A, E = 0.0, V = 8.3145)
-        rheology = (
-            SetMaterialParams(; Phase = 1, CompositeRheology = CompositeRheology((creep(1.0),))),
-            SetMaterialParams(; Phase = 2, CompositeRheology = CompositeRheology((creep(0.5),))),
-        )
-        s = setup(ni, flow_bcs_cases.free_slip, rheologies.viscoelastic)
-        (; stokes, adjoint, phase_ratios) = s
-        args = (; T = @ones(ni .+ 2...), P = stokes.P, s.dt)
-        cutoff = (-Inf, Inf)
-        forward!() = compute_viscosity_τII!(stokes, phase_ratios, args, rheology, cutoff)
-        reverse!() = JR2K.enzyme_compute_viscosity_τII!(
-            (stokes.viscosity.η, stokes.viscosity.ηv),
-            (adjoint.viscosity.η, adjoint.viscosity.ηv),
-            ((adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c), (adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy)),
-            stokes, phase_ratios, args, rheology, cutoff; P_bar = adjoint.P,
-        )
-        inputs = (
-            stokes.τ.xx => adjoint.τ.xx, stokes.τ.yy => adjoint.τ.yy, stokes.τ.xy_c => adjoint.τ.xy_c,
-            stokes.τ.xx_v => adjoint.τ.xx_v, stokes.τ.yy_v => adjoint.τ.yy_v, stokes.τ.xy => adjoint.τ.xy,
-            stokes.P => adjoint.P,
-        )
-        outputs = (stokes.viscosity.η => adjoint.viscosity.η, stokes.viscosity.ηv => adjoint.viscosity.ηv)
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes,), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-7
-    end
-
     # The implicit viscosity pullback, from local derivatives computed once per solve, against
     # its definition by Enzyme reverse sweeps: η̄ = (∂τ/∂η)ᵀ τ̄ / (1 − F), τ̄ += (∂η/∂τ)ᵀ η̄ and
     # P̄ += (∂η/∂P)ᵀ η̄, with F from unit viscosity seeds.
-    @testset "implicit viscosity pullback, $(variational ? "variational" : "standard"), $name" for variational in (false, true),
-            (name, bcs) in pairs(flow_bcs_cases)
+    @testset "implicit viscosity pullback, $name" for (name, bcs) in pairs(flow_bcs_cases)
         ni = (7, 6)
         elasticity = ConstantElasticity(; G = 1.0, Kb = 5.0)
         rheology = ntuple(2) do phase
@@ -383,43 +247,39 @@ end
                 CompositeRheology = CompositeRheology((creep, elasticity)),
             )
         end
-        s = setup(ni, bcs, rheology; air = variational)
+        s = setup(ni, bcs, rheology; air = true)
         (; stokes, adjoint, phase_ratios, dt, ϕ) = s
         args = (; T = @ones(ni .+ 2...), P = stokes.P, dt)
-        air_phase = variational ? 2 : 0
+        air_phase = 2
         cutoff = (-Inf, Inf)
         center_stress = (stokes.τ.xx, stokes.τ.yy, stokes.τ.xy_c)
-        vertex_stress = (stokes.τ.xx_v, stokes.τ.yy_v, stokes.τ.xy)
-        if variational
-            JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, dt)
-        else
-            JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, 1.0, dt)
-        end
+        JR2K.compute_stress_DRYEL!(stokes, rheology, phase_ratios, ϕ, 1.0, dt)
         seeds = (
             adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c, adjoint.τ.xx_v, adjoint.τ.yy_v,
             adjoint.τ.xy, adjoint.τ.II, adjoint.θ,
         )
         initial = map((A, k) -> TA(pseudo_random(size(A), 200 + k)), seeds, Tuple(eachindex(seeds)))
-        reverse_stress!(τ̄; η̄, η̄v = nothing) = variational ?
-            JR2K.enzyme_reverse_stress_DRYEL!(
-                stokes, rheology, phase_ratios, ϕ, 1.0, dt, args;
-                τ_bar = τ̄[1:3], τv_bar = τ̄[4:6], τII_bar = τ̄[7], θ_bar = τ̄[8], η_bar = η̄,
-            ) :
-            JR2K.enzyme_reverse_stress_DRYEL!(
-                stokes, rheology, phase_ratios, 1.0, dt, args;
-                τ_bar = τ̄[1:3], τv_bar = τ̄[4:6], τII_bar = τ̄[7], θ_bar = τ̄[8], η_bar = η̄,
-                ηv_bar = η̄v,
-            )
-        function reverse_viscosity!(η̄, η̄v, τ̄, τ̄v; P_bar = nothing)
-            JR2K.enzyme_compute_viscosity_point!(
-                copy(stokes.viscosity.η), η̄, phase_ratios.center, center_stress, τ̄, args,
-                rheology, cutoff, JR2K.compute_viscosity_τII, JR2K.local_viscosity_args;
-                air_phase, P_adjoint = P_bar,
-            )
-            variational || JR2K.enzyme_compute_viscosity_point!(
-                copy(stokes.viscosity.ηv), η̄v, phase_ratios.vertex, vertex_stress, τ̄v, args,
-                rheology, cutoff, JR2K.compute_viscosity_τII, JR2K.local_viscosity_args_vertex;
-                P_adjoint = P_bar,
+        reverse_stress!(τ̄; η̄) = JR2K.enzyme_reverse_stress_DRYEL!(
+            stokes, rheology, phase_ratios, ϕ, 1.0, dt, args;
+            τ_bar = τ̄[1:3], τv_bar = τ̄[4:6], τII_bar = τ̄[7], θ_bar = τ̄[8], η_bar = η̄,
+        )
+        # reverse of one center-viscosity evaluation: τ̄ += (∂η/∂τ)ᵀ η̄, and P̄ += (∂η/∂P)ᵀ η̄
+        # when `P_bar` is given
+        function reverse_viscosity!(η̄, τ̄; P_bar = nothing)
+            point, pressure = if isnothing(P_bar)
+                JR2K.compute_viscosity_kernel_point!, (args => nothing,)
+            else
+                JR2K.compute_viscosity_pressure_point!,
+                    (args.P => P_bar, merge(args, (; P = nothing)) => nothing)
+            end
+            JR2K.enzyme_reverse_pointwise!(
+                point, size(η̄),
+                (
+                    copy(stokes.viscosity.η) => η̄, 1.0 => nothing, phase_ratios.center => nothing,
+                    center_stress[1] => τ̄[1], center_stress[2] => τ̄[2], center_stress[3] => τ̄[3],
+                    pressure..., rheology => nothing, air_phase => nothing, cutoff => nothing,
+                    JR2K.compute_viscosity_τII => nothing, JR2K.local_viscosity_args => nothing,
+                ),
             )
             return nothing
         end
@@ -428,39 +288,29 @@ end
         # definition
         foreach(copyto!, seeds, initial)
         adjoint.P .= 0
-        η̄, η̄v = zeros_like(stokes.viscosity.η), zeros_like(stokes.viscosity.ηv)
-        reverse_stress!(map(copy, initial); η̄, η̄v)
-        F, Fv = zeros_like(η̄), zeros_like(η̄v)
-        unit = (fill!(similar(η̄), 1), fill!(similar(η̄v), 1))
-        τ̄_unit = (map(zeros_like, center_stress)..., map(zeros_like, vertex_stress)...)
-        reverse_viscosity!(unit..., τ̄_unit[1:3], τ̄_unit[4:6])
-        reverse_stress!((τ̄_unit..., zeros_like(stokes.τ.II), zeros_like(stokes.ΔPψ)); η̄ = F, η̄v = Fv)
+        η̄ = zeros_like(stokes.viscosity.η)
+        reverse_stress!(map(copy, initial); η̄)
+        F = zeros_like(η̄)
+        τ̄_unit = (map(zeros_like, center_stress)..., map(zeros_like, seeds[4:6])...)
+        reverse_viscosity!(fill!(similar(η̄), 1), τ̄_unit[1:3])
+        reverse_stress!((τ̄_unit..., zeros_like(stokes.τ.II), zeros_like(stokes.ΔPψ)); η̄ = F)
         η̄ ./= 1 .- F
-        η̄v ./= 1 .- Fv
-        expected_η = (Array(η̄), Array(η̄v))
-        reverse_viscosity!(η̄, η̄v, seeds[1:3], seeds[4:6]; P_bar = adjoint.P)
+        expected_η = Array(η̄)
+        reverse_viscosity!(η̄, seeds[1:3]; P_bar = adjoint.P)
         expected = (map(Array, seeds)..., Array(adjoint.P))
 
         # cached
         foreach(copyto!, seeds, initial)
         adjoint.P .= 0
-        if variational
-            scratch = JR2K.implicit_viscosity_scratch(stokes, ϕ)
-            JR2K.enzyme_prepare_variational_implicit_viscosity_τII!(
-                scratch, stokes, adjoint, rheology, phase_ratios, ϕ, 1.0, dt, args, cutoff;
-                air_phase,
-            )
-        else
-            scratch = JR2K.implicit_viscosity_scratch(stokes)
-            JR2K.enzyme_compute_implicit_viscosity_τII!(
-                scratch, stokes, adjoint, rheology, phase_ratios, 1.0, dt, args, cutoff,
-            )
-        end
+        scratch = JR2K.implicit_viscosity_scratch(stokes, ϕ)
+        JR2K.enzyme_prepare_variational_implicit_viscosity_τII!(
+            scratch, stokes, adjoint, rheology, phase_ratios, ϕ, 1.0, dt, args, cutoff;
+            air_phase,
+        )
         @test maximum(abs, Array(F)) > 1.0e-3
         @test maximum(abs, expected[end]) > 1.0e-3
         @test Array(scratch.feedback) ≈ Array(F) rtol = 1.0e-10
-        @test Array(scratch.η) ≈ expected_η[1] rtol = 1.0e-10
-        variational || @test Array(scratch.ηv) ≈ expected_η[2] rtol = 1.0e-10
+        @test Array(scratch.η) ≈ expected_η rtol = 1.0e-10
         for (A, B) in zip((map(Array, seeds)..., Array(adjoint.P)), expected)
             @test A ≈ B rtol = 1.0e-10
         end
@@ -476,49 +326,10 @@ end
         @test Jv_w ≈ v_JTw rtol = 1.0e-7
     end
 
-    # One sweep of `adjoint_residual!` is the transpose of the linearized forward residual
-    # chain: boundary conditions, buoyancy, strain rate and continuity, stress, momentum.
-    @testset "adjoint residual, $rheology_name, $name, ni = $ni" for (rheology_name, rheology) in pairs(rheologies),
-            (name, bcs) in pairs(flow_bcs_cases), ni in sizes
-        s = setup(ni, bcs, rheology)
-        (; stokes, adjoint, phase_ratios, ρg, dyrel, grid, dt, args) = s
-        free_surface = true
-        function forward!()
-            flow_bcs!(stokes, bcs)
-            JR2K.update_ρg!(ρg, phase_ratios, rheology, args)
-            JR2K.compute_∇V_strain_rate_RP!(
-                stokes, dyrel, rheology, phase_ratios, grid._di, ni, dt, true; args...
-            )
-            JR2K.compute_stress_DRYEL!(
-                stokes, rheology, phase_ratios, 1.0, dt; Pf = JR2K.fluid_pressure(args, stokes.P)
-            )
-            @parallel (@idx ni) JR2K.compute_PH_residual_V!(
-                stokes.R.Rx, stokes.R.Ry, @velocity(stokes)..., stokes.P, stokes.ΔPψ,
-                @stress(stokes)..., ρg..., grid._di.center, grid._di.vertex, dt * free_surface,
-            )
-            return nothing
-        end
-        function reverse!()
-            # `initialize_adjoint_iteration!` moves the λ seeds into the residual adjoints.
-            Rx, Ry = size(stokes.R.Rx), size(stokes.R.Ry)
-            adjoint.λV.Vx[2:(Rx[1] + 1), 2:(Rx[2] + 1)] .= adjoint.R.Rx
-            adjoint.λV.Vy[2:(Ry[1] + 1), 2:(Ry[2] + 1)] .= adjoint.R.Ry
-            adjoint.λP .= adjoint.R.RP
-            JR2K.initialize_adjoint_iteration!(adjoint, ni)
-            JR2K.adjoint_residual!(
-                stokes, adjoint, ρg, dyrel, bcs, phase_ratios, rheology, args, grid._di, ni,
-                dt, 1.0, free_surface, (-Inf, Inf), true, nothing,
-            )
-            return nothing
-        end
-        inputs = (stokes.V.Vx => adjoint.V.Vx, stokes.V.Vy => adjoint.V.Vy, stokes.P => adjoint.P)
-        outputs = (stokes.R.Rx => adjoint.R.Rx, stokes.R.Ry => adjoint.R.Ry, stokes.R.RP => adjoint.R.RP)
-        Jv_w, v_JTw = dot_product_test(forward!, reverse!, inputs, outputs, (stokes, ρg), (adjoint,))
-        @test Jv_w ≈ v_JTw rtol = 1.0e-6
-    end
-
-    # Variational chain with sticky air: directions and seeds live on the reduced (rock) space,
-    # the degrees of freedom of the variational adjoint.
+    # One sweep of `variational_adjoint_residual!` is the transpose of the linearized forward
+    # residual chain: boundary conditions, buoyancy, strain rate and continuity, stress,
+    # momentum. With sticky air: directions and seeds live on the reduced (rock) space, the
+    # degrees of freedom of the adjoint.
     @testset "variational adjoint residual, $rheology_name, $name, ni = $ni" for (rheology_name, rheology) in pairs(rheologies),
             (name, bcs) in pairs(flow_bcs_cases), ni in sizes
         s = setup(ni, bcs, rheology; air = true)
@@ -576,28 +387,21 @@ end
     end
     # The per-iteration reset (`reset_adjoint_residuals!`) zeroes only P and V: one reverse sweep
     # must consume every stress, strain-rate and residual seed.
-    @testset "sweep consumes its seeds, $(variational ? "variational" : "standard"), $rheology_name, $name" for variational in (false, true),
+    @testset "sweep consumes its seeds, $(air ? "sticky air" : "rock only"), $rheology_name, $name" for air in (false, true),
             (rheology_name, rheology) in pairs(rheologies), (name, bcs) in pairs(flow_bcs_cases)
         ni = (5, 4)
-        s = setup(ni, bcs, rheology; air = variational)
+        s = setup(ni, bcs, rheology; air)
         (; stokes, adjoint, phase_ratios, ρg, dyrel, grid, dt, args, ϕ) = s
         adjoint.λV.Vx .= TA(pseudo_random(size(adjoint.λV.Vx), 7))
         adjoint.λV.Vy .= TA(pseudo_random(size(adjoint.λV.Vy), 8))
         adjoint.λP .= TA(pseudo_random(ni, 9))
         JR2K.initialize_adjoint_iteration!(adjoint, ni)
-        if variational
-            maskP = similar(ϕ.center, Bool)
-            @parallel (@idx ni) JR2K.update_valid_c_mask!(maskP, ϕ)
-            JR2K.variational_adjoint_residual!(
-                stokes, adjoint, ρg, dyrel, bcs, phase_ratios, ϕ, rheology, args, grid._di, ni,
-                dt, 1.0, true, 2, maskP, nothing, (-Inf, Inf),
-            )
-        else
-            JR2K.adjoint_residual!(
-                stokes, adjoint, ρg, dyrel, bcs, phase_ratios, rheology, args, grid._di, ni,
-                dt, 1.0, true, (-Inf, Inf), true, nothing,
-            )
-        end
+        maskP = similar(ϕ.center, Bool)
+        @parallel (@idx ni) JR2K.update_valid_c_mask!(maskP, ϕ)
+        JR2K.variational_adjoint_residual!(
+            stokes, adjoint, ρg, dyrel, bcs, phase_ratios, ϕ, rheology, args, grid._di, ni,
+            dt, 1.0, true, air ? 2 : 0, maskP, nothing, (-Inf, Inf),
+        )
         seeds = (
             adjoint.ε.xx, adjoint.ε.yy, adjoint.ε.xy, adjoint.τ.xx, adjoint.τ.yy, adjoint.τ.xy_c,
             adjoint.τ.II, adjoint.τ.xx_v, adjoint.τ.yy_v, adjoint.τ.xy, adjoint.θ,
@@ -623,11 +427,9 @@ end
         ds = JR2K.adjoint_dyrel!(adjoint, dyrel)
         η = copy(stokes.viscosity.η)
         penalty = copy(dyrel.γ_eff)
-        mask = fill!(similar(stokes.P, Bool), true)
-        if air
-            @parallel (@idx ni) JR2K.update_valid_c_mask!(mask, ϕ)
-        end
-        weight = air ? Array(ϕ.center) : ones(ni)
+        mask = similar(stokes.P, Bool)
+        @parallel (@idx ni) JR2K.update_valid_c_mask!(mask, ϕ)
+        weight = Array(ϕ.center)
         num = 20 .* Array(η)
         expected = isinf(bulk) ? num ./ 2 : bulk .* num ./ (bulk .+ num)
         expected = map((g, w, m) -> m ? g / w : 0.0, expected, weight, Array(mask))

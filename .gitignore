@@ -13,6 +13,14 @@ LocalPreferences.toml
 docs/build/
 docs/site/
 
+# LaTeX build files
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.synctex.gz
+docs/*.tex
+
 package-lock.json
 node_modules
 

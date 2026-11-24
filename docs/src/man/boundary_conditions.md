@@ -164,6 +164,30 @@ displacement2velocity!(stokes, dt) # convert displacement to velocity
 update_halo!(@velocity(stokes)...)
 ```
 
+## Prescribed velocities inside the domain
+
+To hold the velocity fixed inside the domain, for example a block pushed at plate velocity,
+pass a mask per velocity component to `dirichlet`. A mask is sized like its component
+(`(nx+1, ny+2)` for `Vx`, `(nx+2, ny+1)` for `Vy`) and is 1 where the velocity is
+prescribed. Only interior nodes are held; mask entries on the walls and ghost nodes are not
+enforced.
+
+```julia
+flow_bcs = VelocityBoundaryConditions(;
+    free_slip = (left = true, right = true, top = true, bot = true),
+    dirichlet = (;
+        Vx = (; constant = 5.0e-2 / (365.25 * 24 * 3600), mask = mask_x), # 5 cm/yr
+        Vy = (; constant = 0.0, mask = mask_y),
+    ),
+)
+```
+
+Omitted components are unconstrained. For a value that varies in space, pass
+`DirichletBoundaryCondition(value, Mask(mask))`. Interior Dirichlet velocities are supported
+by the 2D `solve_DYREL!` and `solve_VariationalDYREL!`. In the latter, they
+are not imposed at nodes that the rock ratio passed to the solve marks as air, so a box that
+the free surface moves through is held only where it is rock.
+
 # Thermal Boundary Conditions
 
 Thermal boundary conditions are collected in `TemperatureBoundaryConditions`.

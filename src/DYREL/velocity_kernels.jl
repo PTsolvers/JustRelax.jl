@@ -369,6 +369,7 @@ end
         _di_center,
         _di_vertex,
         dt,
+        dirichlet,
     ) where {T}
     # See the overload above: cell-centred fields wrap, the vertex field `τxy` does not.
     Base.@propagate_inbounds @inline av_xa(A) = _av_xa_wrap(A, i, j)
@@ -380,7 +381,9 @@ end
         _dy_v = @dy(_di_vertex, j)
         Base.@propagate_inbounds @inline d_xa(A) = _d_xa_wrap(A, _dx_c, i, j)
         Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy_v, i, j)
-        Rx[i, j] = d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
+        # momentum row (i, j) drives Vx[i + 1, j + 1]; a prescribed velocity has no residual
+        Rx[i, j] = isdirichlet(dirichlet.Vx, i + 1, j + 1) ? zero(T) :
+            d_xa(τxx) + d_yi(τxy) - d_xa(P) - d_xa(ΔPψ) - av_xa(ρgx)
     end
 
     if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
@@ -400,7 +403,8 @@ end
         # correction term
         ρg_correction = (Vyᵢⱼ * ∂ρg∂y) * θ * dt
 
-        Ry[i, j] = d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy) + ρg_correction
+        Ry[i, j] = isdirichlet(dirichlet.Vy, i + 1, j + 1) ? zero(T) :
+            d_ya(τyy) + d_xi(τxy) - d_ya(P) - d_ya(ΔPψ) - av_ya(ρgy) + ρg_correction
     end
 
     return nothing
@@ -458,8 +462,9 @@ end
 end
 
 @parallel_indices (i, j, k) function compute_PH_residual_V!(
-        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt
+        Rx::AbstractArray{T, 3}, Ry, Rz, Vx, Vy, Vz, P, ΔPψ, τxx, τyy, τzz, τyz, τxz, τxy, ρgx, ρgy, ρgz, _di_center, _di_vertex, dt, dirichlet
     ) where {T}
+    # `dirichlet` is always empty in 3D; see `check_velocity_dirichlet`
 
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose
@@ -683,6 +688,7 @@ end
         _di_center,
         _di_vertex,
         dt,
+        dirichlet,
     ) where {T}
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose
@@ -692,7 +698,13 @@ end
     Base.@propagate_inbounds @inline av_ya(A) = _av_ya_wrap(A, i, j)
 
     @inbounds begin
-        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
+        # A prescribed velocity is re-imposed every iteration and contributes no residual or
+        # damping history.
+        if i ≤ size(Rx, 1) && j ≤ size(Rx, 2) && isdirichlet(dirichlet.Vx, i + 1, j + 1)
+            apply_dirichlet!(Vx, dirichlet.Vx, i + 1, j + 1)
+            Rx[i, j] = zero(T)
+            dVxdτ[i, j] = zero(T)
+        elseif i ≤ size(Rx, 1) && j ≤ size(Rx, 2)
             _dx_c = @dx(_di_center, i)
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A) = _d_xa_wrap(A, _dx_c, i, j)
@@ -704,7 +716,11 @@ end
             dVxdτ[i, j] = dVx_new
             Vx[i + 1, j + 1] += ΔVx
         end
-        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
+        if i ≤ size(Ry, 1) && j ≤ size(Ry, 2) && isdirichlet(dirichlet.Vy, i + 1, j + 1)
+            apply_dirichlet!(Vy, dirichlet.Vy, i + 1, j + 1)
+            Ry[i, j] = zero(T)
+            dVydτ[i, j] = zero(T)
+        elseif i ≤ size(Ry, 1) && j ≤ size(Ry, 2)
             _dy_c = @dy(_di_center, j)
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A) = _d_ya_wrap(A, _dy_c, i, j)
@@ -760,7 +776,9 @@ end
         _di_center,
         _di_vertex,
         dt,
+        dirichlet,
     ) where {T}
+    # `dirichlet` is always empty in 3D; see `check_velocity_dirichlet`
 
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose

@@ -39,6 +39,10 @@ function _solve_VariationalDYREL!(
     ) where {N}
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+    check_velocity_dirichlet(flow_bcs, @velocity(stokes))
+    # imposed before `project_reduced_state!` below, so eliminated rows stay eliminated
+    dirichlet = velocity_dirichlet(flow_bcs)
+    foreach(apply_dirichlet!, @velocity(stokes), dirichlet)
 
     N == 3 && reject_periodic_bcs(flow_bcs, "`solve_VariationalDYREL!` in 3D")
     dim = Val(N)
@@ -191,6 +195,7 @@ function _solve_VariationalDYREL!(
             _di.center,
             _di.vertex,
             dt * free_surface,
+            dirichlet,
         )
 
         # Residual check, normalized as in the non-variational solver, but with the spans taken
@@ -305,6 +310,7 @@ function _solve_VariationalDYREL!(
                 _di.center,
                 _di.vertex,
                 dt * free_surface,
+                dirichlet,
             )
             _flow_bcs!(flow_bcs, @velocity(stokes), true)
             update_halo_synced!(@velocity(stokes)...)

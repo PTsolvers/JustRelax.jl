@@ -155,7 +155,7 @@ struct DisplacementBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
 end
 
 """
-    VelocityBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false)
+    VelocityBoundaryConditions(; no_slip, free_slip, periodic, free_surface=false, dirichlet=(;))
 
 Define 2D or 3D boundary conditions for the velocity field. Face names are
 `left`, `right`, `top`, and `bot` in 2D, with `front` and `back` added in 3D.
@@ -165,25 +165,100 @@ Faces where all three are `false` are not modified by `flow_bcs!`, which is how
 a prescribed velocity field is imposed. Periodic faces must be enabled in pairs
 (`left`/`right`, `front`/`back`, or `bot`/`top`), and a periodic top face is
 incompatible with `free_surface=true`.
+
+`dirichlet` prescribes the velocity inside the domain, for example a region moving
+at a fixed plate velocity. It takes one entry per velocity component, `Vx` and `Vy`,
+each in any form accepted by `Dirichlet`: `(; constant = v, mask = mask)` for a
+uniform value (zero included), or a `DirichletBoundaryCondition(value, Mask(mask))`
+for a value that varies in space. Masks and values are sized like the velocity
+component they constrain, ghost nodes included (`(nx+1, ny+2)` for `Vx`,
+`(nx+2, ny+1)` for `Vy`). Omitted components are unconstrained. A
+`DirichletBoundaryCondition` built from a single array infers its mask from the
+non-zero entries, so it cannot prescribe a velocity of exactly zero. Interior Dirichlet
+velocities are enforced by the 2D `solve_DYREL!` and
+`solve_VariationalDYREL!` solvers.
+
+# Examples
+
+```julia
+mask = zeros(nx + 1, ny + 2)
+mask[10:20, 5:8] .= 1
+VelocityBoundaryConditions(;
+    free_slip = (left = true, right = true, top = true, bot = true),
+    dirichlet = (; Vx = (; constant = 1.0e-9, mask = mask)),
+)
+```
 """
-struct VelocityBoundaryConditions{T, nD} <: AbstractFlowBoundaryConditions
+struct VelocityBoundaryConditions{T, nD, D} <: AbstractFlowBoundaryConditions
     no_slip::T
     free_slip::T
     periodic::T
     free_surface::Bool
+    dirichlet::D
 
     function VelocityBoundaryConditions(;
             no_slip::T = (left = false, right = false, top = false, bot = false),
             free_slip::T = (left = true, right = true, top = true, bot = true),
             periodic::T = map(_ -> false, no_slip),
             free_surface::Bool = false,
+            dirichlet::NamedTuple = (;),
         ) where {T}
         @assert length(no_slip) === length(free_slip) === length(periodic)
         check_flow_bcs(no_slip, free_slip, periodic, free_surface)
 
         nD = length(no_slip) == 4 ? 2 : 3
-        return new{T, nD}(no_slip, free_slip, periodic, free_surface)
+        D = parse_velocity_dirichlet(dirichlet, Val(nD))
+        return new{T, nD, typeof(D)}(no_slip, free_slip, periodic, free_surface, D)
     end
+end
+
+function parse_velocity_dirichlet(dirichlet::NamedTuple, ::Val{nD}) where {nD}
+    components = nD == 2 ? (:Vx, :Vy) : (:Vx, :Vy, :Vz)
+    for k in keys(dirichlet)
+        k in components || throw(
+            ArgumentError("unknown velocity component `$k` in `dirichlet`; valid components are $components")
+        )
+    end
+    return NamedTuple{components}(map(k -> Dirichlet(get(dirichlet, k, (;))), components))
+end
+
+@inline has_dirichlet(::AbstractDirichletBoundaryCondition{Nothing, Nothing}) = false
+@inline has_dirichlet(::AbstractDirichletBoundaryCondition) = true
+
+"""
+    velocity_dirichlet(bcs)
+
+Return the interior Dirichlet velocity conditions of `bcs` as a NamedTuple with one
+condition per velocity component (`Vx`, `Vy`[, `Vz`]). Flow boundary conditions without
+interior conditions, such as `DisplacementBoundaryConditions`, return empty conditions.
+"""
+@inline velocity_dirichlet(bcs::VelocityBoundaryConditions) = bcs.dirichlet
+@inline velocity_dirichlet(::DisplacementBoundaryConditions{T, nD}) where {T, nD} =
+    parse_velocity_dirichlet((;), Val(nD))
+
+"""
+    check_velocity_dirichlet(bcs, V)
+
+Check that the interior Dirichlet velocity conditions of `bcs` can be imposed on the
+velocity components `V`: each mask must be sized like its component, and interior
+conditions are only supported by the 2D DYREL solvers.
+"""
+function check_velocity_dirichlet(bcs::AbstractFlowBoundaryConditions, V::NTuple{N, AbstractArray}) where {N}
+    D = velocity_dirichlet(bcs)
+    N == 3 && any(has_dirichlet, D) &&
+        throw(ArgumentError("interior Dirichlet velocities are only supported by the 2D DYREL solvers"))
+    foreach(check_dirichlet_size, D, V, keys(D))
+    return nothing
+end
+
+function check_dirichlet_size(bc, V, name)
+    has_dirichlet(bc) || return nothing
+    size(bc.mask.mask) == size(V) || throw(
+        DimensionMismatch(
+            "the `dirichlet` mask for $name has size $(size(bc.mask.mask)), but $name has size $(size(V))"
+        )
+    )
+    return nothing
 end
 
 """

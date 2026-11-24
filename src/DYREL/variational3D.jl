@@ -128,7 +128,8 @@ end
 
 @inline valid_momentum3(ϕ, d, i, j, k) = d == 1 ? isvalid_vx(ϕ, i + 1, j, k) : d == 2 ? isvalid_vy(ϕ, i, j + 1, k) : isvalid_vz(ϕ, i, j, k + 1)
 
-@parallel_indices (i, j, k) function compute_PH_residual_V!(Rx, Ry, Rz, Vx, Vy, Vz, P, θ, xx, yy, zz, yz, xz, xy, gx, gy, gz, ϕ::JustRelax.RockRatio, dc, dv, dt)
+@parallel_indices (i, j, k) function compute_PH_residual_V!(Rx, Ry, Rz, Vx, Vy, Vz, P, θ, xx, yy, zz, yz, xz, xy, gx, gy, gz, ϕ::JustRelax.RockRatio, dc, dv, dt, dirichlet)
+    # `dirichlet` is always empty in 3D; see `check_velocity_dirichlet`
     R, V, τ, g = (Rx, Ry, Rz), (Vx, Vy, Vz), (xx, yy, zz, yz, xz, xy), (gx, gy, gz)
     for d in 1:3
         if all((i, j, k) .≤ size(R[d]))
@@ -138,7 +139,8 @@ end
     return nothing
 end
 
-@parallel_indices (i, j, k) function compute_DR_residual_update_V!(Rx, Ry, Rz, Vx, Vy, Vz, ux, uy, uz, P, θ, xx, yy, zz, yz, xz, xy, gx, gy, gz, Dx, Dy, Dz, ax, ay, az, bx, by, bz, tx, ty, tz, ϕ::JustRelax.RockRatio, dc, dv, dt)
+@parallel_indices (i, j, k) function compute_DR_residual_update_V!(Rx, Ry, Rz, Vx, Vy, Vz, ux, uy, uz, P, θ, xx, yy, zz, yz, xz, xy, gx, gy, gz, Dx, Dy, Dz, ax, ay, az, bx, by, bz, tx, ty, tz, ϕ::JustRelax.RockRatio, dc, dv, dt, dirichlet)
+    # `dirichlet` is always empty in 3D; see `check_velocity_dirichlet`
     R, V, u = (Rx, Ry, Rz), (Vx, Vy, Vz), (ux, uy, uz)
     D, α, β, t = (Dx, Dy, Dz), (ax, ay, az), (bx, by, bz), (tx, ty, tz)
     τ, g = (xx, yy, zz, yz, xz, xy), (gx, gy, gz)

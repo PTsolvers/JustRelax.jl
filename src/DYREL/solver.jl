@@ -11,7 +11,8 @@ Solve the Stokes system with the self-tuned dynamic relaxation (DYREL) method.
 - `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
 - `ρg`: buoyancy forces arrays.
 - `dyrel`: DYREL-specific parameters and fields.
-- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions. In 2D,
+  `VelocityBoundaryConditions(; dirichlet)` may also prescribe velocities inside the domain.
 - `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
 - `rheology`: Material properties and rheological laws.
 - `args`: Tuple of additional arguments needed to update viscosity, stress, and buoyancy forces.
@@ -70,7 +71,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `stokes`: `JustRelax.StokesArrays` containing the simulation fields.
 - `ρg`: buoyancy forces arrays.
 - `dyrel`: DYREL-specific parameters and fields, built with the same `ϕ`.
-- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions.
+- `flow_bcs`: `AbstractFlowBoundaryConditions` defining velocity boundary conditions. In 2D,
+  `VelocityBoundaryConditions(; dirichlet)` may also prescribe velocities inside the domain.
 - `phase_ratios`: `JustPIC.PhaseRatios` for material phase tracking.
 - `ϕ`: `JustRelax.RockRatio` carrying the cell, vertex and face volume fractions.
 - `rheology`: Material properties and rheological laws.
@@ -150,6 +152,9 @@ function _solve_DYREL!(
     ) where {N}
 
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
+    check_velocity_dirichlet(flow_bcs, @velocity(stokes))
+    dirichlet = velocity_dirichlet(flow_bcs)
+    foreach(apply_dirichlet!, @velocity(stokes), dirichlet)
 
     @copy stokes.P0 stokes.P
 
@@ -254,6 +259,7 @@ function _solve_DYREL!(
             _di.center,
             _di.vertex,
             dt * free_surface,
+            dirichlet,
         )
 
         # pressure residual stokes.R.RP already computed in compute_∇V_strain_rate_RP! above
@@ -337,6 +343,7 @@ function _solve_DYREL!(
                 _di.center,
                 _di.vertex,
                 dt * free_surface,
+                dirichlet,
             )
             _flow_bcs!(flow_bcs, @velocity(stokes), true)
             free_surface_bcs!(

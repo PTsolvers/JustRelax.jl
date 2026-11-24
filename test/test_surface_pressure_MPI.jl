@@ -9,7 +9,7 @@ function load_residual!(stokes, pressure, ϕ, grid)
     ρg = @zeros(ni...), @zeros(ni...)
     @parallel (@idx ni) JR.compute_PH_residual_V!(
         @residuals(stokes.R)..., @velocity(stokes)..., pressure, stokes.ΔPψ,
-        @stress(stokes)..., ρg..., ϕ, grid._di.center, grid._di.vertex, 0.0,
+        @stress(stokes)..., ρg..., ϕ, grid._di.center, grid._di.vertex, 0.0, VelocityBoundaryConditions().dirichlet,
     )
     return map(copy, @residuals(stokes.R))
 end

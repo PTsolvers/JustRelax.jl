@@ -116,7 +116,7 @@ end
         dt_fs = free_surface ? dt : 0.0
         θ = dyrel.P_num
         @parallel (@idx ni) JR3K.compute_PH_residual_V!(
-            @residuals(stokes.R)..., @velocity(stokes)..., stokes.P, θ, @stress(stokes)..., g..., ϕ, grid._di.center, grid._di.vertex, dt_fs,
+            @residuals(stokes.R)..., @velocity(stokes)..., stokes.P, θ, @stress(stokes)..., g..., ϕ, grid._di.center, grid._di.vertex, dt_fs, bcs.dirichlet,
         )
         forcing = vcat(vec.(Array.(@residuals(stokes.R)))...)
         V = @velocity(stokes)
@@ -140,7 +140,7 @@ end
             JR3K.compute_stress_DYREL!(stokes, rheology, phases, ϕ, 1.0, dt)
             @. θ = dyrel.γ_eff * stokes.R.RP
             @parallel (@idx ni) JR3K.compute_PH_residual_V!(
-                @residuals(stokes.R)..., V..., stokes.P, θ, @stress(stokes)..., g..., ϕ, grid._di.center, grid._di.vertex, dt_fs,
+                @residuals(stokes.R)..., V..., stokes.P, θ, @stress(stokes)..., g..., ϕ, grid._di.center, grid._di.vertex, dt_fs, bcs.dirichlet,
             )
             A[:, column] .= forcing .- vcat(vec.(Array.(@residuals(stokes.R)))...)
         end

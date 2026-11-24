@@ -130,6 +130,7 @@ end
     return A[inds...]
 end
 
+@inline Dirichlet(bc::AbstractDirichletBoundaryCondition) = bc
 @inline Dirichlet(x::NamedTuple) = Dirichlet(; x...)
 @inline Dirichlet(; constant = nothing, mask = nothing) = Dirichlet(constant, mask)
 @inline Dirichlet(::Nothing, mask::Nothing) = DirichletBoundaryCondition()

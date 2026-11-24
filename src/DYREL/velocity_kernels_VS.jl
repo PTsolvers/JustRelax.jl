@@ -143,6 +143,7 @@ end
         _di_center,
         _di_vertex,
         dt,
+        dirichlet,
     ) where {T}
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose
@@ -158,7 +159,7 @@ end
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            Rx[i, j] = if isvalid_vx(ϕ, i + 1, j)
+            Rx[i, j] = if isvalid_vx(ϕ, i + 1, j) && !isdirichlet(dirichlet.Vx, i + 1, j + 1)
                 d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) - d_xa(ΔPψ, ϕ.center) - av_xa(ρgx, ϕ.center)
             else
                 0.0e0
@@ -169,7 +170,7 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            Ry[i, j] = if isvalid_vy(ϕ, i, j + 1)
+            Ry[i, j] = if isvalid_vy(ϕ, i, j + 1) && !isdirichlet(dirichlet.Vy, i + 1, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]
@@ -216,6 +217,7 @@ end
         _di_center,
         _di_vertex,
         dt,
+        dirichlet,
     ) where {T}
     # Cell-centred fields are differenced with the wrapping stencil: a momentum row reaches the
     # last cell index only when its direction is periodic, and that row is the seam face, whose
@@ -226,12 +228,18 @@ end
 
     ny = size(ρgy, 2)
     @inbounds begin
+        # An eliminated (void) row stays eliminated; a prescribed velocity on a valid row is
+        # re-imposed every iteration and contributes no residual or damping history.
         if all((i, j) .≤ size(Rx))
             _dx_c = @dx(_di_center, i)
             _dy_v = @dy(_di_vertex, j)
             Base.@propagate_inbounds @inline d_xa(A, ϕ) = _d_xa_wrap(A, ϕ, _dx_c, i, j)
             Base.@propagate_inbounds @inline d_yi(A, ϕ) = _d_yi(A, ϕ, _dy_v, i, j)
-            if isvalid_vx(ϕ, i + 1, j)
+            if isvalid_vx(ϕ, i + 1, j) && isdirichlet(dirichlet.Vx, i + 1, j + 1)
+                apply_dirichlet!(Vx, dirichlet.Vx, i + 1, j + 1)
+                Rx[i, j] = zero(T)
+                dVxdτ[i, j] = zero(T)
+            elseif isvalid_vx(ϕ, i + 1, j)
                 Rx_ij = (d_xa(τxx, ϕ.center) + d_yi(τxy, ϕ.vertex) - variational_pressure_gradient(P, ϕ, Val(1), _dx_c, i, j) - d_xa(θc, ϕ.center) - av_xa(ρgx, ϕ.center)) / Dx[i, j]
                 Rx[i, j] = Rx_ij
                 dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij, αVx[i, j], βVx[i, j], dτVx[i, j])
@@ -248,7 +256,11 @@ end
             _dx_v = @dx(_di_vertex, i)
             Base.@propagate_inbounds @inline d_ya(A, ϕ) = _d_ya_wrap(A, ϕ, _dy_c, i, j)
             Base.@propagate_inbounds @inline d_xi(A, ϕ) = _d_xi(A, ϕ, _dx_v, i, j)
-            if isvalid_vy(ϕ, i, j + 1)
+            if isvalid_vy(ϕ, i, j + 1) && isdirichlet(dirichlet.Vy, i + 1, j + 1)
+                apply_dirichlet!(Vy, dirichlet.Vy, i + 1, j + 1)
+                Ry[i, j] = zero(T)
+                dVydτ[i, j] = zero(T)
+            elseif isvalid_vy(ϕ, i, j + 1)
                 # free-surface stabilization term (ρg masked by ϕ.center, as in `compute_Vy!`)
                 θ = 1.0
                 Vyᵢⱼ = Vy[i + 1, j + 1]

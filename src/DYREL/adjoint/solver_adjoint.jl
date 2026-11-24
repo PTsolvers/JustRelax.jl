@@ -141,21 +141,41 @@ function solve_VariationalDYREL_adjoint!(
     momentum_norms() = ntuple(d -> masked_norm_mpi(maskRi[d], adjoint_Ri[d]) / √(nV[d]), dim)
 
     # Every solve starts from λ = 0: the previous time step's λ did not shorten the solve (and
-    # lengthened it on fine grids). The momentum residual is measured against its value at
-    # λ = 0, the objective's velocity seed.
+    # lengthened it on fine grids).
     foreach(A -> fill!(A, 0), (λV..., stokes_ad.λP))
     initialize_adjoint_iteration!(stokes_ad, ni)
     seed_observation!(observation)
-    errV_seed = momentum_norms()
+
+    # Scale-free convergence measures, so that ϵ does not depend on the units of the problem.
+    # The momentum residual is measured against its largest component at λ = 0, the objective's
+    # velocity seed. A pressure objective seeds only the continuity adjoint, so its reference is
+    # the momentum residual after the first λP update. A reference that is still zero is replaced
+    # by the first nonzero residual.
+    momentum_reference = Ref(maximum(momentum_norms()))
     if observation.field === :P
-        errV_seed = pressure_objective_reference!(stokes_ad, dyrel, pressure_relaxation) do
-            initialize_adjoint_iteration!(stokes_ad, ni)
-            seed_observation!(observation)
-            sweep!()
-            momentum_norms()
-        end
+        momentum_reference[] = maximum(
+            pressure_objective_reference!(stokes_ad, dyrel, pressure_relaxation) do
+                initialize_adjoint_iteration!(stokes_ad, ni)
+                seed_observation!(observation)
+                sweep!()
+                momentum_norms()
+            end
+        )
     end
-    errV0 = momentum_residual_reference(ntuple(_ -> 0.0, dim), errV_seed)
+    function momentum_error(norms = momentum_norms())
+        e = maximum(norms)
+        iszero(momentum_reference[]) && (momentum_reference[] = e)
+        return iszero(momentum_reference[]) ? zero(e) : e / momentum_reference[]
+    end
+    # The continuity adjoint is essentially the divergence of λV, so, like the forward
+    # `RP·lx/Vspan`, it is measured against the λV scale over the domain length. It has no
+    # reference of its own: for a velocity objective it is zero at λ = 0. Before the first
+    # velocity update λV = 0 gives no scale, and the check is skipped.
+    function continuity_error()
+        λV_scale = maximum(map(masked_value_scale, maskV, λVi))
+        iszero(λV_scale) && return zero(λV_scale)
+        return masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λV_scale
+    end
 
     bicgstab = inner_solver === :bicgstab ?
         adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy), deflation) : nothing
@@ -165,29 +185,17 @@ function solve_VariationalDYREL_adjoint!(
 
         residual!()
 
-        # Scale-free criteria, so that ϵ does not depend on the units of the problem. The
-        # objective seeds only some velocity components, so the momentum adjoints are measured
-        # against the largest initial one. The continuity adjoint is the divergence of λV and,
-        # like the forward `RP·lx/Vspan`, is measured against the λV scale over the domain length.
-        # (Relative to its own initial value instead, it would have to drop by ϵ, which the
-        # Powell–Hestenes iteration only reaches after many passes.)
-        errV = momentum_norms()
-        errV0 = momentum_residual_reference(errV0, errV)
-        λVspan = maximum(map(masked_value_scale, maskV, λVi))
-        # λV is exactly zero before the first adjoint update and gives the continuity check no
-        # scale yet; the momentum residual remains one for a nontrivial objective on that pass
-        has_λV_scale = !iszero(λVspan)
-        errPt = has_λV_scale ?
-            masked_norm_mpi(maskP, stokes_ad.P) / √(nP) * lx / λVspan : zero(λVspan)
-        errV_relative = relative_momentum_residual(errV, errV0)
-        err = has_λV_scale ? maximum((errV_relative..., errPt)) : maximum(errV_relative)
+        norms = momentum_norms()
+        errV = momentum_error(norms)
+        errP = continuity_error()
+        err = max(errV, errP)
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
-                ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, errV[d], errV[d] / errV0[d]), dim),
+                ntuple(d -> @sprintf("R%d=%1.3e %1.3e", d, norms[d], norms[d] / momentum_reference[]), dim),
                 ", ",
             )
-            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errPt)
+            @printf("itPH = %02d iter = %06d iter/nx = %03d, err = %1.3e - norm[%s, Rp=%1.3e] \n", itPH, iter, iter / ni[1], err, errV_msg, errP)
         end
         isnan(err) && error("NaN detected in outer loop")
         err > 1.0e10 && error("Kaboom! Error > 1e10 in outer loop")
@@ -214,8 +222,8 @@ function solve_VariationalDYREL_adjoint!(
         if inner_solver === :bicgstab
             corrected_residual!(λV, stokes_ad.λP, true)
             err, iter = adjoint_bicgstab!(
-                corrected_residual!, momentum_norms, bicgstab, λVi, adjoint_velocity_residuals,
-                (dyrel.Dx, dyrel.Dy), errV0, err, ϵ_vel, iter, iterMax_DR, total_iterMax;
+                corrected_residual!, momentum_error, bicgstab, λVi, adjoint_velocity_residuals,
+                (dyrel.Dx, dyrel.Dy), err, ϵ_vel, iter, iterMax_DR, total_iterMax;
                 verbose = verbose_DR && igg.me == 0, nout,
             )
             # the last sweep was of a search direction: refresh the continuity adjoint of λV,
@@ -242,11 +250,7 @@ function solve_VariationalDYREL_adjoint!(
 
             # Residual check
             if iszero(iter % nout)
-                errV = momentum_norms()
-                # same reference as the outer check: relative to the value after the first `nout`
-                # iterations, a residual already at round-off by then can never drop by `rel_drop`
-                errV0 = momentum_residual_reference(errV0, errV)
-                err = maximum(relative_momentum_residual(errV, errV0))
+                err = momentum_error()
                 isnan(err) && error("NaN detected in inner loop")
 
                 if verbose_DR && igg.me == 0

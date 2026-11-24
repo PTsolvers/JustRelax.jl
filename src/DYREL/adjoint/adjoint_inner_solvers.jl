@@ -355,7 +355,7 @@ end
 
 """
     adjoint_bicgstab!(
-        residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
+        residual!, momentum_error, work, λVi, R, D, err, ϵ_vel, iter, iterMax,
         total_iterMax; verbose = false, nout = 1,
     )
 
@@ -367,12 +367,13 @@ the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal, de
 recycled vectors of `work.deflation` if there are any.
 
 `residual!(λV, λP, seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
-with or without the objective seed; on entry `R` holds that of the current `λVi`. Returns
+with or without the objective seed; on entry `R` holds that of the current `λVi`.
+`momentum_error()` returns the relative momentum residual of `R`, the stopping measure. Returns
 `(err, iter)`; `iter` counts reverse sweeps, two per BiCGStab iteration. After a breakdown the
 solve warns, returns early and restarts from the true residual in the next pass.
 """
 function adjoint_bicgstab!(
-        residual!, momentum_norms, work, λVi, R, D, errV0, err, ϵ_vel, iter, iterMax,
+        residual!, momentum_error, work, λVi, R, D, err, ϵ_vel, iter, iterMax,
         total_iterMax; verbose = false, nout = 1,
     )
     (; direction, direction_i, zeroP, isqrtD, r, r̂, p, v, t, deflation) = work
@@ -436,7 +437,7 @@ function adjoint_bicgstab!(
             @. R[d] = r[d] * D[d] * isqrtD[d]
         end
         correct_iterate!(λVi, deflation, c, -ω, isqrtD)
-        err = maximum(relative_momentum_residual(momentum_norms(), errV0))
+        err = momentum_error()
         verbose && iszero(itPT % 2nout) && @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
     end
     return err, iter

@@ -12,7 +12,7 @@ warning only. Variational: seed reached `λP` once, then a different fixed point
 made the relative error explode ("Kaboom!").
 
 **Fix:** seed in every iteration; `errV0` from the first nonzero momentum residual
-(`momentum_residual_reference`, `relative_momentum_residual` in `adjoint_solver_utils.jl`); the
+(`momentum_error` in `solver_adjoint.jl`); the
 standard solver gained the variational guards (no continuity check while `λV = 0`, first pass of a
 pressure objective never accepted). Verified against central FD (rel. err ≤ 6e-10, both solvers,
 `:Vy` and `:P`) in `test/test_adjoint_gradients.jl`.

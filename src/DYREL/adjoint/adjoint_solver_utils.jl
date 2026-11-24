@@ -122,17 +122,6 @@ function pressure_objective_reference!(evaluate_residual!, stokes_ad, dyrel, pre
     return errV
 end
 
-# Reference of the relative momentum residual: the first nonzero one. A pressure objective
-# seeds only the continuity adjoint, so the momentum residual stays zero until λP is nonzero.
-function momentum_residual_reference(errV0, errV)
-    iszero(maximum(errV0)) || return errV0
-    errV_max = maximum(errV)
-    return map(_ -> errV_max, errV)
-end
-
-relative_momentum_residual(errV, errV0) =
-    map((e, e0) -> iszero(e0) ? zero(e) : e / e0, errV, errV0)
-
 # Per-iteration reset. Enzyme zeroes the shadow of every output it propagates, so one reverse
 # sweep consumes the stress, strain-rate and residual seeds; only the accumulated residuals P and
 # V need zeroing. `initialize_adjoint_iteration!` clears everything, once per solve.

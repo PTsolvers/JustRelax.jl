@@ -108,7 +108,8 @@ function sinking_block(
     end
 
     mask = JustRelax2D.observation_mask(stokes_ad, grid, observation)
-    field = observation.field === :P ? stokes.P : getproperty(stokes.V, observation.field)
+    field = observation.field === :P ? stokes.P :
+        observation.field === :τII ? stokes.τ.II : getproperty(stokes.V, observation.field)
     return (;
         J = observed_sum(field, mask),
         gradient = sum(Array(gradients[parameter].center)[2, :, :]),
@@ -192,7 +193,7 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
     init_mpi = JustRelax.MPI.Initialized() ? false : true
     igg = IGG(init_global_grid(24, 24, 1; init_MPI = init_mpi)...)
 
-    for field in (:Vy, :P)
+    for field in (:Vy, :P, :τII)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
         adjoint_gradient = @suppress sinking_block(igg; observation, adjoint = true).gradient
         fd = central_difference(1.2, 1.0e-4) do ρ_block
@@ -281,6 +282,26 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             igg; observation, adjoint = true,
             adjoint_kwargs = (; deflation = 4, inner_solver = :dr),
         )
+    end
+
+    # τII in the block depends on its viscosity directly, which the adjoint adds as an
+    # explicit term
+    @testset "stress invariant objective" begin
+        observation = (; field = :τII, center = (0.5, 0.5), half_width = (0.1, 0.1))
+        adjoint_gradient = @suppress sinking_block(
+            igg; observation, adjoint = true, parameter = :η, η_block = 0.5,
+        ).gradient
+        fd = central_difference(0.5, 1.0e-4) do η_block
+            @suppress sinking_block(igg; observation, η_block).J
+        end
+        @test adjoint_gradient ≈ fd rtol = 1.0e-6
+        # the implicit nonlinear viscosity seed
+        activation_volume = 8.3145
+        nonlinear = @suppress sinking_block(igg; observation, adjoint = true, activation_volume)
+        fd_nonlinear = central_difference(1.2, 1.0e-4) do ρ_block
+            @suppress(sinking_block(igg; observation, ρ_block, activation_volume)).J
+        end
+        @test nonlinear.gradient ≈ fd_nonlinear rtol = 1.0e-6
     end
 
     # The viscosity depends on the solved pressure only, so its pullback must reach λP.

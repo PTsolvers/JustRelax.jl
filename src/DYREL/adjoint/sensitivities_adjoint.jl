@@ -2,6 +2,7 @@
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, ϕ::RockRatio, rheology, _di, ni, λ_relaxation, dt,
         igg, gradients, args; viscosity_cutoff = (-Inf, Inf), free_surface = false, air_phase = 0,
+        constitutive_scratch = nothing, observation = nothing,
     )
 
 Accumulate the sensitivities of the objective functional with respect to the material
@@ -27,7 +28,8 @@ continuity residual.
 
 The adjoint working arrays (`P`, `θ`, the stress tensor and the viscosity fields) are zeroed
 on entry, so this has to be called *after* the adjoint iterations have converged and not in
-between them.
+between them. For a `:τII` objective, pass the resolved `observation` (from `observation_mask`):
+the stress invariant also depends on the material directly, and that term is added here.
 """
 function compute_sensitivities!(
         stokes,
@@ -47,9 +49,12 @@ function compute_sensitivities!(
         free_surface = false,
         air_phase::Integer = 0,
         constitutive_scratch = nothing,
+        observation = nothing,
     )
     periodic = periodic_dims(stokes)
     prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
+    # a stress objective depends on the material directly, not only through the solution
+    !isnothing(observation) && observation.field === :τII && seed_observation!(observation, 1.0)
 
     # 1. Pull the masked momentum residual back to stress, pressure, plastic pressure
     #    correction, and buoyancy.

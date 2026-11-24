@@ -9,7 +9,7 @@ Resolve the objective `J` of the adjoint solve. `observation` is either
     the size of the observed field, i.e. `∂J/∂field`. Weights can follow the material, e.g. a
     phase fraction, to track a body as it moves.
 
-`field` is `:Vx`, `:Vy` or `:P`. Returns `(; field, target, i, j, weights)`, where `target` is the
+`field` is `:Vx`, `:Vy`, `:P` or `:τII` (the second stress invariant at cell centers). Returns `(; field, target, i, j, weights)`, where `target` is the
 adjoint array the objective seeds; `i, j` are the box indices (`nothing` for weights) and
 `weights` is `nothing` for a box.
 """
@@ -22,8 +22,10 @@ function observation_mask(stokes_ad, grid, observation)
         stokes_ad.V.Vy, grid.xci[1], grid.xvi[2], (1, 0)
     elseif field === :P
         stokes_ad.P, grid.xci[1], grid.xci[2], (0, 0)
+    elseif field === :τII
+        stokes_ad.τ.II, grid.xci[1], grid.xci[2], (0, 0)
     else
-        throw(ArgumentError("observation field must be :Vx, :Vy, or :P"))
+        throw(ArgumentError("observation field must be :Vx, :Vy, :P or :τII"))
     end
 
     if haskey(observation, :weights)
@@ -42,16 +44,18 @@ function observation_mask(stokes_ad, grid, observation)
     return (; field, target, i, j, weights = nothing)
 end
 
-# Seed the adjoint of the observed field with -∂J/∂field: -1 on every node of a box, -weights
-# for a weighted objective. `target` has just been zeroed by `initialize_adjoint_iteration!`.
-function seed_observation!(observation)
+# Seed the adjoint of the observed field with `sign`·∂J/∂field: `sign` on every node of a box,
+# `sign`·weights for a weighted objective. The adjoint residual takes -∂J/∂field; the
+# sensitivities take +∂J/∂field, the explicit dependence of a τII objective on the material.
+# `target` has just been zeroed.
+function seed_observation!(observation, sign = -1.0)
     (; target, i, j, weights) = observation
     if isnothing(weights)
         # Use a broadcast over ranges so device arrays need no host index vectors.
         # Box selections on ordered grid coordinates are contiguous.
-        @views target[first(i):last(i), first(j):last(j)] .= -1.0
+        @views target[first(i):last(i), first(j):last(j)] .= sign
     else
-        target .= .-weights
+        target .= sign .* weights
     end
     return nothing
 end

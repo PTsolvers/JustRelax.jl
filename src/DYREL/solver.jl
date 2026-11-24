@@ -130,7 +130,8 @@ fraction vanishes are eliminated rather than solved with air properties.
 - `observation`: Objective `J` of the adjoint solve, required with `adjoint = true`: a box
   `(; field, center, half_width)` with `J = Σ field` over the nodes inside it, or a weighted
   field `(; field, weights)` with `J = Σ weights · field` and `weights` of the size of the
-  observed field (see `observation_mask`). `field` is `:Vx`, `:Vy` or `:P`. Default: `nothing`.
+  observed field (see `observation_mask`). `field` is `:Vx`, `:Vy`, `:P` or `:τII`, the second
+  invariant of the deviatoric stress at cell centers. Default: `nothing`.
 - `gradients`: Optional phase-resolved buffers from `material_controls`, filled by the adjoint
   solve with derivatives with respect to the requested density, stress-law, and viscosity-law
   parameters. Linear and nonlinear viscosity are supported. Default: `(;)`.

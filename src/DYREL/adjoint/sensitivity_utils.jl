@@ -32,6 +32,7 @@ function prepare_sensitivities!(stokes_ad, rheology, ni, gradients, igg)
     stokes_ad.τ.xx_v .= 0.0
     stokes_ad.τ.yy_v .= 0.0
     stokes_ad.τ.xy .= 0.0
+    stokes_ad.τ.II .= 0.0
     stokes_ad.viscosity.η .= 0.0
     stokes_ad.viscosity.ηv .= 0.0
     stokes_ad.ρ .= 0.0

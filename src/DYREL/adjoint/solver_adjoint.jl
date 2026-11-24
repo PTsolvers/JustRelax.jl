@@ -226,6 +226,7 @@ function solve_VariationalDYREL_adjoint!(
     compute_sensitivities!(
         stokes, stokes_ad, ρg, phase_ratios, ϕ, rheology, _di, ni, λ_relaxation, dt, igg,
         gradients, args; viscosity_cutoff, free_surface, air_phase, constitutive_scratch,
+        observation,
     )
 
     return stokes_ad

@@ -255,9 +255,6 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
         advection_MQS!(particles, RungeKutta2(), @velocity(stokes), dt)
         # advect particles in memory
         move_particles!(particles, particle_args)
-        # advect the free surface and assign air/rock phases from it
-        semilagrangian_advection_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, xvi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
         # Inject phase labels first, then initialize every newly injected particle field
         # through the regular centroid/vertex interpolation paths.
         inject_particles_phase!(
@@ -266,6 +263,8 @@ function main(li, origin, phases_GMG, igg; nx = 16, ny = 16, figdir = "figs2D", 
             (pT, pτ.τ_normal[1], pτ.τ_normal[2], pτ.τ_shear[1], pτ.ω[1]),
             (thermal.T, stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, stokes.ω.xy),
         )
+        # advect the free surface and assign air/rock phases from it
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
         # update phase ratios and rock ratios
         update_phase_ratios!(phase_ratios, particles, pPhases)

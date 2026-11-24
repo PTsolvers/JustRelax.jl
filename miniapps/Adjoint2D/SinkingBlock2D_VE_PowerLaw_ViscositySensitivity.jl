@@ -244,6 +244,16 @@ function sinking_block2D_VE_powerlaw_viscosity_sensitivity(
             adjoint = AdjointSolve,
             observation = observation,
             gradients = AdjointSolve ? gradients : (;),
+            # options of the adjoint solve (used only when `adjoint = true`); the values are the
+            # defaults, and options not listed are taken from the forward call above
+            adjoint_kwargs = (;
+                ϵ = solver_ϵ,
+                rel_drop = 0.1,
+                inner_solver = :bicgstab, # or :dr
+                # inner_solver = :dr, # or :dr
+                penalty_factor = 20.0,
+                deflation = 0,            # BiCGStab only: number of recycled vectors
+            ),
         )
         solve_VariationalDYREL!(
             stokes, stokes_ad, ρg, dyrel, flow_bcs, phase_ratios, ϕ, rheology, args, grid,

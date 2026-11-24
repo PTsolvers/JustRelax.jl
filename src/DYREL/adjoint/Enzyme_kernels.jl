@@ -75,7 +75,7 @@ derivatives accumulate in `adjoint.V`, `adjoint.P`, `adjoint.τ`, `adjoint.dρgx
 `adjoint.ρ`.
 
 Only this momentum-residual function is differentiated with Enzyme. The transpose of the
-Schur-complement correction is applied separately by `update_adjoint_V_damping_DR!`.
+Schur-complement correction is applied separately by `adjoint_schur_correction!`.
 enzyme_compute_PH_residual_V! is also used in the gradient calculation after the adjoint solve.
 """
 function enzyme_compute_PH_residual_V!(
@@ -352,7 +352,9 @@ function ensure_constitutive_tangent!(
     return nothing
 end
 
-function compute_constitutive_tangent_amplification!(
+# The implicit viscosity seed divides by 1 − F, and the forward viscosity iteration converges
+# only for F < 1: refuse a state where that fails anywhere.
+function check_viscosity_feedback!(
         scratch, stokes, rheology, phase_ratios, ϕ::JustRelax.RockRatio,
         λ_relaxation, dt, args, cutoff; air_phase::Integer = 0,
     )
@@ -364,8 +366,6 @@ function compute_constitutive_tangent_amplification!(
     isfinite(feedback_max) && feedback_max < 1 || error(
         "The nonlinear constitutive tangent is singular or unstable: maximum feedback = $feedback_max"
     )
-    unit_amplification = one(eltype(scratch.η))
-    @. scratch.η = max(unit_amplification, abs(inv(1 - scratch.feedback)))
     return nothing
 end
 

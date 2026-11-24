@@ -1,30 +1,188 @@
-# Inner velocity solvers of the adjoint Powell–Hestenes passes: damped dynamic relaxation
-# (`inner_solver = :dr`) and BiCGStab with optional recycled deflation (`:bicgstab`).
+# Inner velocity solvers of the adjoint Powell–Hestenes passes.
+#
+# Each pass fixes λP and solves the Schur-corrected momentum system M λV = f for λV, where
+# M = A_vvᵀ + A_pvᵀ γ A_vpᵀ is applied by one reverse sweep. Two solvers share one interface:
+#
+#   inner_solve!(solver, problem, err, ϵ_vel, iter) -> (err, iter)
+#   after_pressure_update!(solver)
+#
+# `problem` holds what both need: `residual!`, `momentum_error`, the unknowns `λVi`, the residual
+# `R` (interior rows), the diagonal `D`, the budgets `iterMax`, `total_iterMax`, and `nout`,
+# `verbose`. `iter` counts reverse sweeps.
 
-# The adjoint iterates on the consistent tangent of the converged forward state, whose smallest
-# eigenvalue can lie far from the one the forward damping was tuned to (a yielding plastic
-# tangent is much softer). Re-estimate the damping every `nout` iterations as the forward
-# solver does: λmin is the Rayleigh quotient of the last velocity step against the change of the
-# preconditioned residual it caused. The residual of a step only exists in the next iteration,
-# so the step and its residual are stored one iteration before each estimate.
-struct AdjointDamping{M}
-    masks::M       # momentum rows entering the estimate
-    stored::Base.RefValue{Int}  # iteration of the stored step, 0 if none
+"""
+    adjoint_inner_solver(name, deflation, stokes_ad, dyrel, maskV, maskRi, periodic,
+                         constitutive_scratch, ϕ, ni)
+
+Validate `inner_solver` and `deflation` and build the inner solver: [`AdjointBiCGStab`](@ref)
+for `:bicgstab`, [`AdjointDR`](@ref) for `:dr`.
+"""
+function adjoint_inner_solver(
+        name, deflation, stokes_ad, dyrel, maskV, maskRi, periodic, constitutive_scratch, ϕ, ni,
+    )
+    deflation isa Integer && deflation ≥ 0 || throw(
+        ArgumentError("deflation must be a nonnegative integer, the number of recycled vectors")
+    )
+    if name === :bicgstab
+        return AdjointBiCGStab(adjoint_bicgstab_workspace(stokes_ad, (dyrel.Dx, dyrel.Dy), deflation))
+    elseif name === :dr
+        iszero(deflation) || throw(ArgumentError("deflation requires inner_solver = :bicgstab"))
+        return AdjointDR(stokes_ad, dyrel, maskV, maskRi, periodic, constitutive_scratch, ϕ, ni)
+    end
+    throw(ArgumentError("inner_solver must be :dr or :bicgstab"))
 end
 
-AdjointDamping(masks) = AdjointDamping(masks, Ref(0))
+# The Schur-complement (penalty) term of the adjoint momentum residual: r_V += A_pvᵀ γ r_P, with
+# A_pv = −ϕ div the derivative of the continuity residual, so A_pvᵀ is the ϕ-weighted gradient.
+# It is the transpose of the forward penalty; rows eliminated by `ϕ` are set to zero.
+@parallel_indices (i, j) function adjoint_schur_correction!(
+        Rx, Ry, P, γ_eff, Dx, Dy, ϕ::JustRelax.RockRatio, _di_center,
+    )
+    @inbounds begin
+        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+            if isvalid_vx(ϕ, i + 1, j)
+                iE = wrap_next(i, size(γ_eff, 1))
+                Rx[i + 1, j + 1] -= (
+                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
+                        ϕ.center[iE, j] * γ_eff[iE, j] * P[iE, j]
+                ) * @dx(_di_center, i)
+            else
+                Rx[i + 1, j + 1] = 0.0
+            end
+        end
+        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+            if isvalid_vy(ϕ, i, j + 1)
+                jN = wrap_next(j, size(γ_eff, 2))
+                Ry[i + 1, j + 1] -= (
+                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
+                        ϕ.center[i, jN] * γ_eff[i, jN] * P[i, jN]
+                ) * @dy(_di_center, j)
+            else
+                Ry[i + 1, j + 1] = 0.0
+            end
+        end
+    end
+    return nothing
+end
+
+#### Damped dynamic relaxation
+
+"""
+    AdjointDR
+
+Damped dynamic relaxation of the adjoint velocity, the iteration of the forward solver on the
+adjoint operator. Two differences from the forward: the damping is re-estimated from the adjoint
+operator (`update_adjoint_damping!`), and for nonlinear viscosity the pseudo-time step is
+shortened by the amplification `max(1, |1/(1 − F)|)` of the implicit viscosity tangent.
+"""
+struct AdjointDR{V, R, D, M, A, P, N}
+    λV::V                       # adjoint velocity arrays, ghost rows included
+    R::R                        # adjoint momentum residual arrays, ghost rows included
+    dyrel::D                    # the adjoint's own DYREL state
+    masks::M                    # momentum rows of the damping estimate
+    stored::Base.RefValue{Int}  # iteration of the stored step, 0 if none
+    amplification::A            # tangent amplification at centers, `nothing` for linear viscosity
+    ϕ::P
+    ni::N
+end
+
+function AdjointDR(stokes_ad, dyrel, maskV, maskRi, periodic, constitutive_scratch, ϕ, ni)
+    # the norm rows, on arrays of the full momentum-row size
+    masks = map(maskV, maskRi) do mask, trimmed
+        rows = fill!(similar(mask), false)
+        norm_rows(rows, periodic) .= trimmed
+        rows
+    end
+    amplification = if isnothing(constitutive_scratch)
+        nothing
+    else
+        F = constitutive_scratch.feedback
+        @. max(one(eltype(F)), abs(inv(1 - F)))
+    end
+    dr = AdjointDR(
+        (stokes_ad.λV.Vx, stokes_ad.λV.Vy), (stokes_ad.V.Vx, stokes_ad.V.Vy), dyrel, masks,
+        Ref(0), amplification, ϕ, ni,
+    )
+    isnothing(amplification) || update_steps!(dr)
+    return dr
+end
+
+function update_steps!(dr::AdjointDR)
+    if isnothing(dr.amplification)
+        update_dτV_α_β!(dr.dyrel)
+    else
+        update_variational_adjoint_dτV_α_β!(dr.dyrel, dr.amplification)
+    end
+    return nothing
+end
+
+function inner_solve!(dr::AdjointDR, problem, err, ϵ_vel, iter)
+    (; λV, R, dyrel, ϕ, ni) = dr
+    itPT = 0
+    while err > ϵ_vel && itPT < problem.iterMax && iter < problem.total_iterMax
+        itPT += 1
+        iter += 1
+        # with the seed: a pressure objective enters through the Schur term and the λP update
+        problem.residual!()
+        @parallel (@idx ni) adjoint_damped_update!(
+            λV..., dyrel.dVxdτ, dyrel.dVydτ, R..., dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy, dyrel.βVx, dyrel.βVy, dyrel.dτVx, dyrel.dτVy, ϕ,
+        )
+        update_adjoint_damping!(dr, problem.R, iter, problem.nout)
+        if iszero(iter % problem.nout)
+            err = problem.momentum_error()
+            isnan(err) && error("NaN detected in inner loop")
+            problem.verbose && @printf("it = %d, iter = %d, err = %1.3e \n", itPT, iter, err)
+        end
+    end
+    return err, iter
+end
+
+# a step stored before the pressure update would mix the pressure change into the λmin estimate
+after_pressure_update!(dr::AdjointDR) = (dr.stored[] = 0; nothing)
+
+# One damped pseudo-time step of the adjoint velocity from the Schur-corrected residual. Rows
+# eliminated by `ϕ` are held at zero, as in the forward `compute_DR_residual_update_V!`.
+@parallel_indices (i, j) function adjoint_damped_update!(
+        Vx, Vy, dVxdτ, dVydτ, Rx, Ry, Dx, Dy, αVx, αVy, βVx, βVy, dτVx, dτVy,
+        ϕ::JustRelax.RockRatio,
+    )
+    @inbounds begin
+        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
+            if isvalid_vx(ϕ, i + 1, j)
+                dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx[i + 1, j + 1] / Dx[i, j], αVx[i, j], βVx[i, j], dτVx[i, j])
+                dVxdτ[i, j] = dVx_new
+                Vx[i + 1, j + 1] += ΔVx
+            else
+                dVxdτ[i, j] = 0.0
+                Vx[i + 1, j + 1] = 0.0
+            end
+        end
+        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
+            if isvalid_vy(ϕ, i, j + 1)
+                dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry[i + 1, j + 1] / Dy[i, j], αVy[i, j], βVy[i, j], dτVy[i, j])
+                dVydτ[i, j] = dVy_new
+                Vy[i + 1, j + 1] += ΔVy
+            else
+                dVydτ[i, j] = 0.0
+                Vy[i + 1, j + 1] = 0.0
+            end
+        end
+    end
+    return nothing
+end
 
 @inline preconditioned_residual(R, D) = iszero(D) ? zero(R) : R / D
 
-"""
-    update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, update_steps!)
-
-Store the last velocity step before an iteration that is a multiple of `nout`; at that
-iteration, update the damping `c = 2√λmin·c_fact` from the stored step and call
-`update_steps!()` to recompute the pseudo-time steps. `residuals` are the unpreconditioned
-adjoint momentum residuals of the current iterate.
-"""
-function update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, update_steps!)
+# The adjoint iterates on the consistent tangent of the converged forward state, whose smallest
+# eigenvalue can lie far from the one the forward damping was tuned to (a yielding plastic
+# tangent is much softer). Re-estimate the damping every `nout` iterations as the forward solver
+# does: λmin is the Rayleigh quotient of the last velocity step against the change of the
+# preconditioned residual it caused. The residual of a step only exists in the next iteration,
+# so the step and its residual are stored one iteration before each estimate. `residuals` are
+# the adjoint momentum residuals of the current iterate.
+function update_adjoint_damping!(dr::AdjointDR, residuals, iter, nout)
+    (; dyrel, masks, stored, ni) = dr
     if iszero((iter + 1) % nout)
         @parallel (@idx ni) compute_dV!(
             (dyrel.dVx, dyrel.dVy), (dyrel.dVxdτ, dyrel.dVydτ),
@@ -32,14 +190,13 @@ function update_adjoint_damping!(damping, dyrel, residuals, iter, nout, ni, upda
         )
         @. dyrel.Rx0 = preconditioned_residual(residuals[1], dyrel.Dx)
         @. dyrel.Ry0 = preconditioned_residual(residuals[2], dyrel.Dy)
-        damping.stored[] = iter
-    elseif iszero(iter % nout) && damping.stored[] == iter - 1
+        stored[] = iter
+    elseif iszero(iter % nout) && stored[] == iter - 1
         λminV = adjoint_λminV(
-            (dyrel.dVx, dyrel.dVy), residuals, (dyrel.Dx, dyrel.Dy), (dyrel.Rx0, dyrel.Ry0),
-            damping.masks,
+            (dyrel.dVx, dyrel.dVy), residuals, (dyrel.Dx, dyrel.Dy), (dyrel.Rx0, dyrel.Ry0), masks,
         )
         @parallel (@idx ni) update_cV!((dyrel.cVx, dyrel.cVy), 2 * √(λminV) * dyrel.c_fact)
-        update_steps!()
+        update_steps!(dr)
     end
     return nothing
 end
@@ -119,116 +276,36 @@ end
     return nothing
 end
 
-# Apply the adjoint Schur-complement correction and diagonal preconditioner, then advance the
-# damped velocity iterate. Keep the unpreconditioned corrected residual in Rx/Ry so the caller
-# can evaluate the same norm as before fusion. The correction is the transpose of the forward
-# penalty, whose continuity residual carries the rock fraction; rows eliminated by `ϕ` are held
-# at zero, as in the forward `compute_DR_residual_update_V!`.
-@parallel_indices (i, j) function update_adjoint_V_damping_DR!(
-        Vx,
-        Vy,
-        dVxdτ,
-        dVydτ,
-        Rx,
-        Ry,
-        P,
-        γ_eff,
-        Dx,
-        Dy,
-        αVx,
-        αVy,
-        βVx,
-        βVy,
-        dτVx,
-        dτVy,
-        ϕ::JustRelax.RockRatio,
-        _di_center,
-    )
-    @inbounds begin
-        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
-            if isvalid_vx(ϕ, i + 1, j)
-                iE = wrap_next(i, size(γ_eff, 1))
-                Rx_ij = Rx[i + 1, j + 1] - (
-                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
-                        ϕ.center[iE, j] * γ_eff[iE, j] * P[iE, j]
-                ) * @dx(_di_center, i)
-                Rx[i + 1, j + 1] = Rx_ij
-                dVx_new, ΔVx = damped_update_V(dVxdτ[i, j], Rx_ij / Dx[i, j], αVx[i, j], βVx[i, j], dτVx[i, j])
-                dVxdτ[i, j] = dVx_new
-                Vx[i + 1, j + 1] += ΔVx
-            else
-                Rx[i + 1, j + 1] = 0.0
-                dVxdτ[i, j] = 0.0
-                Vx[i + 1, j + 1] = 0.0
-            end
-        end
-        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
-            if isvalid_vy(ϕ, i, j + 1)
-                jN = wrap_next(j, size(γ_eff, 2))
-                Ry_ij = Ry[i + 1, j + 1] - (
-                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
-                        ϕ.center[i, jN] * γ_eff[i, jN] * P[i, jN]
-                ) * @dy(_di_center, j)
-                Ry[i + 1, j + 1] = Ry_ij
-                dVy_new, ΔVy = damped_update_V(dVydτ[i, j], Ry_ij / Dy[i, j], αVy[i, j], βVy[i, j], dτVy[i, j])
-                dVydτ[i, j] = dVy_new
-                Vy[i + 1, j + 1] += ΔVy
-            else
-                Ry[i + 1, j + 1] = 0.0
-                dVydτ[i, j] = 0.0
-                Vy[i + 1, j + 1] = 0.0
-            end
-        end
-    end
-    return nothing
+#### BiCGStab with optional recycled deflation
+
+"""
+    AdjointBiCGStab
+
+BiCGStab on the symmetrically scaled adjoint velocity system `D^-½ M D^-½`, optionally deflated
+by recycled solution increments (`deflation = k`). The adjoint is linear, so it needs no damping
+or eigenvalue estimates, and BiCGStab does not need `M` to be symmetric or to have real
+eigenvalues (non-associated plasticity, the tangent of a nonlinear viscosity).
+"""
+struct AdjointBiCGStab{W}
+    work::W
 end
 
-# The Schur-complement correction of `update_adjoint_V_damping_DR!` on its own: the Krylov inner
-# solver needs the corrected residual without the damped update.
-@parallel_indices (i, j) function adjoint_schur_correction!(
-        Rx, Ry, P, γ_eff, Dx, Dy, ϕ::JustRelax.RockRatio, _di_center,
+function inner_solve!(solver::AdjointBiCGStab, problem, err, ϵ_vel, iter)
+    (; residual!, momentum_error, λVi, R, D) = problem
+    # BiCGStab starts from the residual of the current λ
+    residual!()
+    err, iter = adjoint_bicgstab!(
+        residual!, momentum_error, solver.work, λVi, R, D, err, ϵ_vel, iter,
+        problem.iterMax, problem.total_iterMax; problem.verbose, problem.nout,
     )
-    @inbounds begin
-        if i ≤ size(Dx, 1) && j ≤ size(Dx, 2)
-            if isvalid_vx(ϕ, i + 1, j)
-                iE = wrap_next(i, size(γ_eff, 1))
-                Rx[i + 1, j + 1] -= (
-                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
-                        ϕ.center[iE, j] * γ_eff[iE, j] * P[iE, j]
-                ) * @dx(_di_center, i)
-            else
-                Rx[i + 1, j + 1] = 0.0
-            end
-        end
-        if i ≤ size(Dy, 1) && j ≤ size(Dy, 2)
-            if isvalid_vy(ϕ, i, j + 1)
-                jN = wrap_next(j, size(γ_eff, 2))
-                Ry[i + 1, j + 1] -= (
-                    ϕ.center[i, j] * γ_eff[i, j] * P[i, j] -
-                        ϕ.center[i, jN] * γ_eff[i, jN] * P[i, jN]
-                ) * @dy(_di_center, j)
-            else
-                Ry[i + 1, j + 1] = 0.0
-            end
-        end
-    end
-    return nothing
+    # the last sweep was of a search direction: refresh the residual of λ, whose continuity part
+    # the λP update reads
+    residual!()
+    recycle_increment!(solver.work.deflation, λVi, R, solver.work.isqrtD)
+    return err, iter
 end
 
-function check_inner_solver(inner_solver)
-    inner_solver in (:dr, :bicgstab) ||
-        throw(ArgumentError("inner_solver must be :dr or :bicgstab"))
-    return inner_solver
-end
-
-function check_deflation(deflation, inner_solver)
-    deflation isa Integer && deflation ≥ 0 || throw(
-        ArgumentError("deflation must be a nonnegative integer, the number of recycled vectors")
-    )
-    iszero(deflation) || inner_solver === :bicgstab ||
-        throw(ArgumentError("deflation requires inner_solver = :bicgstab"))
-    return deflation
-end
+after_pressure_update!(::AdjointBiCGStab) = nothing
 
 adjoint_dot(a, b) = sum(map((a, b) -> sum_mpi((x, y) -> x * y, a, b), a, b))
 
@@ -359,14 +436,11 @@ end
         total_iterMax; verbose = false, nout = 1,
     )
 
-Inner velocity solve of one Powell–Hestenes pass of the adjoint with BiCGStab, in place of the
-damped dynamic relaxation. The adjoint is linear, so the step and the damping need no
-eigenvalue estimates, and BiCGStab does not need the Jacobian to be symmetric or to have real
-eigenvalues (non-associated plasticity, the tangent of a nonlinear viscosity). It iterates on
-the symmetrically scaled system `D^-½ A D^-½`, with `D` the DYREL diagonal, deflated by the
+BiCGStab iterations of one inner velocity solve (see [`AdjointBiCGStab`](@ref)), on the
+symmetrically scaled system `D^-½ M D^-½`, with `D` the DYREL diagonal, deflated by the
 recycled vectors of `work.deflation` if there are any.
 
-`residual!(λV, λP, seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
+`residual!(λV, λP; seed)` writes the Schur-corrected momentum residual of `(λV, λP)` to `R`,
 with or without the objective seed; on entry `R` holds that of the current `λVi`.
 `momentum_error()` returns the relative momentum residual of `R`, the stopping measure. Returns
 `(err, iter)`; `iter` counts reverse sweeps, two per BiCGStab iteration. After a breakdown the
@@ -385,7 +459,7 @@ function adjoint_bicgstab!(
         for d in components
             @. direction_i[d] = x[d] * isqrtD[d]
         end
-        residual!(direction, zeroP, false)
+        residual!(direction, zeroP; seed = false)
         for d in components
             @. out[d] = -R[d] * isqrtD[d]
         end

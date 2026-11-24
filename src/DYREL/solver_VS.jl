@@ -386,8 +386,6 @@ function _solve_VariationalDYREL!(
             maskV,
             maskP,
             air_phase,
-            λ_relaxation_DR,
-            λ_relaxation_PH,
             free_surface,
             observation,
             gradients,

@@ -256,17 +256,18 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         @test Array(local_result.stokes_ad.solver.dyrel.γ_eff) != Array(baseline.dyrel.γ_eff)
     end
 
-    # BiCGStab replaces only the inner velocity iteration: same gradient, same forward state.
-    @testset "BiCGStab inner solver, $field" for field in (:Vy, :P)
+    # The inner solver changes only the inner velocity iteration: same gradient, same forward
+    # state. BiCGStab is the default; dynamic relaxation is the alternative.
+    @testset "inner solvers, $field" for field in (:Vy, :P)
         observation = (; field, center = (0.5, 0.75), half_width = (0.1, 0.1))
         baseline = @suppress sinking_block(igg; observation, adjoint = true)
-        krylov = @suppress sinking_block(
+        relaxation = @suppress sinking_block(
             igg; observation, adjoint = true,
-            adjoint_kwargs = (; inner_solver = :bicgstab),
+            adjoint_kwargs = (; inner_solver = :dr),
         )
-        @test krylov.J == baseline.J
-        @test krylov.η == baseline.η
-        @test krylov.gradient ≈ baseline.gradient rtol = 1.0e-6
+        @test relaxation.J == baseline.J
+        @test relaxation.η == baseline.η
+        @test relaxation.gradient ≈ baseline.gradient rtol = 1.0e-6
         @test_throws ArgumentError @suppress sinking_block(
             igg; observation, adjoint = true,
             adjoint_kwargs = (; inner_solver = :unknown),
@@ -293,6 +294,12 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
             @suppress(sinking_block(igg; observation, ρ_block, activation_volume)).J
         end
         @test solution.gradient ≈ fd rtol = 1.0e-6
+        # the nonlinear-viscosity path of dynamic relaxation (tangent amplification)
+        relaxation = @suppress sinking_block(
+            igg; observation, adjoint = true, activation_volume,
+            adjoint_kwargs = (; inner_solver = :dr),
+        )
+        @test relaxation.gradient ≈ fd rtol = 1.0e-6
     end
 
     # a looser adjoint tolerance changes the gradient, not the forward solution
@@ -372,11 +379,11 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         end
         @test solution.gradient ≈ fd rtol = 1.0e-6
         # the plastic tangent is not symmetric
-        krylov = @suppress plastic_shear(
+        relaxation = @suppress plastic_shear(
             igg; observation, λ_relaxation, adjoint = true, cells,
-            adjoint_kwargs = (; inner_solver = :bicgstab),
+            adjoint_kwargs = (; inner_solver = :dr),
         )
-        @test krylov.gradient ≈ fd rtol = 1.0e-6
+        @test relaxation.gradient ≈ fd rtol = 1.0e-6
     end
     finalize_global_grid(; finalize_MPI = false)
 end

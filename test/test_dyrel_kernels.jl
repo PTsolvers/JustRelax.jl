@@ -322,16 +322,19 @@ end
         expected_Ry = @views Ry0[2:(end - 1), 2:(end - 1)] .-
             (γ[:, 1:(end - 1)] .* P[:, 1:(end - 1)] .- γ[:, 2:end] .* P[:, 2:end]) .* _di.center[2]
 
-        @parallel (@idx ni) JR2K.update_adjoint_V_damping_DR!(
+        @parallel (@idx ni) JR2K.adjoint_schur_correction!(
+            adjoint.V.Vx, adjoint.V.Vy, adjoint.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
+            rock, _di.center,
+        )
+        @parallel (@idx ni) JR2K.adjoint_damped_update!(
             adjoint.λV.Vx, adjoint.λV.Vy,
             dyrel.dVxdτ, dyrel.dVydτ,
             adjoint.V.Vx, adjoint.V.Vy,
-            adjoint.P, dyrel.γ_eff,
             dyrel.Dx, dyrel.Dy,
             dyrel.αVx, dyrel.αVy,
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
-            rock, _di.center,
+            rock,
         )
 
         @test Array(adjoint.V.Vx[2:(end - 1), 2:(end - 1)]) ≈ expected_Rx
@@ -359,15 +362,8 @@ end
             (γ[:, 1:(end - 1)] .* P[:, 1:(end - 1)] .- γ[:, 2:end] .* P[:, 2:end]) .*
             reshape(Array(_di_nonuniform[2]), 1, :)
 
-        @parallel (@idx ni) JR2K.update_adjoint_V_damping_DR!(
-            adjoint.λV.Vx, adjoint.λV.Vy,
-            dyrel.dVxdτ, dyrel.dVydτ,
-            adjoint.V.Vx, adjoint.V.Vy,
-            adjoint.P, dyrel.γ_eff,
-            dyrel.Dx, dyrel.Dy,
-            dyrel.αVx, dyrel.αVy,
-            dyrel.βVx, dyrel.βVy,
-            dyrel.dτVx, dyrel.dτVy,
+        @parallel (@idx ni) JR2K.adjoint_schur_correction!(
+            adjoint.V.Vx, adjoint.V.Vy, adjoint.P, dyrel.γ_eff, dyrel.Dx, dyrel.Dy,
             rock, _di_nonuniform,
         )
 

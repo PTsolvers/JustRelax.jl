@@ -44,8 +44,7 @@ function solve_VariationalDYREL_adjoint!(
         gradients = (;),
         viscosity_cutoff = (-Inf, Inf),
         linear_viscosity = false,
-        adjoint_ϵ = nothing,
-        adjoint_rel_drop = nothing,
+        ϵ = nothing,
         penalty_scaling = :local,
         penalty_factor = nothing,
         inner_solver = :bicgstab,
@@ -108,8 +107,7 @@ function solve_VariationalDYREL_adjoint!(
     # Iteration loop
     err_min = Inf
     iter = 0
-    ϵ = something(adjoint_ϵ, dyrel.ϵ)
-    rel_drop = something(adjoint_rel_drop, rel_drop)
+    ϵ = something(ϵ, dyrel.ϵ)
     err = 2 * ϵ
 
     isnothing(observation) && throw(ArgumentError("an observation region is required for the adjoint solve"))

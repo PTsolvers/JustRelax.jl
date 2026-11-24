@@ -399,7 +399,6 @@ function _solve_VariationalDYREL!(
                     rel_drop = 0.1, verbose_PH, verbose_DR,
                 ),
                 adjoint_kwargs,
-                kwargs,
             )...,
         )
     end

@@ -111,15 +111,13 @@ fraction vanishes are eliminated rather than solved with air properties.
   The adjoint keeps its own DYREL iteration state in `stokes_ad`: it rebuilds the
   preconditioner from its own penalty at the current state, and carries its damping over from one
   adjoint solve to the next; the forward DYREL state is not modified.
-- `adjoint_ϵ`: Convergence tolerance of the adjoint solve. Default: the `ϵ` of `dyrel`.
-- `adjoint_rel_drop`: `rel_drop` of the adjoint solve. Default: `0.1`.
 - `adjoint_kwargs`: Iteration controls of the adjoint solve that differ from the forward's, as
   a NamedTuple with any of `ϵ`, `rel_drop`, `iterMax_PH`, `iterMax_DR` (or `iterMax`),
   `total_iterMax`, `nout`, `verbose_PH`, `verbose_DR`, `pressure_relaxation`,
   `penalty_scaling`, `penalty_factor`, `inner_solver` and `deflation`, e.g.
   `adjoint_kwargs = (; ϵ = 1.0e-6, total_iterMax = 100_000, verbose_PH = false)`. Options not
-  given are those of the forward solve, except `rel_drop`. `ϵ` and `rel_drop` replace `adjoint_ϵ` and
-  `adjoint_rel_drop`; give only one of each pair. Default: `(;)`.
+  given are those of the forward solve, except `rel_drop` (default `0.1`). `ϵ` defaults to
+  the `ϵ` of `dyrel`. Default: `(;)`.
   The default `penalty_scaling = :local` rebuilds the adjoint penalty and preconditioner from
   the local converged viscosity, with `penalty_factor = 320.0` unless specified;
   `penalty_scaling = :global` inherits the forward penalty unchanged and takes no

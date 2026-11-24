@@ -57,7 +57,7 @@ observed_sum(field, mask) =
 function sinking_block(
         igg; observation, adjoint = false, parameter = :ρ,
         ρ_block = 1.2, η_block = 10.0, η_multiplier = nothing, total_iterMax = 2.0e5,
-        solves = 1, λ_start = :previous, adjoint_ϵ = nothing, activation_volume = nothing,
+        solves = 1, λ_start = :previous, activation_volume = nothing,
         adjoint_kwargs = (;),
     )
     ni = (24, 24)
@@ -93,7 +93,7 @@ function sinking_block(
     gradients = material_controls(backend, ni, (parameter,); nphases = length(rheology))
     solver_kwargs = (;
         verbose_PH = false, verbose_DR = false, iterMax = 2.0e5, total_iterMax,
-        nout = 50, linear_viscosity, adjoint, observation, gradients, adjoint_ϵ,
+        nout = 50, linear_viscosity, adjoint, observation, gradients,
         adjoint_kwargs, η_multiplier,
     )
     ϕ = RockRatio(backend, ni)
@@ -300,29 +300,21 @@ central_difference(f, x, h) = (f(x + h) - f(x - h)) / 2h
         observation = (; field = :Vy, center = (0.5, 0.75), half_width = (0.1, 0.1))
         tight = @suppress sinking_block(igg; observation, adjoint = true)
         loose = @suppress sinking_block(
-            igg; observation, adjoint = true, adjoint_ϵ = 1.0e-3,
+            igg; observation, adjoint = true, adjoint_kwargs = (; ϵ = 1.0e-3),
         )
         @test loose.J == tight.J
         @test loose.gradient != tight.gradient
         @test loose.gradient ≈ tight.gradient rtol = 1.0e-2
-        options = @suppress sinking_block(
-            igg; observation, adjoint = true, adjoint_kwargs = (; ϵ = 1.0e-3),
-        )
-        @test options.gradient == loose.gradient
     end
 
     @testset "adjoint solver options" begin
         forward = (; iterMax_DR = 10, nout = 100, rel_drop = 1.0e-2, verbose_PH = true)
-        options(adjoint_kwargs; kwargs...) =
-            JustRelax2D.adjoint_solver_options(forward, adjoint_kwargs, kwargs)
+        options(adjoint_kwargs) = JustRelax2D.adjoint_solver_options(forward, adjoint_kwargs)
         @test options((;)) == forward
-        @test options((; nout = 10, ϵ = 1.0e-6)) ==
-            (; forward..., nout = 10, adjoint_ϵ = 1.0e-6)
+        @test options((; nout = 10, ϵ = 1.0e-6)) == (; forward..., nout = 10, ϵ = 1.0e-6)
         @test options((; iterMax = 5)).iterMax_DR == 5
-        @test options((;); adjoint_rel_drop = 0.1).adjoint_rel_drop == 0.1
+        @test options((; rel_drop = 0.1)).rel_drop == 0.1
         @test_throws ArgumentError options((; viscosity_cutoff = (1, 2)))
-        @test_throws ArgumentError options((; ϵ = 1.0e-6); adjoint_ϵ = 1.0e-6)
-        @test options((; ϵ = 1.0e-6); adjoint_ϵ = nothing).adjoint_ϵ == 1.0e-6
         @test_throws ArgumentError options([:nout => 10])
     end
 

@@ -177,7 +177,7 @@ viscosity depends on P only, in both solvers; without the fix the gradient was o
     - ⬜ Thread/GPU scaling: 4 threads give only 1.5× per iteration (colored launches); mostly
       solved by the stress-tangent item. The momentum and continuity pullbacks stay colored
       Enzyme launches.
-    - ✅ A separate adjoint tolerance (`adjoint_ϵ`, `adjoint_rel_drop`); merged per-iteration zeroing (`PERFORMANCE.md` 6–8).
+    - ✅ A separate adjoint tolerance (`adjoint_kwargs = (; ϵ, rel_drop)`); merged per-iteration zeroing (`PERFORMANCE.md` 6–8).
 
 ## P4 — Cleanup
 

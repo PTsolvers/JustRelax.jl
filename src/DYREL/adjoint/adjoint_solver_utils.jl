@@ -20,23 +20,16 @@ const ADJOINT_SOLVER_OPTIONS = (
 )
 
 # Iteration controls of the adjoint solve: those of the forward solve, overridden by
-# `adjoint_kwargs`. `kwargs` are the remaining keywords of the forward call.
-function adjoint_solver_options(forward::NamedTuple, adjoint_kwargs, kwargs)
+# `adjoint_kwargs`.
+function adjoint_solver_options(forward::NamedTuple, adjoint_kwargs)
     adjoint_kwargs isa NamedTuple ||
         throw(ArgumentError("`adjoint_kwargs` must be a NamedTuple, got $(typeof(adjoint_kwargs))"))
     unknown = filter(∉(ADJOINT_SOLVER_OPTIONS), keys(adjoint_kwargs))
     isempty(unknown) || throw(
         ArgumentError("unknown adjoint solver option(s) $unknown; supported: $ADJOINT_SOLVER_OPTIONS")
     )
-    options = (; kwargs...)
-    for (name, alias) in ((:ϵ, :adjoint_ϵ), (:rel_drop, :adjoint_rel_drop))
-        haskey(adjoint_kwargs, name) && !isnothing(get(options, alias, nothing)) &&
-            throw(ArgumentError("give either `adjoint_kwargs.$name` or `$alias`, not both"))
-    end
     iterMax_DR = get(adjoint_kwargs, :iterMax_DR, get(adjoint_kwargs, :iterMax, forward.iterMax_DR))
-    ϵ = haskey(adjoint_kwargs, :ϵ) ? (; adjoint_ϵ = adjoint_kwargs.ϵ) : (;)
-    overrides = Base.structdiff(adjoint_kwargs, NamedTuple{(:ϵ, :iterMax)})
-    return merge(forward, options, overrides, (; iterMax_DR), ϵ)
+    return merge(forward, Base.structdiff(adjoint_kwargs, NamedTuple{(:iterMax,)}), (; iterMax_DR))
 end
 
 # The local numerical penalty leaves the physical bulk viscosity and the constitutive tangent

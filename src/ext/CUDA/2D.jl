@@ -66,6 +66,7 @@ include("../../DYREL/solver_VS.jl")
 # to differentiate pointwise stencil operations.  Load the adjoint path here as
 # well as in the CPU module; backend-specific allocation methods live below.
 include("../../DYREL/adjoint/adjoint_solver_utils.jl")
+include("../../DYREL/adjoint/adjoint_inner_solvers.jl")
 include("../../DYREL/adjoint/Enzyme_pointwise.jl")
 include("../../DYREL/adjoint/Enzyme_kernels.jl")
 include("../../DYREL/adjoint/Enzyme_boundary_kernel.jl")

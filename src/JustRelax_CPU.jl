@@ -66,6 +66,7 @@ module JustRelax2D
     export solve_DYREL!, solve_VariationalDYREL!, DYREL
 
     include("DYREL/adjoint/adjoint_solver_utils.jl")
+    include("DYREL/adjoint/adjoint_inner_solvers.jl")
     include("DYREL/adjoint/Enzyme_pointwise.jl")
     include("DYREL/adjoint/Enzyme_kernels.jl")
     include("DYREL/adjoint/Enzyme_boundary_kernel.jl")

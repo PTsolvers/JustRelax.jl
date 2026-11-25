@@ -177,14 +177,15 @@ function solve_VariationalDYREL_adjoint!(
 
     ϵ = something(ϵ, dyrel.ϵ)
     err = 2 * ϵ
-    err_min = Inf
+    errV_min = Inf
     iter = 0
     converged = false
     for itPH in 1:Int(iterMax_PH)
         residual!(; schur = false)
         norms = momentum_norms()
+        errV = momentum_error(norms)
         errP = continuity_error()
-        err = max(momentum_error(norms), errP)
+        err = max(errV, errP)
 
         if verbose_PH && igg.me == 0
             errV_msg = join(
@@ -205,11 +206,13 @@ function solve_VariationalDYREL_adjoint!(
         # the iteration budget is checked here, after the full criterion of the last pass
         iter ≥ total_iterMax && break
 
-        # tighten the inner tolerance when the outer error grows
-        err > err_min * 1.05 && (rel_drop = max(rel_drop * 0.1, 1.0e-3))
-        err_min = min(err_min, err)
+        # As in the forward solver, the inner tolerance follows the momentum error, not the
+        # continuity error, which only the λP update reduces. Its floor is below ϵ because the
+        # inner (Schur) residual becomes the momentum residual after the λP update.
+        errV > errV_min * 1.05 && (rel_drop = max(rel_drop * 0.1, 1.0e-3))
+        errV_min = min(errV_min, errV)
 
-        err, iter = inner_solve!(inner, inner_problem, err, err * rel_drop, iter)
+        err, iter = inner_solve!(inner, inner_problem, err, max(errV * rel_drop, ϵ / 2), iter)
 
         # stokes_ad.P is masked, so eliminated cells keep λP = 0
         @. stokes_ad.λP += pressure_relaxation * dyrel.γ_eff * stokes_ad.P

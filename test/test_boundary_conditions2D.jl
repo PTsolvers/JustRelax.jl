@@ -35,6 +35,19 @@ end
             @test @views T[1, 2:(end - 1)] == 2 .- T0[2, 2:(end - 1)]
             @test @views T[end, 2:(end - 1)] == 2 .- T0[end - 1, 2:(end - 1)]
 
+            # a prescribed temperature of zero is applied, not treated as an inactive face
+            T = reshape(collect(Float64, 1:(6 * 7)), 6, 7)
+            T0 = copy(T)
+            thermal_bcs!(
+                T,
+                TemperatureBoundaryConditions(;
+                    no_flux = (left = false, right = false, top = false, bot = false),
+                    constant_value = (top = 0.0,),
+                ),
+            )
+            @test @views T[:, end] == -T0[:, end - 1]
+            @test @views T[:, 1:(end - 1)] == T0[:, 1:(end - 1)]
+
             T = reshape(collect(Float64, 1:(6 * 7)), 6, 7)
             T0 = copy(T)
             thermal_bcs!(

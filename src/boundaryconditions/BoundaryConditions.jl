@@ -17,7 +17,8 @@ include("simple_shear.jl")
     return n, n
 end
 
-@inline do_bc(bc) = any(!=(false), values(bc))
+# `!==`, not `!=`: a prescribed value of 0.0 compares equal to `false`
+@inline do_bc(bc) = any(x -> x !== false, values(bc))
 
 """
     thermal_bcs!(thermal, bcs::TemperatureBoundaryConditions)

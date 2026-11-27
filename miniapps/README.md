@@ -110,6 +110,8 @@ solver" docs page).
   simple-shear-periodic variants, power-law variant).
 - `shear_heating/Shearheating2D_DYREL.jl` — shear heating with DYREL (rheology in `Shearheating_rheology.jl`).
 - `sinking_block/SinkingBlock2D.jl` — sinking block with DYREL.
-- `subduction/` — subduction with DYREL (`Subduction2D_DYREL.jl`; setup/rheology alongside).
+- `subduction/` — subduction with DYREL (`Subduction2D_DYREL.jl`; setup/rheology alongside), and
+  the same model pushed by an interior velocity box (`Subduction2D_VelocityBox.jl`, and
+  `Subduction2D_VelocityBox_VariationalDYREL.jl` with a marker-chain free surface).
 - `thermal_stress/Thermal_Stress_Magma_Chamber_nondim.jl` — magma chamber thermal stress with DYREL.
 - `volcano/Caldera2D.jl` — caldera collapse with DYREL (setup/rheology alongside).

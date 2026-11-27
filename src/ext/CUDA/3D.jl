@@ -39,6 +39,8 @@ import JustRelax:
     periodic_dims,
     flow_bcs_of,
     check_periodic_bcs,
+    check_velocity_dirichlet,
+    velocity_dirichlet,
     reject_periodic_bcs
 
 import JustRelax: normal_stress, shear_stress, shear_vorticity, grid_stress, unwrap

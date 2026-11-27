@@ -228,7 +228,7 @@ end
         stokes.P, stokes.ΔPψ,
         JustRelax.JustRelax2D.@stress(stokes)...,
         ρgx, ρgy,
-        ϕ, grid._di.center, grid._di.vertex, 0.0,
+        ϕ, grid._di.center, grid._di.vertex, 0.0, VelocityBoundaryConditions().dirichlet,
     )
     @test Array(stokes.R.Rx) ≈ -gx
     @test Array(stokes.R.Ry) ≈ -gy

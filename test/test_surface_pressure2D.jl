@@ -71,7 +71,7 @@ function ph_load!(stokes, ϕ, pressure, grid)
     ρg = ntuple(_ -> @zeros(ni...), 2)
     @parallel (@idx ni) JR.compute_PH_residual_V!(
         @residuals(stokes.R)..., @velocity(stokes)..., pressure, stokes.ΔPψ,
-        @stress(stokes)..., ρg..., ϕ, grid._di.center, grid._di.vertex, 0.0,
+        @stress(stokes)..., ρg..., ϕ, grid._di.center, grid._di.vertex, 0.0, VelocityBoundaryConditions().dirichlet,
     )
     return map(Array, @residuals(stokes.R))
 end
@@ -108,7 +108,7 @@ end
             @parallel (@idx ni) JR.compute_DR_residual_update_V!(
                 @residuals(stokes.R)..., @velocity(stokes)..., z..., pressure, stokes.ΔPψ,
                 @stress(stokes)..., ρg..., D..., a..., a..., a..., ϕ,
-                grid._di.center, grid._di.vertex, 0.0,
+                grid._di.center, grid._di.vertex, 0.0, VelocityBoundaryConditions().dirichlet,
             )
             @test all(isapprox.(map(A -> 3 .* Array(A), @residuals(stokes.R)), reference; atol = 1.0e-12))
         end

@@ -199,7 +199,7 @@ end
             stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
             stokes.P, stokes.ΔPψ,
             stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
-            _di.center, _di.vertex, 0.0,
+            _di.center, _di.vertex, 0.0, VelocityBoundaryConditions().dirichlet,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test all(isfinite, Array(stokes.R.Ry))
@@ -224,7 +224,7 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
-            0.0,
+            0.0, VelocityBoundaryConditions().dirichlet,
         )
         @test all(isfinite, Array(stokes.R.Rx))
         @test Array(stokes.V.Vx) == Array(Vx_before)
@@ -245,7 +245,7 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
-            0.0,
+            0.0, VelocityBoundaryConditions().dirichlet,
         )
         Ry_without_fs = copy(stokes.R.Ry)
         @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
@@ -260,10 +260,62 @@ end
             dyrel.βVx, dyrel.βVy,
             dyrel.dτVx, dyrel.dτVy,
             _di.center, _di.vertex,
-            0.5,
+            0.5, VelocityBoundaryConditions().dirichlet,
         )
         ∂ρg∂y = -inv(grid.di.center[2])
         expected_correction = Array(stokes.V.Vy[2:(end - 1), 2:(end - 1)]) .* (0.5 * ∂ρg∂y)
         @test Array(stokes.R.Ry) .- Array(Ry_without_fs) ≈ expected_correction
+
+        # --- interior Dirichlet velocities ---
+        # momentum row (i, j) drives V[i + 1, j + 1]; prescribe one Vx and one Vy node
+        one_node(A, I) = PTArray(backend)(setindex!(zeros(size(A)), 1.0, I...))
+        Ix, Iy = (4, 3), (3, 4)
+        rx, ry = Ix .- 1, Iy .- 1
+        dirichlet = VelocityBoundaryConditions(;
+            dirichlet = (;
+                Vx = (; constant = 2.5, mask = one_node(stokes.V.Vx, Ix)),
+                Vy = (; constant = 0.0, mask = one_node(stokes.V.Vy, Iy)),
+            ),
+        ).dirichlet
+        @test Array(stokes.V.Vy)[Iy...] != 0
+
+        @parallel (@idx ni) JR2K.compute_PH_residual_V!(
+            stokes.R.Rx, stokes.R.Ry, stokes.V.Vx, stokes.V.Vy,
+            stokes.P, stokes.ΔPψ,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy, ρg...,
+            _di.center, _di.vertex, 0.0, dirichlet,
+        )
+        Rx, Ry = Array(stokes.R.Rx), Array(stokes.R.Ry)
+        @test iszero(Rx[rx...]) && iszero(Ry[ry...])
+        @test count(!iszero, Ry) == length(Ry) - 1
+
+        dyrel.βVx .= 1.0; dyrel.βVy .= 1.0
+        dyrel.dVxdτ .= 1.0; dyrel.dVydτ .= 1.0
+        Vy_before = Array(stokes.V.Vy)
+        @parallel (@idx ni) JR2K.compute_DR_residual_update_V!(
+            stokes.R.Rx, stokes.R.Ry,
+            stokes.V.Vx, stokes.V.Vy,
+            dyrel.dVxdτ, dyrel.dVydτ,
+            stokes.P, θc,
+            stokes.τ.xx, stokes.τ.yy, stokes.τ.xy,
+            ρg...,
+            dyrel.Dx, dyrel.Dy,
+            dyrel.αVx, dyrel.αVy,
+            dyrel.βVx, dyrel.βVy,
+            dyrel.dτVx, dyrel.dτVy,
+            _di.center, _di.vertex,
+            0.0, dirichlet,
+        )
+        Vx, Vy = Array(stokes.V.Vx), Array(stokes.V.Vy)
+        @test Vx[Ix...] == 2.5
+        @test Vy[Iy...] == 0.0
+        @test iszero(Array(stokes.R.Rx)[rx...]) && iszero(Array(stokes.R.Ry)[ry...])
+        @test iszero(Array(dyrel.dVxdτ)[rx...]) && iszero(Array(dyrel.dVydτ)[ry...])
+        # the free rows still relax
+        free_y = trues(size(Vy))
+        free_y[Iy...] = false
+        free_y[[1, end], :] .= false
+        free_y[:, [1, end]] .= false
+        @test all(Vy[free_y] .!= Vy_before[free_y])
     end
 end

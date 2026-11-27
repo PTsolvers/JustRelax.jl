@@ -214,9 +214,12 @@ end
 
 function parse_velocity_dirichlet(dirichlet::NamedTuple, ::Val{nD}) where {nD}
     components = nD == 2 ? (:Vx, :Vy) : (:Vx, :Vy, :Vz)
-    for k in keys(dirichlet)
+    for (k, v) in pairs(dirichlet)
         k in components || throw(
             ArgumentError("unknown velocity component `$k` in `dirichlet`; valid components are $components")
+        )
+        v isa NamedTuple && !haskey(v, :constant) && throw(
+            ArgumentError("`dirichlet.$k` needs a `constant`; use `DirichletBoundaryCondition(value, Mask(mask))` for a varying value")
         )
     end
     return NamedTuple{components}(map(k -> Dirichlet(get(dirichlet, k, (;))), components))

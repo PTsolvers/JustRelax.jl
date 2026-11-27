@@ -154,7 +154,7 @@ function _solve_DYREL!(
     check_periodic_bcs(stokes, flow_bcs, igg, grid.di.center)
     check_velocity_dirichlet(flow_bcs, @velocity(stokes))
     dirichlet = velocity_dirichlet(flow_bcs)
-    foreach(apply_dirichlet!, @velocity(stokes), dirichlet)
+    foreach(JustRelax.apply_interior_dirichlet!, @velocity(stokes), dirichlet)
 
     @copy stokes.P0 stokes.P
 

@@ -225,6 +225,16 @@ end
 @inline has_dirichlet(::AbstractDirichletBoundaryCondition{Nothing, Nothing}) = false
 @inline has_dirichlet(::AbstractDirichletBoundaryCondition) = true
 
+# Interior nodes only: the solver never updates wall-normal velocities, so a value written
+# there would persist as in- or outflow through the wall.
+function apply_interior_dirichlet!(V, bc)
+    has_dirichlet(bc) || return nothing
+    I = ntuple(d -> 2:(size(V, d) - 1), ndims(V))
+    value = bc.value isa ConstantArray ? bc.value : view(bc.value, I...)
+    apply_mask!(view(V, I...), value, Mask(view(bc.mask.mask, I...)))
+    return nothing
+end
+
 """
     velocity_dirichlet(bcs)
 

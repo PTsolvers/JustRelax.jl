@@ -42,7 +42,7 @@ function _solve_VariationalDYREL!(
     check_velocity_dirichlet(flow_bcs, @velocity(stokes))
     # imposed before `project_reduced_state!` below, so eliminated rows stay eliminated
     dirichlet = velocity_dirichlet(flow_bcs)
-    foreach(apply_dirichlet!, @velocity(stokes), dirichlet)
+    foreach(JustRelax.apply_interior_dirichlet!, @velocity(stokes), dirichlet)
 
     N == 3 && reject_periodic_bcs(flow_bcs, "`solve_VariationalDYREL!` in 3D")
     dim = Val(N)

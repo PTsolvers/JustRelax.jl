@@ -64,6 +64,17 @@ const TA = PTArray(backend)
     @test isnothing(JustRelax.check_velocity_dirichlet(bcs, V))
     @test_throws DimensionMismatch JustRelax.check_velocity_dirichlet(bcs, (zeros(6, 5), zeros(6, 5)))
 
+    # mask entries on the walls and ghost nodes are not imposed
+    for bc in (
+            VelocityBoundaryConditions(; dirichlet = (; Vx = (; constant = 1.0, mask = ones(5, 6)))).dirichlet.Vx,
+            JustRelax.DirichletBoundaryCondition(ones(5, 6), JustRelax.Mask(ones(5, 6))),
+        )
+        Vb = zeros(5, 6)
+        JustRelax.apply_interior_dirichlet!(Vb, bc)
+        @test all(isone, Vb[2:(end - 1), 2:(end - 1)])
+        @test sum(Vb) == 3 * 4
+    end
+
     # the 3D kernels take no interior conditions, so a 3D solve must reject them
     faces3D = (left = true, right = true, front = true, back = true, top = true, bot = true)
     bcs3D = VelocityBoundaryConditions(;
